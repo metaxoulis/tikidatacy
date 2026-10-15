@@ -17,16 +17,25 @@ export const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;'
 export const leagueMeta=slug=>LEAGUES[slug]||{name:slug,icon:'⚽'};
 export const hasPrediction=m=>!!m&&[m.p1,m.px,m.p2].every(n=>typeof n==="number"&&Number.isFinite(n)&&n>=0&&n<=100)&&Math.abs(m.p1+m.px+m.p2-100)<=1.5;
 export const fmtPct=v=>Number.isFinite(v)?`${Math.round(v)}%`:'—';
+export const fairOdd=v=>Number.isFinite(v)&&v>=1&&v<=100?(100/v).toFixed(2):'—';
 const localDate=ts=>new Date(ts);
 export const fmtDate=ts=>localDate(ts).toLocaleDateString('el-GR',{timeZone:'Europe/Nicosia',weekday:'short',day:'2-digit',month:'short'});
 export const fmtTime=ts=>localDate(ts).toLocaleTimeString('el-GR',{timeZone:'Europe/Nicosia',hour:'2-digit',minute:'2-digit'});
 export const TEAM_LOGOS=Object.freeze({}); export const LEAGUE_LOGOS=Object.freeze({});
-function logoLetters(name){return String(name||'?').trim().split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0]).join('').toUpperCase()}
-export function teamBadge(name){const t=String(name||'?'),url=TEAM_LOGOS[t],hue=[...t].reduce((n,c)=>(n*29+c.charCodeAt(0))%360,173);
- if(url&&/^https:\/\/[^\s<>"']+$/i.test(url))return '<span class="team-logo team-crest" aria-hidden="true"><img src="'+esc(url)+'" alt="" loading="lazy"></span>';
- return '<span class="team-logo team-crest" style="--crest-hue:'+hue+'" aria-hidden="true"><svg viewBox="0 0 44 48" fill="none"><path d="M22 2 40 9v16c0 9-7 16-18 20C11 41 4 34 4 25V9L22 2Z" stroke="currentColor" stroke-width="1.5" fill="currentColor" fill-opacity=".10"/><path d="M22 9 33 13v11c0 6-4 11-11 14-7-3-11-8-11-14V13Z" stroke="currentColor" stroke-opacity=".25"/></svg><span class="crest-initials">'+esc(logoLetters(t))+'</span></span>'}
-export function leagueIcon(slug){const link=LEAGUE_LOGOS[slug];if(link&&/^https:\/\/[^\s<>"']+$/i.test(link))return '<span class="league-symbol" aria-hidden="true"><img src="'+esc(link)+'" alt="" loading="lazy"></span>';
- return '<span class="league-symbol" aria-hidden="true"><svg viewBox="0 0 36 36" fill="none"><path d="M11 8h14v7c0 6-2.5 10.5-7 13-4.5-2.5-7-7-7-13V8Z" stroke="currentColor" stroke-width="1.5"/><path d="M11 12H7v4c0 4 2.5 6 5.5 6.4M25 12h4v4c0 4-2.5 6-5.5 6.4M18 28v3m-7 1h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="m18 12 1.7 3.4 3.8.6-2.7 2.7.6 3.7-3.4-1.8-3.4 1.8.6-3.7-2.7-2.7 3.8-.6L18 12Z" fill="currentColor"/></svg></span>'}
+function initials(s){const words=String(s||'?').replace(/&amp;/g,'&').replace(/[^\p{L}\p{N} ]/gu,' ').trim().split(/\s+/).filter(Boolean).filter(w=>!['FC','CF','AC','SC','US','AS','CLUB','1'].includes(w.toUpperCase()));return (words.length>1?words[0][0]+words[1][0]:words[0]?.slice(0,2)||'?').toUpperCase()}
+function stableHash(s){let h=2166136261;for(const c of String(s)){h^=c.codePointAt(0);h=Math.imul(h,16777619)}return h>>>0}
+export function teamBadge(name){
+ const t=String(name||'?'),url=TEAM_LOGOS[t];
+ if(typeof url==='string'&&/^https:\/\/[^\s<>"']+$/i.test(url))return '<span class="team-logo team-crest" aria-hidden="true"><img alt="" loading="lazy" src="'+esc(url)+'"></span>';
+ const h=stableHash(t),tone=h%360,accent=(tone+50)%360,shapes=['M22 2 40 9v16c0 9-7 16-18 20C11 41 4 34 4 25V9Z','M22 2 40 11 37 31 22 45 7 31 4 11Z','M22 3 39 12v24L22 45 5 36V12Z'];const motif=['M10 17h24M10 27h24','M11 14 33 35M33 14 11 35','M17 12v25M27 12v25'][h%3];
+ return '<span class="team-logo team-crest" style="--crest-hue:'+tone+'" aria-hidden="true"><svg viewBox="0 0 44 48" fill="none" class="crest-art"><path d="'+shapes[h%3]+'" fill="hsl('+tone+' 53% 31%)" stroke="hsl('+accent+' 70% 75%)" stroke-width="1.8"/><path d="'+motif+'" stroke="white" stroke-opacity=".19" stroke-width="2.4"/></svg><span class="crest-initials">'+esc(initials(t))+'</span></span>';
+}
+const LEAGUE_IDS={ucl:'CL',uel:'EL',uecl:'CO',epl:'PL',laliga:'LL',seriea:'SA',bundesliga:'BL',ligue1:'L1',greece:'GR',cyprus:'CY'};
+export function leagueIcon(slug){
+ const link=LEAGUE_LOGOS[slug];if(typeof link==='string'&&/^https:\/\/[^\s<>"']+$/i.test(link))return '<span class="league-symbol" aria-hidden="true"><img alt="" loading="lazy" src="'+esc(link)+'"></span>';
+ const hue=stableHash(slug)%360;
+ return '<span class="league-symbol league-identity" style="--league-hue:'+hue+'" aria-hidden="true"><svg viewBox="0 0 36 36" fill="none"><circle cx="18" cy="18" r="15" stroke="currentColor" stroke-width="1.4" stroke-opacity=".6"/><path d="M7 27 28 10" stroke="currentColor" stroke-opacity=".2" stroke-width="2"/></svg><span>'+esc(LEAGUE_IDS[slug]||initials(slug))+'</span></span>';
+}
 export const leagueBadge=slug=>{const lg=leagueMeta(slug);return '<span class="comp-chip">'+leagueIcon(slug)+'<span>'+esc(lg.name)+'</span></span>'};
 function oddsStrip(m,large=false){if(!hasPrediction(m))return '<span class="subtle">Χωρίς εκτίμηση</span>';const arr=[['1',m.p1],['X',m.px],['2',m.p2]],best=Math.max(m.p1,m.px,m.p2);return '<div class="'+(large?'probs-large':'probs-mini')+'" role="group" aria-label="Πιθανότητες μοντέλου 1 Χ 2">'+arr.map(([k,n],i)=>'<div class="prob-unit '+(n===best?'is-best':'')+'"><div class="prob-row"><span>'+k+'</span><strong>'+fmtPct(n)+'</strong></div><div class="prob-track"><span class="prob-fill p'+i+'" style="width:'+Math.max(0,Math.min(100,n))+'%"></span></div></div>').join('')+'</div>'}
 export function Header({route}){
@@ -58,7 +67,7 @@ export function MatchCard({match,highlight=false,compact=false}){
      </div>
      <div class="probability-caption"><span>ΠΙΘΑΝΟΤΗΤΕΣ 1 / X / 2</span><span>90 ΛΕΠΤΑ · ΜΟΝΤΕΛΟ</span></div>${oddsStrip(match,true)}
      <div class="market-grid second">${[['Over 2.5',match.over25],['Under 2.5',match.under25],['BTTS Ναι',match.btts],['BTTS Όχι',match.no_btts]].map(([label,value])=>`<div class="market"><small>${label}</small><b>${fmtPct(value)}</b></div>`).join('')}</div>
-     <div class="small-note">${pred?'Εκτίμηση Poisson για το 90λεπτο · Χωρίς ανεξάρτητο backtest.':'Πραγματικός αγώνας χωρίς επαρκές ιστορικό για αξιόπιστη πρόβλεψη.'}</div>
+     ${pred?`<div class="analysis-ribbon"><div><small>ΠΡΩΤΗ ΕΚΤΙΜΗΣΗ</small><b>${Math.max(match.p1,match.px,match.p2)===match.p1?"1":Math.max(match.p1,match.px,match.p2)===match.px?"X":"2"} · ${fmtPct(Math.max(match.p1,match.px,match.p2))}</b></div><div><small>ΘΕΩΡΗΤΙΚΗ ΑΠΟΔΟΣΗ</small><b>${fairOdd(Math.max(match.p1,match.px,match.p2))}</b></div></div>`:""}<div class="small-note">${pred?'Εκτίμηση Poisson για το 90λεπτο · Χωρίς ανεξάρτητο backtest.':'Πραγματικός αγώνας χωρίς επαρκές ιστορικό για αξιόπιστη πρόβλεψη.'}</div>
    </article>`;
 }
 export function PredictionCard({match,selected=false,as="button"}){
@@ -97,7 +106,7 @@ export function MatchModal({match}){
  '<div class="match-modal-top"><div><div class="modal-eyebrow">TIKI-DATA / MATCH INTELLIGENCE</div><h2 id="matchDialogTitle">Ανάλυση αγώνα<span class="modal-title-dot">.</span></h2></div><button type="button" class="modal-close" data-close-dialog aria-label="Κλείσιμο ανάλυσης αγώνα" title="Κλείσιμο (Esc)">×</button></div>'+
  '<div class="match-modal-scroll">'+MatchCard({match})+'<div class="match-modal-intelligence"><div class="modal-intel-icon" aria-hidden="true">↗</div><div><h3>Match intelligence</h3><p id="matchDialogDesc">'+
  (predicted?'Η υψηλότερη πιθανότητα του μοντέλου είναι:':'Δεν υπάρχουν επαρκή δεδομένα για εκτίμηση του μοντέλου.')+' <strong>'+winner+'</strong></p>'+
- '<p>Οι εκτιμήσεις προκύπτουν από το μοντέλο Poisson βάσει ιστορικών αποτελεσμάτων. Δεν λαμβάνονται υπόψη απουσίες ή live μεταβολές. Δεν υπάρχει ακόμη ανεξάρτητο backtest.</p>'+
+ '<p>Οι εκτιμήσεις προκύπτουν από το μοντέλο Poisson βάσει ιστορικών αποτελεσμάτων. Δεν λαμβάνονται υπόψη απουσίες ή live μεταβολές. Το νέο Learning Engine παραμένει μη εγκεκριμένο λόγω κενών σε πρόσφατα αποτελέσματα και έλλειψης προοπτικής αξιολόγησης.</p>'+
  '<div class="modal-intel-badges"><span>90 λεπτά</span><span>Poisson</span><span>Football-Data.org</span></div></div></div>'+
  '<div class="modal-footer-row"><p>Οι πιθανότητες δεν αποτελούν εγγύηση αποτελέσματος.</p><button type="button" class="modal-copy" data-copy-match-link>↗ Αντιγραφή συνδέσμου</button></div></div></section></div>';
 }
