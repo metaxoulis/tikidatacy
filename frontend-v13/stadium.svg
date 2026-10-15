@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="560" viewBox="0 0 1600 560" preserveAspectRatio="xMidYMid slice">
+<defs>
+ <linearGradient id="sky" x2="0" y2="1"><stop stop-color="#021523"/><stop offset=".55" stop-color="#063145"/><stop offset="1" stop-color="#12364b"/></linearGradient>
+ <radialGradient id="halo"><stop stop-color="#d8f8ff" stop-opacity=".94"/><stop offset=".14" stop-color="#7cddff" stop-opacity=".67"/><stop offset=".48" stop-color="#32b6e6" stop-opacity=".15"/><stop offset="1" stop-color="#1ba1d5" stop-opacity="0"/></radialGradient>
+ <radialGradient id="field" cx=".5" cy=".2" r=".8"><stop stop-color="#227478"/><stop offset=".65" stop-color="#0c3d55"/><stop offset="1" stop-color="#032036"/></radialGradient>
+ <linearGradient id="roof" x2="0" y2="1"><stop stop-color="#0c344c" stop-opacity=".8"/><stop offset="1" stop-color="#03131d"/></linearGradient>
+ <filter id="glow"><feGaussianBlur stdDeviation="13"/></filter>
+ <pattern id="fans" width="16" height="7" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r=".9" fill="#89d4e5" opacity=".37"/><circle cx="10" cy="4" r=".7" fill="#4aa0b1" opacity=".3"/></pattern>
+ <pattern id="pitch" width="135" height="90" patternUnits="userSpaceOnUse"><path d="M0 0H135V90H0Z" fill="#0c5860" opacity=".11"/></pattern>
+</defs>
+<rect width="1600" height="560" fill="url(#sky)"/>
+<path d="M0 0h1600v140c-420-85-880-125-1600 15z" fill="#092f44" opacity=".52"/>
+<path d="M0 48C340-25 1210-38 1600 55" stroke="#4389a1" stroke-opacity=".33" stroke-width="9" fill="none"/>
+<path d="M0 92C365 26 1210 11 1600 100" stroke="#66a9b5" stroke-opacity=".19" stroke-width="3" fill="none"/>
+<path d="M0 186C300 90 1370 71 1600 200V322H0Z" fill="url(#roof)" opacity=".87"/>
+<path d="M0 186C400 106 1240 104 1600 205" fill="none" stroke="#2a7292" stroke-width="10" opacity=".65"/>
+<path d="M0 236C445 140 1230 145 1600 260v134c-560-70-1020-52-1600 6Z" fill="#0b364e"/>
+<path d="M0 261C445 180 1180 188 1600 278v136c-480-95-1070-108-1600 4Z" fill="url(#fans)" opacity=".75"/>
+<path d="M0 333C430 253 1220 279 1600 367v95H0Z" fill="#091e30" opacity=".9"/>
+<path d="M0 341C430 257 1200 280 1600 352" stroke="#4cc5de" stroke-width="3" opacity=".3" fill="none"/>
+<path d="M0 394C420 350 1190 345 1600 394v170H0Z" fill="url(#field)"/>
+<path d="M0 394C420 350 1190 345 1600 394v170H0Z" fill="url(#pitch)"/>
+<path d="M0 393C425 362 1150 360 1600 396" stroke="#70ced7" stroke-width="4" opacity=".7" fill="none"/>
+<path d="M192 550C525 432 1030 423 1447 551" fill="none" stroke="#83d8df" opacity=".3" stroke-width="2"/>
+<ellipse cx="800" cy="560" rx="248" ry="110" stroke="#b2e7f0" fill="none" opacity=".23" stroke-width="2"/>
+<path d="M800 431V560M0 505H1600" stroke="#a5dce3" stroke-width="2" opacity=".18"/>
+<g opacity=".83">
+ <ellipse cx="1124" cy="123" rx="235" ry="210" fill="url(#halo)"/><ellipse cx="1285" cy="119" rx="250" ry="208" fill="url(#halo)"/><ellipse cx="1442" cy="150" rx="220" ry="190" fill="url(#halo)"/>
+ <path d="M1000 124l150 430M1080 113l210 442M1160 126l300 430M1253 106l390 440" stroke="#9cecff" stroke-width="5" opacity=".06"/>
+ <g fill="#e9ffff">
+  <circle cx="1030" cy="126" r="3"/><circle cx="1070" cy="112" r="4"/><circle cx="1110" cy="108" r="4"/><circle cx="1152" cy="111" r="4"/><circle cx="1190" cy="126" r="3"/>
+  <circle cx="1250" cy="108" r="4"/><circle cx="1290" cy="109" r="4"/><circle cx="1330" cy="113" r="4"/><circle cx="1375" cy="124" r="4"/><circle cx="1420" cy="139" r="4"/><circle cx="1460" cy="150" r="4"/>
+ </g>
+</g>
+<g opacity=".8" transform="translate(1320,197)">
+ <circle r="106" fill="#89dfff" opacity=".075" filter="url(#glow)"/>
+ <circle r="94" fill="#0a2f4b" stroke="#73cbe4" stroke-opacity=".34" stroke-width="3"/>
+ <circle r="84" fill="#103958" stroke="#74bdce" stroke-width="1.5"/>
+ <path d="M-40-65L-8-81L31-61L40-23L11 7L-27-4L-45-32Z" fill="#183f6b" stroke="#87d3e6" stroke-width="2"/>
+ <path d="M11 7L40-23L69-8L70 35L35 66L-3 49Z" fill="#0e3160" stroke="#87d3e6" stroke-width="2"/>
+ <path d="M-27-4L11 7L-3 49L-41 65L-70 30L-66-11Z" fill="#27527a" stroke="#a2deec" stroke-width="2"/>
+ <path d="M-40-65L-45-32L-66-11M31-61L60-46L69-8M35 66L16 83M-41 65L-24 84" stroke="#80c5de" stroke-width="3" fill="none"/>
+</g>
+<rect width="1600" height="560" fill="#001526" opacity=".13"/>
+</svg>
