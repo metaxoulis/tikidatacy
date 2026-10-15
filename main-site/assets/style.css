@@ -452,3 +452,13 @@ body{font-family:Inter,"SF Pro Display",ui-sans-serif,-apple-system,BlinkMacSyst
 .match-modal .featured-card{background:linear-gradient(150deg,#245167,#19384d)}
 @media(max-width:760px){.hero{padding:23px 18px;margin-top:14px;border-radius:21px}.hero-grid{grid-template-columns:1fr;gap:20px}.hero-copy h1{font-size:clamp(35px,8.5vw,47px)}.mini-stat{padding:10px 9px}.mini-stat span{font-size:10px}.team-pane .team-logo{width:40px;height:46px}.score-vs{width:43px;height:43px;font-size:11px}.prob-unit{padding:9px 8px}.probability-caption{font-size:9px}.predictions-page .catalog-list{padding:12px}.pred-item{padding:13px}.pred-top{flex-wrap:wrap}.match-modal .team-pane .team-logo{width:40px;height:46px}}
 @media(prefers-reduced-motion:reduce){.pred-item,.cta-btn,.hero-discover{transition:none!important;transform:none!important}}
+
+/* v8: distinct illustrative league/team badges & probability context */
+.league-identity{position:relative;isolation:isolate;background:linear-gradient(150deg,hsl(var(--league-hue) 42% 35% / .6),#162d3e)}
+.league-identity svg{position:absolute;inset:0;width:100%;height:100%}
+.league-identity span{position:relative;z-index:1;color:#f1fffe;font-weight:850;font-size:10px}
+.team-crest .crest-art{width:100%;height:100%}
+.analysis-ribbon{display:flex;justify-content:space-between;gap:12px;margin-top:13px;padding:13px;border:1px solid #79dece40;border-radius:13px;background:#23495a66}
+.analysis-ribbon div{display:flex;flex-direction:column;gap:4px}.analysis-ribbon div:last-child{text-align:right}
+.analysis-ribbon small{font-weight:750;letter-spacing:.07em;font-size:9px;color:#add4dc}.analysis-ribbon b{font-size:15px;color:#baffed;font-variant-numeric:tabular-nums}
+@media(max-width:480px){.analysis-ribbon{padding:10px}.analysis-ribbon small{font-size:8px}}

@@ -1,6 +1,6 @@
-import {Header,Footer,MobileNav,Warning,MatchModal} from './components.js?v=7';
-import {loadFixtures} from './data.js?v=7';
-import {Home,Predictions} from './pages.js?v=7';
+import {Header,Footer,MobileNav,Warning,MatchModal} from './components.js?v=8';
+import {loadFixtures} from './data.js?v=8';
+import {Home,Predictions} from './pages.js?v=8';
 const root=document.getElementById('app');
 const route=location.pathname.replace(/\/+$/,'')||'/';
 const targetRoute=route==='/predictions'?'/predictions':'/';
