@@ -67,7 +67,7 @@ export function MatchCard({match,highlight=false,compact=false}){
      </div>
      <div class="probability-caption"><span>ΠΙΘΑΝΟΤΗΤΕΣ 1 / X / 2</span><span>90 ΛΕΠΤΑ · ΜΟΝΤΕΛΟ</span></div>${oddsStrip(match,true)}
      <div class="market-grid second">${[['Over 2.5',match.over25],['Under 2.5',match.under25],['BTTS Ναι',match.btts],['BTTS Όχι',match.no_btts]].map(([label,value])=>`<div class="market"><small>${label}</small><b>${fmtPct(value)}</b></div>`).join('')}</div>
-     ${pred?`<div class="analysis-ribbon"><div><small>ΠΡΩΤΗ ΕΚΤΙΜΗΣΗ</small><b>${Math.max(match.p1,match.px,match.p2)===match.p1?"1":Math.max(match.p1,match.px,match.p2)===match.px?"X":"2"} · ${fmtPct(Math.max(match.p1,match.px,match.p2))}</b></div><div><small>ΘΕΩΡΗΤΙΚΗ ΑΠΟΔΟΣΗ</small><b>${fairOdd(Math.max(match.p1,match.px,match.p2))}</b></div></div>`:""}<div class="small-note">${pred?'Εκτίμηση Poisson για το 90λεπτο · Χωρίς ανεξάρτητο backtest.':'Πραγματικός αγώνας χωρίς επαρκές ιστορικό για αξιόπιστη πρόβλεψη.'}</div>
+     ${pred?`<div class="analysis-ribbon"><div><small>ΠΡΩΤΗ ΕΚΤΙΜΗΣΗ</small><b>${Math.max(match.p1,match.px,match.p2)===match.p1?"1":Math.max(match.p1,match.px,match.p2)===match.px?"X":"2"} · ${fmtPct(Math.max(match.p1,match.px,match.p2))}</b></div><div><small>ΘΕΩΡΗΤΙΚΗ ΑΠΟΔΟΣΗ</small><b>${fairOdd(Math.max(match.p1,match.px,match.p2))}</b></div></div>`:""}<div class="small-note">${pred?'Εκτίμηση Poisson για το 90λεπτο · Η θεωρητική απόδοση ΔΕΝ είναι τιμή στοιχηματικής · Χωρίς ανεξάρτητο προοπτικό backtest.':'Πραγματικός αγώνας χωρίς επαρκές ιστορικό για αξιόπιστη πρόβλεψη.'}</div>
    </article>`;
 }
 export function PredictionCard({match,selected=false,as="button"}){
