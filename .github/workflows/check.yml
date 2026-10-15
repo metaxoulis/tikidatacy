@@ -1,7 +1,7 @@
 name: Tiki-Data preview checks
 on:
   push:
-    branches: ['development/**']
+    branches: ['development/**', 'feature/**']
   pull_request:
   workflow_dispatch:
 permissions:
@@ -14,14 +14,27 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Check syntax
+      - name: Check all present JavaScript sources
         run: |
-          node --check model.js
-          node --check app.js
-          node --check worker-base.js
-      - name: Check Poisson model
-        run: node test_model.js
-      - name: Build preview bundle
+          count=0
+          while IFS= read -r -d '' js; do
+            echo "Checking $js"
+            node --check "$js"
+            count=$((count + 1))
+          done < <(find . -type f -name '*.js' ! -path './node_modules/*' -print0)
+          echo "Checked $count JavaScript files"
+      - name: Run existing JavaScript model tests if present
         run: |
-          python3 bundle.py
-          node --check _worker.js
+          if test -f test_model.js; then
+            node test_model.js
+          else
+            echo "No root JS model test; Python Learning Engine is verified by a separate workflow."
+          fi
+      - name: Build legacy preview only when its files are present
+        run: |
+          if test -f bundle.py; then
+            python3 bundle.py
+            if test -f _worker.js; then node --check _worker.js; fi
+          else
+            echo "Legacy preview bundler not present in this branch; skipped."
+          fi
