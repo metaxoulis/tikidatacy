@@ -28,3 +28,14 @@ The Cloudflare project currently uses Direct Upload, so merging GitHub does **no
 
 ## QA
 Check `/` and `/predictions` for desktop and 390px mobile widths. Verify the match API populates both, the stat panel distinguishes missing fields, league/day/search filters update matches, favorites persist, and the detail modal is keyboard-closeable. Never claim live-scores functionality without a source. 
+
+## UX polish — v14
+
+- Consistent inline **Lucide-style SVG icons** in the desktop sidebar, hero metrics, action controls, table favorites, and mobile bottom navigation (no icon font dependency).
+- Static HTML skeletons render before JavaScript; `renderLoading()` reuses them on refresh while the real `/api/fixtures` request is pending. Subtle shimmer obeys `prefers-reduced-motion`; after a successful response all skeletons are removed and the table is populated.
+- The recent-form field renders a restrained calendar-unavailable SVG empty state, without invented W/D/L series.
+- JavaScript computes 1/X/2 leader, Over/Under 2.5 leader and BTTS Yes/No leader; the strongest available value gets a restrained mint outline in relevant views. Missing/tied paired values are not misrepresented as a winner.
+- Bottom navigation on mobile uses translucent navy, `backdrop-filter: blur(16px)`, `-webkit-backdrop-filter`, and safe-area padding for notched phones.
+- Existing data feed and predictive model are unchanged; the frontend remains a Cloudflare Pages advanced-mode Worker in `../frontend/worker.js`.
+
+QA: test 390px and desktop routes `/` and `/predictions`; verify initial (no-JS) skeleton markup and that a completed API request removes placeholders. Check one match with absent model percentages and the form empty state. See reduced-motion mode.
