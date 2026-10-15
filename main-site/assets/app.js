@@ -1,6 +1,7 @@
-import {Header,Footer,MobileNav,Warning,MatchModal} from './components.js?v=8';
-import {loadFixtures} from './data.js?v=8';
-import {Home,Predictions} from './pages.js?v=8';
+import {Header,Footer,MobileNav,Warning,MatchModal} from './components.js?v=9';
+import {loadFixtures} from './data.js?v=9';
+import {Home,Predictions} from './pages.js?v=9';
+document.addEventListener('error',event=>{const image=event.target;if(image instanceof HTMLImageElement&&image.matches('img[data-team-logo],img[data-league-logo]'))image.remove()},true);
 const root=document.getElementById('app');
 const route=location.pathname.replace(/\/+$/,'')||'/';
 const targetRoute=route==='/predictions'?'/predictions':'/';

@@ -462,3 +462,10 @@ body{font-family:Inter,"SF Pro Display",ui-sans-serif,-apple-system,BlinkMacSyst
 .analysis-ribbon div{display:flex;flex-direction:column;gap:4px}.analysis-ribbon div:last-child{text-align:right}
 .analysis-ribbon small{font-weight:750;letter-spacing:.07em;font-size:9px;color:#add4dc}.analysis-ribbon b{font-size:15px;color:#baffed;font-variant-numeric:tabular-nums}
 @media(max-width:480px){.analysis-ribbon{padding:10px}.analysis-ribbon small{font-size:8px}}
+
+/* v9: real team and competition logo images with graceful fallback */
+.real-crest,.league-symbol-real{position:relative;isolation:isolate;overflow:hidden;background:rgba(255,255,255,.06)}
+.real-crest img,.league-symbol-real img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;padding:2px;z-index:2;background:#152c40}
+.real-crest .logo-fallback,.league-symbol-real .logo-fallback{font-size:10px;font-weight:900;color:#c9ffe9;position:relative;z-index:1}
+.real-crest .logo-fallback{font-size:11px}
+.league-symbol-real img{padding:3px;border-radius:5px}

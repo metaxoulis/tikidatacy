@@ -1,5 +1,5 @@
-import {BRAND_LOGO} from './components.js?v=8';
-import {MatchCard,PredictionCard,Insight,CompetitionFilters,LEAGUES,esc,hasPrediction} from './components.js?v=8';
+import {BRAND_LOGO} from './components.js?v=9';
+import {MatchCard,PredictionCard,Insight,CompetitionFilters,LEAGUES,esc,hasPrediction} from './components.js?v=9';
 import {chooseFeatured} from './data.js';
 export function Hero({matches}){
  const n=matches.length;
