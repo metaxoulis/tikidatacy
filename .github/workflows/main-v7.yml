@@ -1,0 +1,26 @@
+name: Main-site Premium v7
+on:
+  push:
+    branches: ['feature/main-site-premium-v7']
+  pull_request:
+    paths:
+      - 'main-site/**'
+      - '.github/workflows/main-v7.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: main-site
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check main-site JavaScript
+        run: npm run check
+      - name: Validate no-prediction filtering and visual components
+        run: npm test
