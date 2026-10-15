@@ -1,0 +1,22 @@
+name: Premium UI review checks
+on:
+  push:
+    branches: ['feature/**']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check icon script and build
+        run: |
+          node --check premium/premium-icons.js
+          node --check premium/worker-template.js
+          python3 premium/build.py
+          node --check premium/_worker.js
