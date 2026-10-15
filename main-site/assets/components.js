@@ -97,4 +97,7 @@ export function MatchModal({match}){
  '<div class="match-modal-top"><div><div class="modal-eyebrow">TIKI-DATA / MATCH INTELLIGENCE</div><h2 id="matchDialogTitle">Ανάλυση αγώνα<span class="modal-title-dot">.</span></h2></div><button type="button" class="modal-close" data-close-dialog aria-label="Κλείσιμο ανάλυσης αγώνα" title="Κλείσιμο (Esc)">×</button></div>'+
  '<div class="match-modal-scroll">'+MatchCard({match})+'<div class="match-modal-intelligence"><div class="modal-intel-icon" aria-hidden="true">↗</div><div><h3>Match intelligence</h3><p id="matchDialogDesc">'+
  (predicted?'Η υψηλότερη πιθανότητα του μοντέλου είναι:':'Δεν υπάρχουν επαρκή δεδομένα για εκτίμηση του μοντέλου.')+' <strong>'+winner+'</strong></p>'+
- '<p>Οι εκτιμήσεις προκύπτουν από το μοντέλο Poisson βάσει ιστορικών αποτελεσμάτων. Δεν λαμβάνονται υπόψη απουσίες ή l --- TRUNCATED --- 23,920 chars
+ '<p>Οι εκτιμήσεις προκύπτουν από το μοντέλο Poisson βάσει ιστορικών αποτελεσμάτων. Δεν λαμβάνονται υπόψη απουσίες ή live μεταβολές. Δεν υπάρχει ακόμη ανεξάρτητο backtest.</p>'+
+ '<div class="modal-intel-badges"><span>90 λεπτά</span><span>Poisson</span><span>Football-Data.org</span></div></div></div>'+
+ '<div class="modal-footer-row"><p>Οι πιθανότητες δεν αποτελούν εγγύηση αποτελέσματος.</p><button type="button" class="modal-copy" data-copy-match-link>↗ Αντιγραφή συνδέσμου</button></div></div></section></div>';
+}
