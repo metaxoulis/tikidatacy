@@ -1,0 +1,27 @@
+name: Tiki-Data preview checks
+on:
+  push:
+    branches: ['development/**']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check syntax
+        run: |
+          node --check model.js
+          node --check app.js
+          node --check worker-base.js
+      - name: Check Poisson model
+        run: node test_model.js
+      - name: Build preview bundle
+        run: |
+          python3 bundle.py
+          node --check _worker.js
