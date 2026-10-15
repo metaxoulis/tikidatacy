@@ -64,3 +64,69 @@ button:disabled{opacity:.5;cursor:default}::selection{color:#072423;background:#
 
 /* All crest slots use real images where known, otherwise bespoke SVG image placeholders. */
 .icon-btn i{display:none}
+
+
+/* v14 — accessible, native-style icons */
+.ui-icon{width:19px;height:19px;display:inline-block;flex:none;vertical-align:middle;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round}
+.side-icon{width:20px;height:20px;color:#79e3c4;margin-left:2px;margin-right:4px}
+.metric-icon.ui-icon{width:25px;height:25px;stroke-width:1.8;color:#6ee6c6;flex:none}
+.stat-visual.ui-icon{width:23px;height:23px;color:#70ddbc}
+.calendar-icon .ui-icon,.refresh-btn .ui-icon{width:19px;height:19px}
+.stats-note .ui-icon{height:14px;width:14px;color:#69dcbd;margin-right:5px}
+.feature-open .ui-icon,.insights-link .ui-icon{width:17px;height:17px}
+.mini-pill .ui-icon{width:14px;height:14px;margin-right:4px}
+.segmented .ui-icon{width:16px;height:16px;vertical-align:middle}
+.favorite-btn .ui-icon{width:19px;height:19px}
+.favorite-btn.is-fav .ui-icon{fill:#ffcb6e;stroke:#ffcb6e}
+.form-empty{min-height:47px;margin:10px 13px 14px;padding:8px 12px;display:flex;justify-content:center;align-items:center;border:1px dashed rgba(115,151,167,.24);border-radius:9px;background:linear-gradient(90deg,rgba(94,127,144,.075),rgba(43,90,111,.06));color:#88a7b7}
+.form-empty-inner{display:flex;gap:9px;align-items:center;justify-content:center;text-align:center;font-size:10px;line-height:1.45;font-weight:550;color:#8aa7b5}
+.form-empty-inner .ui-icon{height:19px;width:19px;stroke:#7595a6;opacity:.7}
+.form-empty .form-dots{display:none}
+
+/* v14 — elegant skeleton placeholders, matching real final geometry */
+.skel{position:relative;display:inline-block;overflow:hidden;vertical-align:middle;border-radius:6px;background:linear-gradient(112deg,rgba(79,116,134,.20) 15%,rgba(143,196,203,.29) 48%,rgba(79,116,134,.20) 82%);background-size:210% 100%;animation:tiki-skeleton 1.85s ease-in-out infinite}
+@keyframes tiki-skeleton{0%{background-position:130% center;opacity:.67}50%{opacity:1}100%{background-position:-70% center;opacity:.67}}
+.skel-metric{width:64px;height:23px;border-radius:6px}
+.skel-league{display:flex;align-items:center;gap:10px;min-height:40px;padding:8px 11px}
+.skel-circle,.skel-small-circle{width:23px;height:23px;flex:none;border-radius:7px}
+.skel-line{height:11px;width:68%;border-radius:5px}
+.skel-league .skel-line{width:72%;height:12px}
+.skel-tab{height:40px;width:116px;border-radius:9px;flex:none}
+.skel-date{width:95px;height:43px;border-radius:8px;flex:none;margin-right:4px}
+.skel-crest{width:54px;height:54px;border-radius:50%}
+.skel-team{width:102px;max-width:80%;height:14px;border-radius:5px;margin-top:8px}
+.skel-prob{min-height:81px;justify-content:center;gap:9px}
+.skel-prob .skel-line{width:28%;height:10px}
+.skel-num{width:54%;height:17px;border-radius:5px}
+.skel-track{width:100%;height:4px;border-radius:4px}
+.skel-market{min-height:65px;display:flex;flex-direction:column;gap:13px;justify-content:center}
+.skel-market .skel-line{height:9px;width:65%}
+.skel-market .skel-num{height:13px;width:45%}
+.skel-stat{display:grid;grid-template-columns:35px 1fr 35px;align-items:center;gap:9px;min-height:43px}
+.skel-stat .skel-value{width:28px;height:17px}
+.skel-stat .skel-label{width:80%;height:8px;margin:auto}
+.skel-table-row{border-bottom:1px solid #214558;height:55px;background:rgba(17,42,59,.72)}
+.skel-table-row:nth-child(even){background:rgba(13,38,54,.72)}
+.skel-table-row td{text-align:center!important;padding:13px 7px!important}
+.skel-time{height:12px;width:43px}
+.skel-small-circle{height:22px;width:22px;border-radius:50%}
+.skel-fixture{height:12px;width:144px;max-width:100%}
+.skel-team-group{display:flex;align-items:center;gap:10px;min-width:180px;justify-content:center}
+.skel-probcell{height:29px;width:47px;max-width:100%;border-radius:6px}
+.is-loading .stat-widget,.is-loading .spotlight{transition:none}
+.is-loading .match-tag{opacity:.5}
+.strongest{border-color:#58c8aa!important;background:linear-gradient(155deg,#225f51,#1b4c47)!important;color:#d2fff1!important;box-shadow:inset 0 0 0 1px #7de7c236,0 0 16px rgba(57,221,165,.075)}
+.pct.best{border-color:#58c8aa;box-shadow:inset 0 0 0 1px #70e4b324,0 0 0 1px #6de6bf0b;background:linear-gradient(145deg,#195448,#174438);color:#bfffe7;font-weight:850}
+.feature-prob.best{border-color:#56bda3;background:linear-gradient(140deg,#20574c,#19453e)}
+/* The mobile tab is translucent, stays fixed while scrolling, and respects the iOS safe area. */
+@media(max-width:740px){
+.bottom-nav{background:rgba(8,30,44,.76);border-top:1px solid rgba(105,180,182,.27);-webkit-backdrop-filter:blur(16px) saturate(155%);backdrop-filter:blur(16px) saturate(155%);box-shadow:0 -8px 30px rgba(0,9,18,.40),inset 0 1px rgba(221,255,244,.045)}
+.bottom-nav a,.bottom-nav button{gap:4px;min-height:51px;justify-content:center}
+.bottom-nav .ui-icon{width:23px;height:23px;stroke-width:1.8;color:#9bc7cf;transition:color .17s,transform .17s}
+.bottom-nav a:hover .ui-icon,.bottom-nav button:hover .ui-icon,.bottom-nav a[aria-current="page"] .ui-icon{color:#72efc6;transform:translateY(-1px)}
+.bottom-nav span{font-size:9px;color:#a7c3d0;font-weight:650;line-height:1.2}
+.bottom-nav a[aria-current="page"] span{color:#baffdf}
+.skel-market{min-height:56px}.skel-tab{height:40px;width:108px}
+.form-empty{min-height:46px;margin:10px 11px 14px}
+}
+@media(prefers-reduced-motion:reduce){.skel{animation:none;background-size:100% 100%;opacity:.78}.bottom-nav .ui-icon{transition:none}}
