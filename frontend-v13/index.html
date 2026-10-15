@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="el">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#071723">
+<meta name="description" content="Tiki-Data: αναλυτικό πρόγραμμα, στατιστικές πιθανότητες και προβλέψεις ποδοσφαίρου.">
+<title>Tiki-Data | Football Intelligence</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<a class="skip" href="#fixtures">Μετάβαση στους αγώνες</a>
+<div class="app">
+<header class="topbar">
+<a class="brand" href="/" aria-label="Tiki-Data, Αρχική"><img src="/brand.webp" alt="Tiki-Data" width="196" height="54"></a>
+<nav class="desktop-nav" aria-label="Κύρια πλοήγηση">
+<a class="nav-current" data-nav="matches" href="/">Αγώνες</a>
+<a data-nav="predictions" href="/predictions">Προβλέψεις</a>
+<a href="#stats">Στατιστικά</a><a href="#competitions">Διοργανώσεις</a><a href="#analysis">Ανάλυση</a>
+</nav>
+<div class="top-actions">
+<label class="nav-search" aria-label="Αναζήτηση ομάδας"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.4"/><path d="m16 16 5 5"/></svg><input id="globalSearch" type="search" placeholder="Αναζήτηση ομάδας..." autocomplete="off"></label>
+<button type="button" class="icon-btn" id="notifyBtn" aria-label="Ειδοποιήσεις"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4"/></svg><i></i></button>
+<button type="button" class="icon-btn account" id="profileBtn" aria-label="Λογαριασμός επισκέπτη"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c.7-4.1 3-6 7.5-6s6.8 1.9 7.5 6"/></svg></button>
+</div>
+</header>
+<div class="notice-popover" id="actionPopover" hidden></div>
+<div class="layout">
+<aside class="sidebar" id="competitions" aria-label="Διοργανώσεις">
+<div class="side-heading"><span>ΔΙΟΡΓΑΝΩΣΕΙΣ</span><button class="side-all" data-league="all">Όλες</button></div>
+<div id="sidebarLeagues" class="side-leagues"><div class="skeleton-line"></div><div class="skeleton-line"></div></div>
+<div class="side-separator"></div>
+<div class="side-heading"><span>ΓΡΗΓΟΡΗ ΠΡΟΣΒΑΣΗ</span></div>
+<button class="side-link selected" data-quick="all"><span class="side-emoji">◉</span> Όλοι οι αγώνες</button>
+<button class="side-link" data-quick="predicted"><span class="side-emoji">◈</span> Με ανάλυση</button>
+<button class="side-link" data-quick="favorites"><span class="side-emoji">☆</span> Αγαπημένα <span id="sideFavCount" class="side-count">0</span></button>
+<div class="sidebar-footer"><div class="data-status"><span class="status-dot"></span><span><strong id="feedStatus">Σύνδεση δεδομένων…</strong><small>Πηγή: football-data.org</small></span></div><p>Οι προβλέψεις είναι στατιστικές εκτιμήσεις, όχι εγγυήσεις.</p></div>
+</aside>
+<main class="main">
+<section class="hero" id="top" aria-label="Tiki-Data Football Intelligence">
+<div class="hero-art" aria-hidden="true"></div><div class="hero-shade" aria-hidden="true"></div>
+<div class="hero-copy"><div class="eyebrow"><span class="line"></span> FOOTBALL INTELLIGENCE PLATFORM <span class="eyebrow-tag">BETA</span></div>
+<h1>Πιο έξυπνες<br>προβλέψεις για <em>κάθε αγώνα.</em></h1>
+<p>Στατιστικά. Ανάλυση. Πιθανότητες. Όλα σε ένα μέρος.</p>
+<div class="hero-metrics"><div class="metric glass"><span class="metric-icon">▥</span><div><b id="metricMatches">—</b><small>Διαθέσιμοι αγώνες</small></div></div><div class="metric glass"><span class="metric-icon">◉</span><div><b id="metricLeagues">—</b><small>Διοργανώσεις</small></div></div><div class="metric glass"><span class="metric-icon">◎</span><div><b id="metricAnalyses">—</b><small>Αναλύσεις μοντέλου</small></div></div></div>
+</div>
+</section>
+<section class="toolbar" id="matches">
+<div class="toolbar-title"><span class="section-kicker">MATCH CENTER</span><h2>Αγώνες & προβλέψεις</h2></div>
+<div class="toolbar-tools"><button class="mini-pill is-active" data-quick="all">Όλοι</button><button class="mini-pill" data-quick="predicted">Με πρόβλεψη</button><button class="mini-pill" data-quick="favorites">☆ Αγαπημένα</button></div>
+</section>
+<div class="mobile-league-wrap"><div class="mobile-league-tabs" id="mobileLeagues" aria-label="Διοργανώσεις"></div></div>
+<div class="datebar"><div class="date-switcher" id="dateTabs" aria-label="Ημερομηνία"></div><button class="calendar-icon" id="todayBtn" aria-label="Εμφάνιση της πλησιέστερης ημερομηνίας">▦</button></div>
+<section class="spotlight-grid" id="analysis">
+<div class="spotlight" id="featured">
+<div class="spotlight-top"><div class="spotlight-meta"><span class="league-mini" id="spotLeague">—</span><small id="spotDate">—</small></div><span class="match-tag" id="spotLabel">MODEL MATCH</span></div>
+<div class="featured-center"><div class="featured-team" id="spotHome"><span class="featured-crest placeholder">FC</span><b>—</b></div><div class="featured-vs">VS</div><div class="featured-team" id="spotAway"><span class="featured-crest placeholder">FC</span><b>—</b></div></div>
+<div class="formline" id="spotForm"><span>FORM</span><div class="form-dots" aria-label="Πρόσφατη φόρμα μη διαθέσιμη">◌ ◌ ◌ ◌ ◌</div><span class="form-note">Δεν υπάρχουν στοιχεία φόρμας</span></div>
+<div class="feature-pred" id="spotPred"><div class="feature-prob muted">Αναμονή πιθανοτήτων…</div></div>
+<div class="feature-markets" id="spotMarkets"></div>
+<button class="feature-open" id="spotDetails">Πλήρης ανάλυση <span>↗</span></button>
+</div>
+<aside class="stat-widget" id="stats"><div class="widget-head"><div><span class="section-kicker">MATCH METRICS</span><h3>Βασικά στατιστικά</h3></div><span class="stat-visual">▥</span></div>
+<div class="comparison-head"><div id="statsHome">HOME</div><div id="statsAway">AWAY</div></div>
+<div id="statsCompare" class="stat-rows"></div>
+<div class="stats-note"><span>ⓘ</span> Η διαθεσιμότητα εξαρτάται από την πηγή δεδομένων. Τα αναμενόμενα γκολ προέρχονται από το μοντέλο.</div>
+<button id="statsAnalyze" class="insights-link">Πλήρης εικόνα αγώνα <span>→</span></button>
+</aside>
+</section>
+<section class="results" id="fixtures">
+<div class="results-top"><div><span class="section-kicker">FIXTURE INTELLIGENCE</span><h2>Πρόγραμμα αγώνων <span id="matchesCount">—</span></h2></div>
+<div class="results-actions"><div class="segmented" role="group" aria-label="Φίλτρα"><button class="active" data-quick="all">Όλοι</button><button data-quick="predicted">Με ανάλυση</button><button data-quick="favorites">☆</button></div><button class="refresh-btn" id="refreshBtn" aria-label="Ανανέωση αγώνων">↻</button></div></div>
+<div class="table-scroll"><table class="matches-table"><thead><tr><th>ΩΡΑ</th><th>ΛΙΓΚΑ</th><th>ΑΝΑΜΕΤΡΗΣΗ</th><th>1</th><th>Χ</th><th>2</th><th>OVER 2.5</th><th>UNDER 2.5</th><th>BTTS</th><th aria-label="Αγαπημένα"></th></tr></thead><tbody id="matchRows"><tr><td class="loading-cell" colspan="10">Φόρτωση πραγματικών αγώνων…</td></tr></tbody></table></div>
+<div class="list-footer"><span>Οι πιθανότητες προέρχονται από πειραματικό μοντέλο Poisson.</span><button id="loadMore" class="load-more" hidden>Περισσότεροι αγώνες ↓</button></div></section>
+<footer class="footer"><span>© <span id="year">2026</span> TIKI-DATA / FOOTBALL INTELLIGENCE</span><span>Υπολογισμένες πιθανότητες · Όχι αποδόσεις στοιχηματικών · <a href="https://www.football-data.org/" target="_blank" rel="noopener">Data source ↗</a></span></footer>
+</main>
+</div>
+<nav class="bottom-nav" aria-label="Κινητή πλοήγηση"><a href="/"><span>⌂</span>Αρχική</a><a href="#fixtures"><span>◫</span>Αγώνες</a><a href="/predictions"><span>▥</span>Προβλέψεις</a><button data-quick="favorites"><span>☆</span>Αγαπημένα</button><a href="#competitions"><span>☷</span>Λίγκες</a></nav>
+</div>
+<div class="modal-mount" id="modalMount"></div>
+<script defer src="/app.js"></script>
+</body></html>
