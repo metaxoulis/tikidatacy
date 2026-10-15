@@ -1,6 +1,6 @@
 // The API token and Poisson calculations remain entirely in Cloudflare Pages server code.
 // This module handles only public, already-computed fixture probabilities.
-import {hasPrediction} from './components.js?v=8';
+import {hasPrediction} from './components.js?v=9';
 const API_URL='/api/fixtures';
 const demoFixtures=()=>[
  {id:'demo-1',league:'ucl',home:'Orion FC',away:'Vega City',date:new Date(Date.now()+3600000*18).toISOString(),p1:48,px:27,p2:25,over25:58,under25:42,btts:62,no_btts:38},
