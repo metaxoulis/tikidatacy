@@ -29,6 +29,9 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_*.py' -v
       - name: Fetch CC0 sources and retrain QA candidate
         run: python -m learning_engine.pipeline --output learning-engine-output
+      - name: Print aggregate QA evaluation to job log
+        if: success()
+        run: cat learning-engine-output/REPORT.md
       - name: Store model candidate and reproducible QA reports
         if: always()
         uses: actions/upload-artifact@v4
