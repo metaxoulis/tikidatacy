@@ -39,3 +39,12 @@ Check `/` and `/predictions` for desktop and 390px mobile widths. Verify the mat
 - Existing data feed and predictive model are unchanged; the frontend remains a Cloudflare Pages advanced-mode Worker in `../frontend/worker.js`.
 
 QA: test 390px and desktop routes `/` and `/predictions`; verify initial (no-JS) skeleton markup and that a completed API request removes placeholders. Check one match with absent model percentages and the form empty state. See reduced-motion mode.
+
+
+## v15 — 2026-10-16: official image catalogue and logo contrast
+- `logos.js` is a **static exported snapshot** of the 137 verified club URLs and 6 current-competition logo URLs in D1 `tiki_data_lab.logo_assets` (17 competition-season rows collapse to 6 visual marks).
+- The source is loaded before `app.js`. Home, Predictions, match-table, hero, competition sidebar and mobile league tabs use it where team/competition names match. Explicit Olympiacos alias and unique suffix-normalized fallback avoid guessing when names differ. Unmatched clubs still use known football-data.org crest IDs or a local SVG fallback.
+- New pearl/slate neutral backgrounds, subtle borders and controlled drop-shadows keep both dark and white marks legible in the dark Tiki-Data dashboard. Images are **not recolored**. On image load failure, JS removes only the broken overlay and reveals the placeholder.
+- The advanced-mode Pages Worker bundles `logos.js` as a static route and allows the two image hosts in CSP; the Poisson API and pinned backend remain untouched.
+- The snapshot does not update automatically with future D1 additions; refresh the generated logo catalog and redeploy the direct-upload Pages project to pick up additional teams.
+- Club and league identities remain third-party trademarks; links to assets do not grant merchandising/redistribution rights.
