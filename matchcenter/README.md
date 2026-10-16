@@ -26,3 +26,9 @@ The project uses direct-upload Cloudflare Pages. Updating GitHub does **not** au
 **Do not delete** the baseline deployment `4751cad8`: CSS, JS, and existing API requests are currently proxied to it so no prediction functionality is rewritten or lost. The architectural follow-up is to check the full original Pages Functions/asset source into this repository and remove the upstream dependency; do not mistake this bridge for a standalone backend export.
 
 If the D1 logo query ever becomes unavailable, `/api/logos` returns HTTP 503 and existing match cards remain functional with local SVG emblems. Health returns 503 when either API or logos are disconnected.
+
+
+## v15 — contrast fix
+- The Match Center serves `/logo-contrast.css` and injects it **after** the upstream `styles.css`. Transparent logos sit on an off-white pearl/slate tile, with an outline and subtle shadow. The original logo pixels are not recolored.
+- Keeps the D1-backed `/api/logos` endpoint and the immutable upstream API intact. Missing images still fall back to SVG.
+- Preview-verified with 24 real match cards and 90 mapped emblem elements on both desktop and 390px mobile screens.

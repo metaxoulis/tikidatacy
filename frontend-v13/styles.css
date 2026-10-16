@@ -130,3 +130,51 @@ button:disabled{opacity:.5;cursor:default}::selection{color:#072423;background:#
 .form-empty{min-height:46px;margin:10px 11px 14px}
 }
 @media(prefers-reduced-motion:reduce){.skel{animation:none;background-size:100% 100%;opacity:.78}.bottom-nav .ui-icon{transition:none}}
+
+
+/* v15: Correct crest contrast without recoloring protected club marks. */
+/* Neutral pearl-slate tiles make dark badges readable while a fine rim still separates white logos. */
+.featured-crest,.table-crest,.small-league,.side-league .league-badge,.mobile-league-tabs .tab-league{
+  position:relative;
+  isolation:isolate;
+  overflow:hidden;
+  background:linear-gradient(145deg,#f0f6f8,#d5e3e9);
+  border:1px solid rgba(180,214,224,.95);
+  color:#26546a;
+  box-shadow:inset 0 1px 2px #ffffffba,0 2px 8px #04172548;
+}
+.featured-crest img,.table-crest img,.small-league img,.side-league .league-badge img,.mobile-league-tabs .tab-league img{object-fit:contain}
+.featured-crest .logo-fallback,.table-crest .logo-fallback{
+  width:75%;height:75%;position:relative;
+  display:block;z-index:0;
+  border-radius:50%;
+}
+.featured-crest .logo-image,.table-crest .logo-image,.small-league .logo-image,.side-league .league-badge .logo-image,.mobile-league-tabs .tab-league .logo-image{
+  position:absolute;
+  z-index:1;
+  inset:0;
+  width:100%;
+  height:100%;
+  margin:0;
+  object-fit:contain;
+  padding:12%;
+  background:transparent;
+  filter:drop-shadow(0 0 1px #16324499) drop-shadow(0 1px 1px #17314077);
+  border-radius:inherit;
+}
+.small-league,.side-league .league-badge,.mobile-league-tabs .tab-league{display:inline-grid;place-items:center}
+.side-league .league-badge{flex:none;min-width:24px;width:24px;height:24px}
+.mobile-league-tabs .tab-league{flex:none;min-width:22px;width:22px;height:22px}
+.league-mini{display:inline-flex;align-items:center;gap:7px;min-width:0}
+.league-mini .small-league{width:24px;height:24px;min-width:24px}
+.league-logo .small-league{width:26px;height:26px}
+.featured-team .featured-crest{width:60px;height:60px}
+.modal-team .featured-crest{width:60px;height:60px}
+.match-line:hover .table-crest,.side-league:hover .league-badge{
+  border-color:#b0dfe2;
+  box-shadow:0 0 0 1px #86e3cc33,0 2px 8px #020e1a5c;
+}
+@media(max-width:740px){
+  .featured-team .featured-crest{width:55px;height:55px}
+  .featured-team .featured-crest .logo-image{padding:12%}
+}
