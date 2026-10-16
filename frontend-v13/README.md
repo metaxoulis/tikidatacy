@@ -60,3 +60,20 @@ Shared `app.js` checks the path and only initializes elements found on that page
 Main navigation highlights `Αρχική` vs `Προβλέψεις` based on the **route**, not the selected filter. Hero counts, model probabilities, crests and API source remain unchanged. Empty upcoming schedules show an honest empty state instead of past fixtures.
 
 Cloudflare Pages `frontend/worker.js` bundles both documents, serving distinct responses for `/` and `/predictions`; the existing read-only `/api/*` upstream is untouched. The project is still Cloudflare Pages Direct Upload, so a GitHub merge alone does not trigger a deployment.
+
+## v18 — homepage runtime isolation and API error recovery
+
+**The root cause risk:** after the homepage/predictions page split, both routes continued executing the same DOM-heavy `app.js`. Any unguarded selector from the predictions table, sidebar or filters could interrupt homepage rendering and strand the skeleton placeholders.
+
+**Fix:**
+- `index.html` now loads `/logos.js` and an entirely independent `/home.js`; **it does not execute `app.js`**.
+- `home.js` only accesses the Hero counters, featured match, comparison stats, top-three upcoming cards and its small interactive controls. DOM writes use guarded lookups. A failed fetch or malformed payload clears all loading indicators, shows an explicit error and offers a retry button.
+- `predictions.html` still loads `app.js`; its entrypoint now returns immediately on any other route.
+- The existing API contract is **`GET /api/fixtures`**. Browser JS does not contact football-data.org directly or expose private provider credentials; the Cloudflare Worker forwards this route to the previously pinned read-only API deployment. Fields: `matches[].id/date/league/home/away/p1/px/p2/over25/under25/btts/no_btts/mu_home/mu_away`.
+- `frontend/worker.js` bundles and serves the new `home.js` route and uses `Cache-Control: no-cache, must-revalidate` for HTML and JS to avoid old-script/new-HTML cache mismatches during Direct Upload releases.
+
+**Testing:**
+- Programmatic browser-mock smoke checks: successful API response renders 3 upcoming matches and clears `aria-busy`; rejected request displays retry/error state and clears `aria-busy` instead of infinite skeletons.
+- Cloudflare Preview https://822dcb08.tiki-data.pages.dev/: desktop **129 matches**, featured match populated, **3 upcoming cards**, no remaining skeletons; 390px mobile renders the same.
+- Cloudflare Preview `/predictions`: 100 rendered table rows, 7 league tabs and no remaining loading placeholders.
+- No model or match API changes were necessary.

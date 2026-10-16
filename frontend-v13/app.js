@@ -1,6 +1,7 @@
 (()=>{
 'use strict';
 const IS_PREDICTIONS=location.pathname.startsWith('/predictions');
+if(!IS_PREDICTIONS)return; // this controller must never initialize homepage-only DOM.
 const $=(s,root=document)=>root.querySelector(s);
 const $$=(s,root=document)=>Array.from(root.querySelectorAll(s));
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
