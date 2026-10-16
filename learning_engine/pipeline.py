@@ -7,6 +7,7 @@ from datetime import date, datetime, timezone, timedelta
 from pathlib import Path
 from .sources import DATASETS, Match, dataset_integrity, download_dataset
 from .model import PARAMETERS, LAG_DAYS, evaluate, clip
+from .advanced import evaluate_dc, RHO_RIDGE
 from math import exp
 
 VERSION = 'learning-engine-v1.0.0'
@@ -30,6 +31,11 @@ def quality_gates(games: list[Match], now: date) -> dict:
             reasons.append(f'{league}: inadequate recently recorded finals ({scored}/{len(recent)}), future scores={future_scored}')
     if not breakdown:
         reasons.append('No current-season competitions in sources')
+    latest = max((m.day for m in games if m.finished and m.day <= now),default=None)
+    # A stale historical archive must never be presented as an up-to-date live model.
+    if latest is None or (now-latest).days > 7:
+        reasons.append(f'Stale final-score feed: latest={latest}; max age=7 days')
+
     return {'passed':not reasons,'reasons':reasons,'by_league':breakdown,
             'window':'21 days to 3 days before run date','minimum_recent_coverage':.85}
 
@@ -76,9 +82,13 @@ def train(fixtures:list[Match], *,asof: date, manifest:list[dict],prospective_ve
     qualified=[v for v in validation if v['model']['n']>=250]
     selected=min(qualified,key=lambda x:(x['model']['brier'],x['model']['log_loss'])) if qualified else None
     holdout=None
+    advanced_validation=None
+    advanced_holdout=None
     if selected:
         trial,base=evaluate(finished_known,CURRENT_SEASON,selected['prior'],selected['decay_days'])
         holdout={'model':trial,'baseline':base}
+        advanced_validation=evaluate_dc(finished_known,'2025-26',selected['prior'],selected['decay_days'],RHO_RIDGE)
+        advanced_holdout=evaluate_dc(finished_known,CURRENT_SEASON,selected['prior'],selected['decay_days'],RHO_RIDGE)
     blockers=list(quality['reasons'])
     if not selected:
         blockers.append('Validation coverage insufficient to select hyperparameters')
@@ -89,6 +99,14 @@ def train(fixtures:list[Match], *,asof: date, manifest:list[dict],prospective_ve
               holdout['model']['brier']>holdout['baseline']['brier']-.002 or
               holdout['model']['log_loss']>holdout['baseline']['log_loss']-.002):
             blockers.append('Holdout is too small or did not outperform baseline')
+    if selected:
+        # Improvement must be demonstrated on a temporally later, untouched season.
+        # Never select the candidate because it won on its own validation set alone.
+        for label,report,minimum in [('validation',advanced_validation,250),('holdout',advanced_holdout,80)]:
+            if (not report or report['candidate']['n'] < minimum or
+                    report['brier_gain'] is None or report['logloss_gain'] is None or
+                    report['brier_gain'] < .002 or report['logloss_gain'] < .002):
+                blockers.append(f'Dixon-Coles candidate not proven better on {label} by Brier and log loss')
     if prospective_verified<100:
         blockers.append(f'Only {prospective_verified} independently logged pre-match predictions; 100 required before promotion review')
     profile=fit_profiles(finished_known,asof=asof,
@@ -98,7 +116,11 @@ def train(fixtures:list[Match], *,asof: date, manifest:list[dict],prospective_ve
             'run_at_utc':datetime.now(timezone.utc).isoformat(timespec='seconds'),
             'licensing':'OpenFootball football.json: CC0 1.0 Universal',
             'data_source':'OpenFootball archive downloaded at run time; not a live/as-of historical record',
-            'model_family':'Poisson with time-decay and empirical-Bayes venue shrinkage',
+            'model_family':'Research candidate: Poisson with time-decay, empirical-Bayes venue shrinkage and penalized Dixon-Coles correction',
+            'numerical_method':'bounded Newton-Raphson optimization of penalized low-score log likelihood',
+            'rho_ridge':RHO_RIDGE,
+            'advanced_validation_2025_26':advanced_validation,
+            'advanced_holdout_2026_27':advanced_holdout,
             'feature_cutoff_policy':f'Exclude results within {LAG_DAYS} calendar days of fixture date',
             'source_manifest':manifest,'datasets':len(manifest),'fixtures':len(fixtures),
             'validation_2025_26':validation,'holdout_2026_27':holdout,
@@ -109,6 +131,7 @@ def train(fixtures:list[Match], *,asof: date, manifest:list[dict],prospective_ve
             'blockers':blockers,
             'important_caveats':[
                 'Current public Tiki-Data site uses a different prediction provider; do not claim these metrics for it.',
+                'Dixon-Coles candidate is NOT deployed or used for live percentages until quality gates and prospective validation pass.',
                 'Historical backtesting uses archives fetched now, not immutable snapshots taken before every historical fixture.',
                 'An automated retrain is not automatic model promotion; source gaps and missing lineups remain.',
                 'Accuracy and probability calibration are uncertain; predictions are not bookmaker odds or guaranteed outcomes.'
@@ -130,6 +153,12 @@ def write_reports(result:dict,output:Path) -> None:
     lines += ['', '## Validation (2025/26, retrospective; archived data may have been revised)']
     for v in result['validation_2025_26']:
         lines.append(f"- prior {v['prior']}, decay {v['decay_days']}d: model Brier={v['model']['brier']}, 1X2 top pick={v['model']['accuracy']}, N={v['model']['n']}; baseline Brier={v['baseline']['brier']}")
+    if result.get('advanced_validation_2025_26'):
+        a=result['advanced_validation_2025_26']
+        lines+=['',f"## Dixon-Coles vs independent Poisson — validation 2025/26: N={a['candidate']['n']}, DC Brier={a['candidate']['brier']}, independent={a['independent']['brier']}, Δ={a['brier_gain']}"]
+    if result.get('advanced_holdout_2026_27'):
+        a=result['advanced_holdout_2026_27']
+        lines+=['',f"## Dixon-Coles vs independent Poisson — holdout 2026/27: N={a['candidate']['n']}, DC Brier={a['candidate']['brier']}, independent={a['independent']['brier']}, Δ={a['brier_gain']}"]
     if result['holdout_2026_27']:
         h=result['holdout_2026_27']
         lines += ['',f"## Holdout 2026/27: N={h['model']['n']}, model Brier={h['model']['brier']}, baseline={h['baseline']['brier']}"]

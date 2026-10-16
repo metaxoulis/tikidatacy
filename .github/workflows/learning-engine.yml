@@ -1,15 +1,15 @@
 name: Tiki-Data Learning Engine — QA retraining
 on:
   push:
-    branches: ['feature/learning-engine-v1']
+    branches: ['feature/learning-engine-v1', 'research/**']
     paths:
       - 'learning_engine/**'
-      - 'tests/test_learning_engine.py'
+      - 'tests/test_*.py'
       - '.github/workflows/learning-engine.yml'
   pull_request:
     paths:
       - 'learning_engine/**'
-      - 'tests/test_learning_engine.py'
+      - 'tests/test_*.py'
       - '.github/workflows/learning-engine.yml'
   schedule:
     - cron: '20 6 * * *'
@@ -26,9 +26,12 @@ jobs:
         with:
           python-version: '3.12'
       - name: Unit tests — leakage and sanity gates
-        run: python -m unittest discover -s tests -p test_learning_engine.py -v
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
       - name: Fetch CC0 sources and retrain QA candidate
         run: python -m learning_engine.pipeline --output learning-engine-output
+      - name: Print aggregate QA evaluation to job log
+        if: success()
+        run: cat learning-engine-output/REPORT.md
       - name: Store model candidate and reproducible QA reports
         if: always()
         uses: actions/upload-artifact@v4

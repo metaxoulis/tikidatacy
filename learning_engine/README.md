@@ -19,3 +19,16 @@ python -m learning_engine.pipeline --output learning-engine-output
 ```
 
 No third-party Python dependencies or secrets. Network access is needed only for ingestion. Workflow scheduling starts after this PR is merged to the default branch because GitHub Actions cron runs there; branch push/PR runs tests before approval.
+
+
+## Research v2: penalized Dixon–Coles low-score correction
+
+Added `learning_engine/advanced.py`, a no-dependency experimental model that **starts from the existing shrinkage/time-decayed Poisson team strengths** and fits a league-level low-score interaction parameter `rho`. The parameter is estimated from historical final scores via **bounded Newton–Raphson on a ridge-penalized log likelihood**. The joint Poisson score distribution is normalized and produces mutually consistent 1X2, Over/Under 2.5, BTTS, clean-sheet probabilities, expected goals and five likely scorelines.
+
+Important safeguards: strict three-calendar-day result cutoff, minimum 80 prior league results and five venue results per team, no made-up predictions for unknown/promoted/cross-division opponents. Higher mathematical complexity alone does NOT imply better forecasts.
+
+`pipeline.py` selects independent-Poisson parameters using retrospective 2025/26 validation, then evaluates Dixon–Coles **on the same prediction cohort** against that independent Poisson and on the **later 2026/27 holdout**. The advanced candidate cannot be promoted unless both Brier score and log loss improve by at least 0.002 on both periods, the fresh-results checks pass, and 100 independently recorded pre-match predictions exist. The comparison uses the latest fetched retrospective archive, **not** true archived pre-match snapshots.
+
+**The public production predictions continue to use their existing independent API.** This new algorithm is a QA-only research candidate; it does not replace the API or change betting recommendations. GitHub Actions produces candidate and audit artifacts, never automatically deploys a model.
+
+Data source is currently problematic: on 2026-10-16 the existing Cloudflare D1 `tiki_data_lab` contained 5,674 rows, 4,031 finished scores and latest scored fixture 2026-09-20. More advanced mathematics cannot compensate for missing results. Update and independently verify the source snapshots before discussing production use.
