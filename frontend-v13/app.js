@@ -1,5 +1,6 @@
 (()=>{
 'use strict';
+try{
 const IS_PREDICTIONS=location.pathname.startsWith('/predictions');
 const $=(s,root=document)=>root.querySelector(s);
 const $$=(s,root=document)=>Array.from(root.querySelectorAll(s));
@@ -128,4 +129,5 @@ document.addEventListener('error',e=>{const im=e.target;if(im&&im.tagName==='IMG
 if(IS_PREDICTIONS)$('a[href="/predictions"]', $('.bottom-nav'))?.setAttribute('aria-current','page');else $('a[href="/"]', $('.bottom-nav'))?.setAttribute('aria-current','page');
 $('#year').textContent=String(new Date().getFullYear());
 update();fetchFixtures();
+}catch(error){document.body.setAttribute('data-tiki-runtime-error',String(error&&error.stack||error).slice(0,1200));console.error('Tiki-Data start failed',error)}
 })();
