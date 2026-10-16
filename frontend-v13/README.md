@@ -48,3 +48,15 @@ QA: test 390px and desktop routes `/` and `/predictions`; verify initial (no-JS)
 - The advanced-mode Pages Worker bundles `logos.js` as a static route and allows the two image hosts in CSP; the Poisson API and pinned backend remain untouched.
 - The snapshot does not update automatically with future D1 additions; refresh the generated logo catalog and redeploy the direct-upload Pages project to pick up additional teams.
 - Club and league identities remain third-party trademarks; links to assets do not grant merchandising/redistribution rights.
+
+
+## v16 — Independent overview and predictions pages
+The frontend has two **separate HTML documents**, not merely two tabs hiding a single long table:
+- `/` (from `index.html`): stadium hero with counts based on the real fixture feed, featured upcoming match, model/goal stats, and **exactly three** chronologically upcoming fixtures. No sidebar, dense table, or date/league filter blocks. Mobile still displays the featured comparison statistics.
+- `/predictions` (from `predictions.html`): league sidebar, mobile league tabs, date filters, search, favorites, full 1/X/2 · O/U · BTTS table; shows 100 results initially and allows loading the rest. This page does not load the homepage hero or featured-match markup.
+
+Shared `app.js` checks the path and only initializes elements found on that page. The global search on the homepage navigates to `/predictions?q=...` on Enter. Favorites direct links use `/predictions?filter=favorites`. Deep-link anchors on mobile open the visible league tabs.
+
+Main navigation highlights `Αρχική` vs `Προβλέψεις` based on the **route**, not the selected filter. Hero counts, model probabilities, crests and API source remain unchanged. Empty upcoming schedules show an honest empty state instead of past fixtures.
+
+Cloudflare Pages `frontend/worker.js` bundles both documents, serving distinct responses for `/` and `/predictions`; the existing read-only `/api/*` upstream is untouched. The project is still Cloudflare Pages Direct Upload, so a GitHub merge alone does not trigger a deployment.
