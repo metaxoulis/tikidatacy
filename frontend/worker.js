@@ -1795,7 +1795,7 @@ async function tdBackfillHistory(env){
    return;
   }
   // League IDs come only from previously verified Sportmonks fixtures.
-  const fresh=await db.prepare('SELECT payload_json FROM sportapi_home_cache WHERE cache_key=?1').bind(SM_FOCUS_CACHE_KEY).first();
+  const fresh=await db.prepare('SELECT payload_json FROM sportapi_home_cache WHERE cache_key=?1').bind('focus_hierarchical_v5').first();
   const cache=JSON.parse(fresh?.payload_json||'null');
   const ids=new Set((cache?.matches||[]).filter(m=>FH_LEAGUES[m.league_key]&&Number.isSafeInteger(m.league_id)&&m.league_id>0).map(m=>m.league_id));
   if(ids.size<6){
