@@ -118,11 +118,21 @@ function fhSelect(fixtures,model,limit=7){
   const prev=dedup.get(k);
   if(!prev||(prev.provider==='allsportsapi'&&m.provider==='sportapi.ai'))dedup.set(k,m);
  }
- const group=[...dedup.values()],first=[],seen=new Set();
- for(const m of group){if(!seen.has(m.league_key)){first.push(m);seen.add(m.league_key);}}
- const picks=[...first,...group.filter(m=>!first.includes(m))].slice(0,limit);
- const next=picks.map(m=>{const estimate=fhEstimate(m,model);return {...m,model:{...estimate,most_likely_score:fhLikelyScore(estimate.mu_home,estimate.mu_away)}};});
- return {featured:next[0]||null,upcoming:next.slice(1),fixtures_available:group.length,leagues_available:[...new Set(group.map(m=>m.league_key))].map(k=>FH_LEAGUES[k].name)};
+ // Only genuine matched historic home-and-away venue samples qualify.
+ // No league-only priors or generic 43/26/31 scorelines are publicly published.
+ const group=[...dedup.values()],vetted=[];
+ for(const m of group){
+  const estimate=fhEstimate(m,model);
+  if(estimate.method!=='openfootball_cc0_fitted_venue_poisson'||!estimate.team_samples
+   ||estimate.team_samples.home<3||estimate.team_samples.away<3)continue;
+  vetted.push({...m,model:{...estimate,most_likely_score:fhLikelyScore(estimate.mu_home,estimate.mu_away)}});
+ }
+ const first=[],seen=new Set();
+ for(const m of vetted){if(!seen.has(m.league_key)){first.push(m);seen.add(m.league_key);}}
+ const next=[...first,...vetted.filter(m=>!first.includes(m))].slice(0,limit);
+ return {featured:next[0]||null,upcoming:next.slice(1),matches:vetted,
+  fixtures_available:vetted.length,real_fixtures_seen:group.length,
+  leagues_available:[...new Set(vetted.map(m=>m.league_key))].map(k=>FH_LEAGUES[k].name)};
 }
 function fhSportFixtures(b,secret){
  const raw=Array.isArray(b?._fixtures)?b._fixtures:[];
@@ -139,9 +149,9 @@ const fhJSON=(data,status=200)=>new Response(JSON.stringify(data),{status,header
 async function fhHomeResponse(req,env,ctx){
  if(req.method!=='GET')return fhJSON({error:'method_not_allowed'},405);
  const cache=typeof caches!=='undefined'?caches.default:null;
- const cacheKey=new Request('https://tiki-cache.local/focus-home-v1');
+ const cacheKey=new Request('https://tiki-cache.local/focus-home-v2');
  try{const hit=await cache?.match(cacheKey);if(hit)return hit;}catch{}
- try{if(env?.TIKI_DB){const row=await env.TIKI_DB.prepare("SELECT payload_json FROM sportapi_home_cache WHERE cache_key='focus_v1' AND expires_at>?1").bind(Math.floor(Date.now()/1000)).first();if(row?.payload_json)return fhJSON(JSON.parse(row.payload_json));}}catch{}
+ try{if(env?.TIKI_DB){const row=await env.TIKI_DB.prepare("SELECT payload_json FROM sportapi_home_cache WHERE cache_key='focus_v2' AND expires_at>?1").bind(Math.floor(Date.now()/1000)).first();if(row?.payload_json)return fhJSON(JSON.parse(row.payload_json));}}catch{}
  const today=new Date().toISOString().slice(0,10);
  const days=[today,tdAddDays(today,1),tdAddDays(today,2)];
  const allTask=env?.ALLSPORTS_API_KEY?Promise.allSettled(days.map(async date=>{
@@ -159,14 +169,23 @@ async function fhHomeResponse(req,env,ctx){
  const result={source:'SportAPI.ai + AllSportsAPI',updated_at:new Date().toISOString(),range:days,
   coverage:{matches:selected.fixtures_available,competitions:selected.leagues_available.length},
   featured:selected.featured,upcoming:selected.upcoming,
+  matches:selected.matches.map(m=>({
+   id:m.id,league:m.league,league_key:m.league_key,home:m.home,away:m.away,date:m.date,
+   status:m.status,logos:m.logos,league_logo:m.league_logo,
+   p1:m.model.p1,px:m.model.px,p2:m.model.p2,over25:m.model.over25,under25:m.model.under25,
+   btts:m.model.btts,no_btts:m.model.no_btts,mu_home:m.model.mu_home,mu_away:m.model.mu_away,
+   most_likely_score:m.model.most_likely_score,confidence:'experimental',
+   coverage:'verified_historical_inputs',method:m.model.method,validated:false,
+   historical_sample:m.model.team_samples,history_latest:m.model.history_latest
+  })),
   leagues_with_matches:selected.leagues_available,
-  model:{name:'CC0 historical venue Poisson (experimental)',trained_at:model?.trained_at||null,historical_cutoff:model?.cutoff||null,history_leagues:Object.keys(model?.leagues||{}),validated:false,
+  model:{name:'CC0 historical venue Poisson (experimental)',historical_matches:Object.values(model?.leagues||{}).reduce((n,l)=>n+(l.matches||0),0),trained_at:model?.trained_at||null,historical_cutoff:model?.cutoff||null,history_leagues:Object.keys(model?.leagues||{}),validated:false,
    note:'Not an LLM. Pure statistical fitting to licensed OpenFootball finished scores; no verified prospective track record.'},
   fallback_reason:fixtures.length?'': 'No upstream fixtures available',data_sources:{sportapi:fhSportFixtures(sport).length,allsports:raw.length}};
  // Prospective evaluation log: only genuinely team-fitted predictions well before kickoff.
  // Never backdate forecasts and never count generic no-data priors as learned predictions.
  if(env?.TIKI_DB&&ctx?.waitUntil&&model){
-  const now=Date.now(),eligible=[selected.featured,...selected.upcoming].filter(m=>
+  const now=Date.now(),eligible=selected.matches.filter(m=>
     m&&m.model?.method==='openfootball_cc0_fitted_venue_poisson'&&Date.parse(m.date)>now+2*3600000);
   if(eligible.length){
    const writes=eligible.map(m=>env.TIKI_DB.prepare(
@@ -177,7 +196,7 @@ async function fhHomeResponse(req,env,ctx){
  }
  const response=fhJSON(result,200);
  try{ctx?.waitUntil?.(cache?.put(cacheKey,response.clone()))}catch{}
- if(env?.TIKI_DB&&ctx?.waitUntil){const payload=JSON.stringify(result);ctx.waitUntil(env.TIKI_DB.prepare("INSERT INTO sportapi_home_cache(cache_key,payload_json,expires_at,saved_at) VALUES('focus_v1',?1,?2,?3) ON CONFLICT(cache_key) DO UPDATE SET payload_json=excluded.payload_json,expires_at=excluded.expires_at,saved_at=excluded.saved_at").bind(payload,Math.floor(Date.now()/1000)+600,new Date().toISOString()).run().catch(()=>{}));}
+ if(env?.TIKI_DB&&ctx?.waitUntil){const payload=JSON.stringify(result);ctx.waitUntil(env.TIKI_DB.prepare("INSERT INTO sportapi_home_cache(cache_key,payload_json,expires_at,saved_at) VALUES('focus_v2',?1,?2,?3) ON CONFLICT(cache_key) DO UPDATE SET payload_json=excluded.payload_json,expires_at=excluded.expires_at,saved_at=excluded.saved_at").bind(payload,Math.floor(Date.now()/1000)+600,new Date().toISOString()).run().catch(()=>{}));}
  return response;
 }
 export {fhLeague,fhName,fhTrain,fhEstimate,fhSelect,fhHomeResponse,FH_LEAGUES};

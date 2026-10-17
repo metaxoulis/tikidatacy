@@ -23,18 +23,18 @@ function markets(m){
  if(!p)return '<div class="unavailable">Η στατιστική εκτίμηση δεν είναι διαθέσιμη.</div>';
  const vals=[p.p1,p.px,p.p2],best=vals.indexOf(Math.max(...vals));
  return '<div class="side-label">ΥΠΟΛΟΓΙΣΜΕΝΕΣ ΠΙΘΑΝΟΤΗΤΕΣ</div><div class="triple">'+['1','Χ','2'].map((n,i)=>'<div'+(i===best?' class="best"':'')+'><small>'+n+'</small><b>'+pct(vals[i])+'</b></div>').join('')+'</div><div class="other-markets"><div><small>OVER 2.5</small><b>'+pct(p.over25)+'</b></div><div><small>GG / BTTS</small><b>'+pct(p.btts)+'</b></div></div>'+
- '<div class="forecast-result"><span>Πιθανότερο σκορ (εκτίμηση)</span><strong>'+esc(p.most_likely_score?.score||'—')+'</strong><small>'+pct(p.most_likely_score?.probability)+'</small></div>'+ '<p class="model-note">'+(p.method==='openfootball_cc0_fitted_venue_poisson'?'Πειραματικό μοντέλο από ιστορικά αποτελέσματα OpenFootball · '+esc(p.data_points)+' αγώνες · στοιχεία έως '+esc(p.history_latest):'Πολύ χαμηλή αξιοπιστία: δεν υπάρχουν επιβεβαιωμένα ιστορικά στοιχεία των δύο ομάδων. Χρησιμοποιείται γενικό υπόδειγμα, όχι εξατομικευμένη πρόβλεψη.')+' Καμία εκτίμηση δεν έχει πιστοποιημένη ακρίβεια.</p>';
+ '<div class="forecast-result"><span>Πιθανότερο σκορ (εκτίμηση)</span><strong>'+esc(p.most_likely_score?.score||'—')+'</strong><small>'+pct(p.most_likely_score?.probability)+'</small></div>'+ '<p class="model-note">'+(p.method==='openfootball_cc0_fitted_venue_poisson'?'Πειραματικό μοντέλο από καταγεγραμμένα ιστορικά αποτελέσματα · '+esc(p.data_points)+' αγώνες · στοιχεία έως '+esc(p.history_latest):'Πολύ χαμηλή αξιοπιστία: δεν υπάρχουν επιβεβαιωμένα ιστορικά στοιχεία των δύο ομάδων. Χρησιμοποιείται γενικό υπόδειγμα, όχι εξατομικευμένη πρόβλεψη.')+' Καμία εκτίμηση δεν έχει πιστοποιημένη ακρίβεια.</p>';
 }
 function featured(m){
- if(!m){$('featuredContent').innerHTML='<div class="loading">Δεν υπάρχουν προγραμματισμένοι αγώνες στα επτά επιλεγμένα πρωταθλήματα για το επόμενο τριήμερο.</div>';return;}
+ if(!m){$('featuredContent').innerHTML='<div class="loading">Δεν υπάρχουν επερχόμενοι αγώνες με επαρκή τεκμηριωμένα ιστορικά στοιχεία για το επόμενο τριήμερο.</div>';return;}
  $('featuredContent').innerHTML='<div class="feature-top"><b>'+leagueEmblem(m.league,m.league_logo)+esc(m.league)+'</b><span>'+(isLive(m)?'● LIVE':isDone(m)?'ΤΕΛΙΚΟ':'ΕΠΟΜΕΝΟΣ ΑΓΩΝΑΣ')+' · '+esc(when(m))+'</span></div>'+
- '<div class="feature-grid"><div class="feature-main"><div class="featured-teams"><div class="ft-team">'+crest(m,'home')+'<b>'+esc(m.home)+'</b></div><div class="vs"><strong>'+esc(score(m))+'</strong>'+(isLive(m)?'LIVE':'FOOTBALL')+'</div><div class="ft-team">'+crest(m,'away')+'<b>'+esc(m.away)+'</b></div></div><div class="feat-bottom"><span class="f-league"><span class="league-icon">TD</span>'+esc(m.league)+'</span><a href="/data" class="feat-details">Πλήρη στοιχεία αγώνα →</a></div></div><aside class="feature-side">'+markets(m)+'</aside></div>';
+ '<div class="feature-grid"><div class="feature-main"><div class="featured-teams"><div class="ft-team">'+crest(m,'home')+'<b>'+esc(m.home)+'</b></div><div class="vs"><strong>'+esc(score(m))+'</strong>'+(isLive(m)?'LIVE':'FOOTBALL')+'</div><div class="ft-team">'+crest(m,'away')+'<b>'+esc(m.away)+'</b></div></div><div class="feat-bottom"><span class="f-league"><span class="league-icon">TD</span>'+esc(m.league)+'</span><a href="/predictions" class="feat-details">Πλήρη στοιχεία αγώνα →</a></div></div><aside class="feature-side">'+markets(m)+'</aside></div>';
  $('featuredContent').setAttribute('aria-busy','false');
 }
 function upcoming(matches){
  const wrap=$('upcomingGrid'),items=Array.isArray(matches)?matches.slice(0,6):[];document.querySelector('.upcoming-heading').hidden=!items.length;wrap.hidden=!items.length;
  if(!items.length){wrap.replaceChildren();}
- else wrap.innerHTML=items.map(m=>'<article class="upcoming-card"><div class="up-meta"><span>'+leagueEmblem(m.league,m.league_logo)+esc(m.league)+'</span><span>'+esc(when(m))+'</span></div><div class="up-match"><div class="up-team">'+crest(m,'home')+'<b>'+esc(m.home)+'</b></div><span class="up-versus">'+esc(score(m))+'</span><div class="up-team">'+crest(m,'away')+'<b>'+esc(m.away)+'</b></div></div><div class="up-footer"><span>'+(m.model?'1 '+pct(m.model.p1)+' · Χ '+pct(m.model.px)+' · 2 '+pct(m.model.p2)+'<br><small>'+esc(m.model.method==='openfootball_cc0_fitted_venue_poisson'?'Ιστορικό Poisson · πειραματικό':'Γενικό Poisson · πολύ χαμηλή αξιοπιστία')+'</small>':'Χωρίς εκτίμηση')+'</span><a href="/data">Στοιχεία ↗</a></div></article>').join('');
+ else wrap.innerHTML=items.map(m=>'<article class="upcoming-card"><div class="up-meta"><span>'+leagueEmblem(m.league,m.league_logo)+esc(m.league)+'</span><span>'+esc(when(m))+'</span></div><div class="up-match"><div class="up-team">'+crest(m,'home')+'<b>'+esc(m.home)+'</b></div><span class="up-versus">'+esc(score(m))+'</span><div class="up-team">'+crest(m,'away')+'<b>'+esc(m.away)+'</b></div></div><div class="up-footer"><span>'+(m.model?'1 '+pct(m.model.p1)+' · Χ '+pct(m.model.px)+' · 2 '+pct(m.model.p2)+'<br><small>'+esc(m.model.method==='openfootball_cc0_fitted_venue_poisson'?'Ιστορικό Poisson · πειραματικό':'Γενικό Poisson · πολύ χαμηλή αξιοπιστία')+'</small>':'Χωρίς εκτίμηση')+'</span><a href="/predictions">Στοιχεία ↗</a></div></article>').join('');
  wrap.setAttribute('aria-busy','false');
 }
 let controller=null,fetching=false;
@@ -47,9 +47,9 @@ async function load(){
   $('metricMatches').textContent=String(data.coverage?.matches??'—');
   $('metricLeagues').textContent=String(data.coverage?.competitions??'—');
   featured(data.featured);upcoming(data.upcoming);
-  $('metricSource').textContent=String(Number(data.data_sources?.sportapi>0)+Number(data.data_sources?.allsports>0));
+  $('metricSource').textContent=String(data.model?.historical_matches??'—');
   const t=new Date(data.updated_at);
-  $('refreshStatus').textContent='SportAPI.ai + AllSportsAPI · Ενημερώθηκε '+(Number.isNaN(t.getTime())?'πρόσφατα':fmtTime.format(t));
+  $('refreshStatus').textContent='Ενημερώθηκε '+(Number.isNaN(t.getTime())?'πρόσφατα':fmtTime.format(t));
  }catch{
   $('featuredContent').innerHTML='<div class="loading">Τα δεδομένα των επιλεγμένων πρωταθλημάτων δεν είναι διαθέσιμα αυτή τη στιγμή.</div>';
   $('featuredContent').setAttribute('aria-busy','false');
