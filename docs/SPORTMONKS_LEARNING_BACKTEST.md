@@ -57,3 +57,16 @@ No arbitrary 43/26/31 values or hardcoded goal rates are published. If the datab
 The separate `/api/model/backtest` endpoint has been versioned to `walk_forward_hierarchical_v5_1` to avoid applying the former v3 performance claim to v5. Its time-split retrospective results must be considered separately from verified prospective performance. The prospective forecast audit remains restricted to the `team` evidence tier, ensuring historical continuity of high-evidence records.
 
 The model snapshot key is `tiki-hierarchical-poisson-coverage-v5`; existing snapshots and CC0 data are retained. The rolling 6-hour training and 3-day embargo remain in place.
+
+## Historical API ingestion v6
+
+The historical importer uses the **Sportmonks v3 date-range endpoint**, a strict inclusive 28-day window, 50 records/page, a maximum of 20 pages per window, and the existing secret `SPORTMONKS_API_TOKEN`. This is deliberately *not* a dump of raw data to an LLM.
+
+- D1 keys `sportmonks_backfill_cursor_v6` and `sportmonks_backfill_lock_v6` provide checkpointing and a global lease. Cursor begins `2024-07-01`, progressing 28 days at a time through the third UTC day before the current date. This bounded historical horizon may be extended if the subscription supports older seasons.
+- `smLeagues` identifiers must be obtained from a previously verified Sportmonks feed or verified via the provider for the date window; request `fixtureLeagues` and also reclassify each returned fixture with its `league.country`.
+- Only state `FT`/standard full-time, valid participants, valid goals and permitted leagues can enter `sportmonks_training_results`. Extra-time / penalty results are not ingested as a regular-time score. Raw JSON, odds, live event narratives and lineups are not stored in this table.
+- Upsert by Sportmonks fixture ID (duplicate-safe); model's normalized league/date/teams match-key also deduplicates when OpenFootball and Sportmonks overlap.
+- DB checkpoint advances only after all pages and D1 writes succeed. 429/403/errors do **not** advance cursor. Status and progress are shown by `GET /api/model/sync-status`.
+- Each home-feed request opportunistically dispatches one batch; a successful batch has a short lease before the next batch. Visitor-triggered sync is **not a guaranteed scheduled full import** and cannot be described as fully synchronized until the reported checkpoint reaches current data.
+- The numeric probabilities are from empirical goal history, not freeform LLM generation. In particular, outcomes, scores, post-match xG, events, premium odds, or other future-derived data must not leak into their own earlier pre-match predictions.
+- Worker model version `tiki-historical-ingestion-poisson-v6` and evaluation cache `walk_forward_historical_v6_1` are isolated from previous backtests. Backtesting remains based on previously licensed historical results and 3-day embargo; introducing additional Sportmonks seasons should trigger a new, properly time-split evaluation rather than retroactively claiming higher accuracy.
