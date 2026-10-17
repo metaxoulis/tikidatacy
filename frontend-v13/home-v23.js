@@ -1,0 +1,61 @@
+/* Tiki-Data v23 — SportAPI.ai only. No legacy API and no client-side secrets. */
+(()=>{'use strict';
+const $=id=>document.getElementById(id);
+if(!$('featuredContent'))return;
+const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
+const initial=x=>String(x||'FC').trim().split(/\s+/).filter(w=>!/(?:FC|CF|AC|SC|AFC)$/i.test(w)).slice(0,2).map(x=>x[0]||'').join('').slice(0,3).toUpperCase()||'FC';
+const safeLogo=x=>typeof x==='string'&&/^\/api\/logo\/team\/\d{1,13}\?sig=[0-9a-f]{64}$/.test(x)?x:null;
+const num=n=>typeof n==='number'&&Number.isFinite(n)?n:null;
+const pct=n=>num(n)===null?'—':n.toLocaleString('el-GR',{maximumFractionDigits:1})+'%';
+const fmtDate=new Intl.DateTimeFormat('el-GR',{weekday:'short',day:'numeric',month:'short'});
+const fmtTime=new Intl.DateTimeFormat('el-GR',{hour:'2-digit',minute:'2-digit',hour12:false});
+const isLive=m=>['LIVE','1H','2H','HT','ET','BREAK'].includes(m?.status);
+const isDone=m=>['FT','AET','PEN','FINISHED','FULL_TIME'].includes(m?.status);
+function crest(m,side){const name=m[side]||'Ομάδα';const url=safeLogo(m.logos?.[side]);
+  return '<span class="crest fallback">'+(url?'<img loading="lazy" src="'+esc(url)+'" alt="Έμβλημα '+esc(name)+'" onerror="this.remove()">':'')+'<span>'+esc(initial(name))+'</span></span>';}
+function when(m){const d=new Date(m.date);return Number.isNaN(d.getTime())?'Ώρα μη διαθέσιμη':fmtDate.format(d)+' · '+fmtTime.format(d);}
+function score(m){return num(m.home_score)!==null&&num(m.away_score)!==null&&(isLive(m)||isDone(m))?m.home_score+' – '+m.away_score:'VS';}
+function market(label,n){return '<div class="odd-row"><div class="odd-values"><span>'+esc(label)+'</span><b>'+pct(n)+'</b></div><div class="prob-bar"><span style="width:'+Math.max(0,Math.min(100,Number(n)||0))+'%"></span></div></div>';}
+function markets(m){
+ const p=m.model;
+ if(!p)return '<div class="unavailable"><strong>Πρόβλεψη μη διαθέσιμη</strong>Δεν υπάρχουν αρκετά αξιόπιστα δεδομένα βαθμολογίας για τις δύο ομάδες. Δεν εμφανίζουμε τυχαία ποσοστά.<p class="market-caption">Οι εκτιμήσεις προστίθενται αυτόματα όταν το δείγμα επαρκεί.</p></div>';
+ const vals=[p.p1,p.px,p.p2],best=vals.indexOf(Math.max(...vals));
+ return '<div class="side-label">ΥΠΟΛΟΓΙΣΜΕΝΕΣ ΠΙΘΑΝΟΤΗΤΕΣ</div><div class="triple">'+['1','Χ','2'].map((n,i)=>'<div'+(i===best?' class="best"':'')+'><small>'+n+'</small><b>'+pct(vals[i])+'</b></div>').join('')+'</div><div class="other-markets"><div><small>OVER 2.5</small><b>'+pct(p.over25)+'</b></div><div><small>GG / BTTS</small><b>'+pct(p.btts)+'</b></div></div>'+
+ '<p class="model-note">Προσωρινό Poisson από πραγματικές βαθμολογίες SportAPI.ai. Δεν έχει επικυρωθεί με backtest. Εκτίμηση πριν από τον αγώνα, όχι live in-play odds.</p>';
+}
+function featured(m){
+ if(!m){$('featuredContent').innerHTML='<div class="loading">Δεν υπάρχουν διαθέσιμοι αγώνες αυτή τη στιγμή. <a href="/data" class="feat-details">Δες το πρόγραμμα →</a></div>';return;}
+ $('featuredContent').innerHTML='<div class="feature-top"><b>'+esc(m.league)+'</b><span>'+(isLive(m)?'● LIVE':isDone(m)?'ΤΕΛΙΚΟ':'ΕΠΟΜΕΝΟΣ ΑΓΩΝΑΣ')+' · '+esc(when(m))+'</span></div>'+
+ '<div class="feature-grid"><div class="feature-main"><div class="featured-teams"><div class="ft-team">'+crest(m,'home')+'<b>'+esc(m.home)+'</b></div><div class="vs"><strong>'+esc(score(m))+'</strong>'+(isLive(m)?'LIVE':'FOOTBALL')+'</div><div class="ft-team">'+crest(m,'away')+'<b>'+esc(m.away)+'</b></div></div><div class="feat-bottom"><span class="f-league"><span class="league-icon">TD</span>'+esc(m.league)+'</span><a href="/data" class="feat-details">Πλήρη στοιχεία αγώνα →</a></div></div><aside class="feature-side">'+markets(m)+'</aside></div>';
+ $('featuredContent').setAttribute('aria-busy','false');
+}
+function upcoming(matches){
+ const wrap=$('upcomingGrid'),items=Array.isArray(matches)?matches.slice(0,3):[];
+ if(!items.length){wrap.innerHTML='<div class="loading">Δεν υπάρχουν άλλοι επιλεγμένοι αγώνες. <a href="/data">Δες το πλήρες πρόγραμμα →</a></div>';}
+ else wrap.innerHTML=items.map(m=>'<article class="upcoming-card"><div class="up-meta"><span>'+esc(m.league)+'</span><span>'+esc(when(m))+'</span></div><div class="up-match"><div class="up-team">'+crest(m,'home')+'<b>'+esc(m.home)+'</b></div><span class="up-versus">'+esc(score(m))+'</span><div class="up-team">'+crest(m,'away')+'<b>'+esc(m.away)+'</b></div></div><div class="up-footer"><span>'+(m.model?'1 '+pct(m.model.p1)+' · Χ '+pct(m.model.px)+' · 2 '+pct(m.model.p2):'Πρόβλεψη μη διαθέσιμη')+'</span><a href="/data">Στοιχεία ↗</a></div></article>').join('');
+ wrap.setAttribute('aria-busy','false');
+}
+let controller=null,fetching=false;
+async function load(){
+ if(fetching)return;fetching=true;controller=new AbortController();
+ try{
+  const res=await fetch('/api/home-v23',{signal:controller.signal,headers:{Accept:'application/json'},cache:'no-store'});
+  if(!res.ok)throw new Error(res.status===429?'quota':'feed');
+  const data=await res.json();if(data.source!=='SportAPI.ai')throw Error('wrong_source');
+  $('metricMatches').textContent=String(data.coverage?.matches??'—');
+  $('metricLeagues').textContent=String(data.coverage?.competitions??'—');
+  featured(data.featured);upcoming(data.upcoming);
+  const t=new Date(data.updated_at);
+  $('refreshStatus').textContent='SportAPI.ai · Ενημερώθηκε '+(Number.isNaN(t.getTime())?'πρόσφατα':fmtTime.format(t));
+ }catch{
+  $('featuredContent').innerHTML='<div class="loading">Η πηγή SportAPI.ai δεν είναι διαθέσιμη αυτή τη στιγμή. Δοκιμάστε ξανά αργότερα.</div>';
+  $('featuredContent').setAttribute('aria-busy','false');
+  $('upcomingGrid').innerHTML='<div class="loading">Δεν μπορέσαμε να φορτώσουμε τους αγώνες.</div>';
+  $('upcomingGrid').setAttribute('aria-busy','false');
+  $('refreshStatus').textContent='Η ενημέρωση δεν είναι διαθέσιμη';
+ }finally{fetching=false;}
+}
+$('year').textContent=String(new Date().getFullYear());
+void load();
+setInterval(()=>{if(!document.hidden)void load()},180000);
+})();
