@@ -668,7 +668,7 @@ async function asPredictionResponse(req,env,ctx,url){
  * for fitted parameters; predictions are explicitly unvalidated experimental estimates.
  */
 // Time-order validation (2025-26, n=1723) selected these rates without seeing the 2026-27 holdout.
-const FH_TRAINING={version:'tiki-home-venue-poisson-learning-v3',decay_days:360,venue_prior:3,validated:false};
+const FH_TRAINING={version:'tiki-hierarchical-poisson-coverage-v5',decay_days:360,venue_prior:3,validated:false};
 const FH_LEAGUES={
  epl:{name:'Premier League',rank:7,country:/^(england|eng|en|gb|united kingdom)$/},
  laliga:{name:'La Liga',rank:6,country:/^(spain|esp|es)$/},
@@ -699,7 +699,28 @@ function fhLeague(name,country=''){
 const fhName=x=>{
  let n=fhText(x).replace(/[^\p{L}\p{N}]+/gu,' ').replace(/\b(fc|cf|afc|sc|ac|club|football|futbol)\b/g,'').replace(/\s+/g,' ').trim();
  const aliases={'man city':'manchester city','man utd':'manchester united','man united':'manchester united','tottenham':'tottenham hotspur','newcastle utd':'newcastle united','nottm forest':'nottingham forest','wolves':'wolverhampton wanderers','inter':'internazionale','inter milan':'internazionale','atletico madrid':'atletico de madrid','bayern munich':'bayern munchen','bayern munchen':'bayern munchen','psg':'paris saint germain','paris sg':'paris saint germain','olympiacos':'olympiakos','olympiacos piraeus':'olympiakos','olympiakos piraeus':'olympiakos'};
- return aliases[n]||n;
+ const supplement={
+  // Official club-name variants observed between Sportmonks and OpenFootball.
+  'udinese':'udinese calcio','lecce':'us lecce','fiorentina':'acf fiorentina','como':'como 1907',
+  'atalanta':'atalanta bc','lazio':'ss lazio','cagliari':'cagliari calcio','parma':'parma calcio 1913',
+  'napoli':'ssc napoli','roma':'as roma','sassuolo':'us sassuolo calcio','frosinone':'frosinone calcio',
+  'milan':'milan','inter milan':'internazionale milano','inter':'internazionale milano',
+  'osasauna':'ca osasuna','osasuna':'ca osasuna','racing santander':'real racing de santander',
+  'celta de vigo':'rc celta de vigo','alaves':'deportivo alaves','deportivo alaves':'deportivo alaves',
+  'real sociedad':'real sociedad de','rayo vallecano':'rayo vallecano de madrid',
+  'levante':'levante ud','malaga':'malaga','sevilla':'sevilla',
+  'olympique marseille':'olympique de marseille','marseille':'olympique de marseille',
+  'rennes':'stade rennais 1901','monaco':'as monaco','auxerre':'aj auxerre',
+  'nice':'ogc nice','brest':'stade brestois 29','lens':'racing de lens',
+  'paris saint germain':'paris saint germain','angers':'angers sco',
+  'hoffenheim':'tsg 1899 hoffenheim','tsg hoffenheim':'tsg 1899 hoffenheim',
+  'koln':'1 koln','union berlin':'1 union berlin','werder bremen':'sv werder bremen',
+  'paok':'paok saloniki','aris':'aris saloniki','ofi':'ofi heraklion',
+  'kifisia':'ae kifisias','kifisias':'ae kifisias','panaitolikos':'panetolikos',
+  'olympiacos f c':'olympiakos','olympiacos':'olympiakos',
+  'aek':'aek athen','aek athens':'aek athen'
+ };
+ return supplement[aliases[n]||n]||aliases[n]||n;
 };
 const fhClamp=(x,a,b)=>Math.min(b,Math.max(a,x));
 function fhTrain(rows,asOfDate=new Date()){
@@ -744,7 +765,13 @@ function fhTrain(rows,asOfDate=new Date()){
   }
   result[league]={league,trained_from:'Licensed finalized match results (source counts below)',source_counts:{openfootball_cc0:list.filter(x=>x.source==='openfootball_cc0').length,sportmonks:list.filter(x=>x.source==='sportmonks').length},matches:list.length,last_result:new Date(Math.max(...list.map(x=>x.day))).toISOString().slice(0,10),hmean:lh,amean:la,teams:profiles};
  }
- return {model_version:FH_TRAINING.version,trained_at:new Date(asOfDate).toISOString(),cutoff:new Date(cutoff).toISOString().slice(0,10),decay_days:FH_TRAINING.decay_days,venue_prior:FH_TRAINING.venue_prior,status:'experimental_unvalidated',leagues:result};
+ const pool=Object.values(result),mass=pool.reduce((z,l)=>z+l.matches,0);
+ const global=mass>=80?{matches:mass,
+  hmean:pool.reduce((z,l)=>z+l.matches*l.hmean,0)/mass,
+  amean:pool.reduce((z,l)=>z+l.matches*l.amean,0)/mass,
+  last_result:pool.reduce((z,l)=>l.last_result>z?l.last_result:z,''),
+  trained_from:'empirical pooled licensed league home/away scores; NOT league-specific'}:null;
+ return {model_version:FH_TRAINING.version,trained_at:new Date(asOfDate).toISOString(),cutoff:new Date(cutoff).toISOString().slice(0,10),decay_days:FH_TRAINING.decay_days,venue_prior:FH_TRAINING.venue_prior,status:'experimental_unvalidated',global,leagues:result};
 }
 function fhLikelyScore(lh,la){let top={score:'—',prob:0};let mass=0;const poisson=(lambda,n)=>Math.exp(-lambda)*Math.pow(lambda,n)/[1,1,2,6,24,120,720,5040][n];for(let i=0;i<=7;i++)for(let j=0;j<=7;j++){const p=poisson(lh,i)*poisson(la,j);mass+=p;if(p>top.prob)top={score:i+'-'+j,prob:p};}return{score:top.score,probability:top.prob/mass*100};}
 function fhPoisson(h,a){
@@ -753,16 +780,49 @@ function fhPoisson(h,a){
  for(let i=0;i<x.length;i++)for(let j=0;j<y.length;j++){const v=x[i]*y[j];sum+=v;if(i>j)one+=v;else if(i===j)draw+=v;else two+=v;if(i+j>2)over+=v;if(i>0&&j>0)gg+=v;}
  return{p1:100*one/sum,px:100*draw/sum,p2:100*two/sum,over25:100*over/sum,under25:100*(1-over/sum),btts:100*gg/sum,no_btts:100*(1-gg/sum),mu_home:h,mu_away:a};
 }
-function fhEstimate(fixture,model){
- const profile=model?.leagues?.[fixture.league_key];
- if(!profile)return{...fhPoisson(1.42,1.16),method:'generic_prior_no_licensed_history',confidence:'very_low',data_points:0,model_status:'not_trained_for_league',validated:false};
- const home=profile.teams[fhName(fixture.home)]?.home,away=profile.teams[fhName(fixture.away)]?.away;
- if(!home||!away||home.matches<3||away.matches<3)
-  return {...fhPoisson(profile.hmean,profile.amean),method:'historical_league_baseline_no_verified_team_match',confidence:'very_low',data_points:profile.matches,model_status:'team_history_unmatched',validated:false,history_latest:profile.last_result};
- const lh=fhClamp(profile.hmean*(home.for/profile.hmean)*(away.against/profile.amean),.35,3.6);
- const la=fhClamp(profile.amean*(away.for/profile.amean)*(home.against/profile.hmean),.35,3.6);
- return {...fhPoisson(lh,la),method:profile.source_counts?.sportmonks?'licensed_historical_venue_poisson':'openfootball_cc0_fitted_venue_poisson',confidence:'experimental',data_points:profile.matches,team_samples:{home:home.matches,away:away.matches},model_status:'trained_historical_unvalidated',history_latest:profile.last_result,validated:false};
+/* Tiki-Data: historical-evidence tiers, no arbitrary 1X2 defaults.
+ * Fully fitted team rates remain the top tier. Missing teams use empirically
+ * trained league rates; leagues with no scores use a pooled, transparent prior.
+ */
+const FINITE=x=>typeof x==='number'&&Number.isFinite(x);
+const methods=new Set(['openfootball_cc0_fitted_venue_poisson','licensed_historical_venue_poisson','partial_team_hierarchical_poisson','league_historical_prior_poisson','cross_league_historical_prior_poisson']);
+function historicalTier(fixture,model,helpers={}){
+ const {canonical,poisson,clamp}=helpers;
+ if(typeof canonical!=='function'||typeof poisson!=='function'||typeof clamp!=='function')throw Error('missing_tier_dependencies');
+ const profile=model?.leagues?.[fixture?.league_key];
+ const gh=profile?.hmean??model?.global?.hmean,ga=profile?.amean??model?.global?.amean;
+ const n=profile?.matches??model?.global?.matches??0;
+ if(!FINITE(gh)||!FINITE(ga)||gh<=0||ga<=0||n<80)return null;
+ const home=profile?.teams?.[canonical(fixture.home)]?.home,away=profile?.teams?.[canonical(fixture.away)]?.away;
+ const hc=home?.matches??0,ac=away?.matches??0,hs=hc>=3,as=ac>=3;
+ const matched=Number(hs)+Number(as);
+ const low=.35,high=3.6;
+ const factor=(v,mean)=>clamp(FINITE(v)&&v>0?v/mean:1,.45,1.8);
+ const muHome=profile?clamp(gh*(hs?factor(home.for,gh):1)*(as?factor(away.against,gh):1),low,high):gh;
+ const muAway=profile?clamp(ga*(as?factor(away.for,ga):1)*(hs?factor(home.against,ga):1),low,high):ga;
+ const tier=profile?(matched===2?'team':matched===1?'partial_team':'league'):'cross_league';
+ const method=tier==='team'?(profile.source_counts?.sportmonks?'licensed_historical_venue_poisson':'openfootball_cc0_fitted_venue_poisson'):
+   tier==='partial_team'?'partial_team_hierarchical_poisson':tier==='league'?'league_historical_prior_poisson':'cross_league_historical_prior_poisson';
+ return {...poisson(muHome,muAway),method,tier,model_status:tier==='team'?'trained_historical_unvalidated':'historical_prior_unvalidated',
+  confidence:tier==='team'?'experimental':tier==='partial_team'?'low':'very_low',
+  validated:false,team_samples:{home:hc,away:ac},data_points:n,
+  history_latest:profile?.last_result??model?.global?.last_result??null,
+  evidence_source:profile?'licensed_results_from_fixture_league':'pooled_other_leagues_only',
+  model_note:tier==='cross_league'?'No eligible historical results from this league. This is a cross-league baseline, NOT a team-specific forecast.':
+   tier==='league'?'League-level home and away goal rates; no reliable team-specific history.':
+   tier==='partial_team'?'One team has verified venue history; the other uses league-average rates.':
+   'Both teams have verified home/away historical results.'};
 }
+function validHistoricalTier(value){
+ return !!value&&methods.has(value.method)&&['team','partial_team','league','cross_league'].includes(value.tier)
+  &&[value.p1,value.px,value.p2,value.over25,value.btts,value.mu_home,value.mu_away].every(FINITE)
+  &&value.p1>=0&&value.px>=0&&value.p2>=0&&Math.abs(value.p1+value.px+value.p2-100)<1;
+}
+
+function fhEstimate(fixture,model){
+ return historicalTier(fixture,model,{canonical:fhName,poisson:fhPoisson,clamp:fhClamp});
+}
+
 async function fhLoadModel(db,ctx){
  if(!db)return null;
  const key=FH_TRAINING.version;
