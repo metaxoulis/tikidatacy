@@ -64,6 +64,13 @@ async function sportFixture(row,key,day){
     home_token:home_id?await sportToken(key,'team',home_id,day):null,
     away_token:away_id?await sportToken(key,'team',away_id,day):null};
 }
+async function spAttachSignedLogos(fixtures,secret){
+ const ids=[...new Set(fixtures.flatMap(x=>[x.home_id,x.away_id]).filter(spId))];
+ if(!ids.length)return;
+ const k=await crypto.subtle.importKey('raw',new TextEncoder().encode('tiki-logo-v1:'+secret),{name:'HMAC',hash:'SHA-256'},false,['sign']);
+ const entries=await Promise.all(ids.map(async id=>[id,'/api/logo/team/'+id+'?sig='+sportHex(await crypto.subtle.sign('HMAC',k,new TextEncoder().encode('sportapi-team:'+id)))]));
+ const mapped=new Map(entries);for(const x of fixtures)x.logos={home:mapped.get(x.home_id)||null,away:mapped.get(x.away_id)||null};
+}
 function sportEvents(raw){
   const entries=Array.isArray(raw?.events)?raw.events:Array.isArray(raw?.data)?raw.data:Array.isArray(raw?.fixture?.events)?raw.fixture.events:[];
   return entries.slice(0,180).map(x=>({minute:spStr(x.minute,12),type:spStr(x.event_type||x.type,48),side:spStr(x.team_side||x.side,12),team:spStr(x.team_name,100),
@@ -109,7 +116,7 @@ async function sportPublicResponse(url,env,ctx){
     if(!await sportVerify(key,route,identity,day,url.searchParams.get('token')))return sportJSON({error:'invalid_link'},403);
     ttl=section==='events'||section==='stats'?900:section==='lineups'?3600:section==='standings'?1800:7200;
   }
-  const cacheReq=new Request(new URL('/__tiki_data_cache/'+route+'/'+encodeURIComponent(day)+'/'+encodeURIComponent(identity||'date')+'/'+encodeURIComponent(section||'list'),url.origin).toString());
+  const cacheReq=new Request(new URL('/__tiki_data_cache/v25/'+route+'/'+encodeURIComponent(day)+'/'+encodeURIComponent(identity||'date')+'/'+encodeURIComponent(section||'list'),url.origin).toString());
   let stored=null;try{stored=await caches.default.match(cacheReq);}catch{}
   if(stored)return stored;
   const fetched=await sportUpstream(providerPath,env.SPORTAPI_AI_KEY);
@@ -118,6 +125,7 @@ async function sportPublicResponse(url,env,ctx){
   if(route==='fixtures'){
     const rows=sportRows(raw);if(!rows||rows.length>600)return sportJSON({error:'invalid_provider_data'},502);
     const fixtures=(await Promise.all(rows.map(x=>sportFixture(x,key,day)))).filter(Boolean);
+    await spAttachSignedLogos(fixtures,env.SPORTAPI_AI_KEY);
     payload={source:'SportAPI.ai',date:day,updated_at:new Date().toISOString(),count:fixtures.length,fixtures};
   }else if(route==='match'){
     if(section==='stats')payload=sportStats(raw);
