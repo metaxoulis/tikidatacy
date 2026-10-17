@@ -45,7 +45,10 @@ test('SportAPI finished-match fallback never includes future scores and abstains
  assert.equal(m.method,'provisional_poisson_recent_results');
  assert(Math.abs(m.p1+m.px+m.p2-100)<1e-8);
  const modified={matches:h.matches.filter(x=>x.date<base)};
- assert.deepEqual(tdModelFromRecent(h,a,{home:'Everton',away:'Chelsea',date:base+'T16:00:00Z'}),
-                  tdModelFromRecent(modified,a,{home:'Everton',away:'Chelsea',date:base+'T16:00:00Z'}));
+ const one=tdModelFromRecent(h,a,{home:'Everton',away:'Chelsea',date:base+'T16:00:00Z'});
+ const two=tdModelFromRecent(modified,a,{home:'Everton',away:'Chelsea',date:base+'T16:00:00Z'});
+ // The forecast values must match; their wall-clock report timestamps need not.
+ delete one.updated_at;delete two.updated_at;
+ assert.deepEqual(one,two);
  assert.equal(tdRecentRates({matches:h.matches.slice(0,3)},'Everton',base),null);
 });
