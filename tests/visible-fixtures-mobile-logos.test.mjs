@@ -43,7 +43,7 @@ test('team-logo tile uses REAL crest catalog, reliable two-source fallback and n
  assert(js.includes("has-team-logo"));
  assert(js.includes("team-no-logo"));
  assert(js.includes("realTeamLogo(n)"));
- assert(js.includes("safeSignedLogo(providerURL)"));
+ assert(js.includes("sportmonksLogo(providerURL)"));
  assert(js.includes("im.classList.contains('team-logo-image')"));
  assert(!js.includes("const generated='<svg"));
  assert(style.includes('.modern-predictions .table-crest.has-team-logo'));
