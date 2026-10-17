@@ -870,26 +870,37 @@ async function fhHomeResponse(req,env,ctx){
 // Read-only temporary credential and plan probe. NEVER expose credentials or raw responses.
 async function smCheckAccess(req,env){
  const token=env?.SPORTMONKS_API_TOKEN;
- const reply=(v,s=200)=>new Response(JSON.stringify(v),{status:s,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
- if(!token)return reply({configured:false,authenticated:false,binding_exists:Object.prototype.hasOwnProperty.call(env||{},'SPORTMONKS_API_TOKEN'),binding_type:typeof token,d1_connected:!!env?.TIKI_DB},503);
- const d=new Date().toISOString().slice(0,10),u=new URL(req.url);
- const date=/^\d{4}-\d{2}-\d{2}$/.test(u.searchParams.get('date')||'')?u.searchParams.get('date'):d;
- const targets=[['leagues','https://api.sportmonks.com/v3/football/leagues/date/'+date+'?per_page=50&include=country'],['fixtures','https://api.sportmonks.com/v3/football/fixtures/date/'+date+'?per_page=5&include=participants;league.country']];
+ const reply=(x,status=200)=>new Response(JSON.stringify(x),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
+ if(!token)return reply({configured:false,binding_exists:Object.hasOwn(env||{},'SPORTMONKS_API_TOKEN')},503);
+ const current=new Date().toISOString().slice(0,10);
+ const date=/^\d{4}-\d{2}-\d{2}$/.test(new URL(req.url).searchParams.get('date')||'')?new URL(req.url).searchParams.get('date'):current;
+ const base='https://api.sportmonks.com/v3/football/';
+ const endpoints=[['leagues',base+'leagues/date/'+date+'?per_page=20&include=country'],['fixtures',base+'fixtures/date/'+date+'?per_page=5&include=participants;league.country'],['live',base+'livescores/inplay?include=scores;events;participants']];
  const results=[];
- for(const [kind,url] of targets){
+ for(const [name,initial] of endpoints){
+  let url=initial;let redirects=0;
   try{
-   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
-   let res;try{res=await fetch(url,{headers:{Authorization:token,Accept:'application/json'},redirect:'error',signal:controller.signal});}finally{clearTimeout(timer)}
+   let res=null;
+   for(let attempt=0;attempt<3;attempt++){
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
+    try{res=await fetch(url,{headers:{Authorization:token,Accept:'application/json'},redirect:'manual',signal:controller.signal});}finally{clearTimeout(timer);}
+    if(![301,302,303,307,308].includes(res.status))break;
+    const location=res.headers.get('location');if(!location)throw Error('redirect_missing_location');
+    const next=new URL(location,url);
+    if(next.protocol!=='https:'||next.hostname!=='api.sportmonks.com'||!/^\/(?:api\/)?v3\/football\//.test(next.pathname))throw Error('redirect_to_unapproved_host');
+    url=next.toString();redirects++;
+   }
+   if(!res)throw Error('no_response');
    const payload=await res.json().catch(()=>({}));
    const items=Array.isArray(payload?.data)?payload.data:[];
-   results.push({endpoint:kind,http_status:res.status,items:items.length,paginated:!!payload.pagination?.has_more,
-    sample_leagues:kind==='leagues'?items.slice(0,35).map(x=>({league:String(x.name||'').slice(0,60),country:String(x.country?.name||'').slice(0,40)})):undefined,
-    sample_participants:kind==='fixtures'?items.filter(x=>Array.isArray(x.participants)).length:undefined});
-  }catch(e){const message=String(e?.message||'').toLowerCase();const reason=e?.name==='AbortError'?'timeout':message.includes('redirect')?'redirect':message.includes('certificate')?'tls':message.includes('fetch')?'fetch_error':message.includes('invalid')?'invalid_response':'unknown_error';results.push({endpoint:kind,error:reason,error_type:String(e?.name||'Error').slice(0,32)});}
+   results.push({endpoint:name,http_status:res.status,redirects,items:items.length,has_more:!!payload.pagination?.has_more,
+     name_samples:name==='leagues'?items.slice(0,12).map(x=>({name:String(x.name||'').slice(0,50),country:String(x.country?.name||'').slice(0,30)})):undefined,
+     with_participants:name==='fixtures'?items.filter(x=>Array.isArray(x.participants)).length:undefined,
+     resolved_path:new URL(url).pathname});
+  }catch(e){results.push({endpoint:name,error:String(e?.message||'request_failed').slice(0,80),redirects});}
  }
- return reply({configured:true,checked_date:date,results},200);
+ return reply({configured:true,date,results});
 }
-
 const CSP="default-src 'none';base-uri 'none';form-action 'none';object-src 'none';frame-ancestors 'none';script-src 'self';style-src 'self' https://fonts.googleapis.com;style-src-attr 'unsafe-inline';font-src 'self' https://fonts.gstatic.com;img-src 'self' data: https://raw.githubusercontent.com https://media.api-sports.io https://apiv2.allsportsapi.com https://allsportsapi.com;connect-src 'self'";
 function asset(body,mime){return new Response(body,{status:200,headers:{'Content-Type':mime,'Cache-Control':(/text\/html|javascript/.test(mime)?'no-cache, must-revalidate':'public,max-age=180'),'X-Content-Type-Options':'nosniff','Referrer-Policy':'strict-origin-when-cross-origin','Content-Security-Policy':CSP}})}
 export default {async fetch(req,env,ctx){const u=new URL(req.url),path=u.pathname;if(!['GET','HEAD'].includes(req.method))return new Response('Method Not Allowed',{status:405});if(path==='/'||path==='/index.html')return asset(HTML_HOME,'text/html; charset=utf-8');if(path==='/predictions'||path==='/predictions/')return asset(HTML_PREDICTIONS,'text/html; charset=utf-8');if(path==='/data'||path==='/data/')return new Response(null,{status:302,headers:{Location:'/predictions','Cache-Control':'no-store'}});if(path==='/data.css')return asset(CSS_DATA,'text/css; charset=utf-8');if(path==='/data.js')return asset(JS_DATA,'application/javascript; charset=utf-8');if(path==='/home-v23.css')return asset(HOME_V23_CSS,'text/css; charset=utf-8');if(path==='/home-v23.js')return asset(HOME_V23_JS,'application/javascript; charset=utf-8');if(path==='/styles.css')return asset(CSS,'text/css; charset=utf-8');if(path==='/logos.js')return asset(LOGOS,'application/javascript; charset=utf-8');if(path==='/home.js')return asset(HOME,'application/javascript; charset=utf-8');if(path==='/app.js')return asset(JS,'application/javascript; charset=utf-8');if(path==='/stadium.svg')return asset(STADIUM,'image/svg+xml');if(path==='/brand.svg')return asset(BRAND,'image/svg+xml');if(path==='/favicon.svg')return asset(FAVICON,'image/svg+xml');if(path.startsWith('/api/allsports/'))return asPublicResponse(req,env,ctx,u);if(path.startsWith('/api/sport/')){if(req.method!=='GET')return new Response('Method Not Allowed',{status:405});return sportPublicResponse(u,env,ctx)}if(path==='/api/sportmonks/health')return smCheckAccess(req,env);if(path==='/api/home-focus')return fhHomeResponse(req,env,ctx);if(path==='/api/home-v23')return tdHomeHandler(req,env,ctx);if(path==='/api/fixtures')return tdPredictionsHandler(req,env,ctx);if(path.startsWith('/api/logo/team/'))return tdServeLogo(req,env,ctx,u);return new Response('Not Found',{status:404})}};
