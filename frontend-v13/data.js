@@ -84,7 +84,7 @@ async function loadFixtures(){
  try{
   const data=await requestData('fixtures',{date:state.date});
   if(sequence!==state.sequence)return;
-  state.all=Array.isArray(data.fixtures)?data.fixtures:[];
+  state.all=Array.isArray(data?.data?.fixtures)?data.data.fixtures:[];
   $('totalGames').textContent=state.all.length;
   $('totalLeagues').textContent=new Set(state.all.map(x=>x.league)).size;
   $('totalFinished').textContent=state.all.filter(x=>statusKind(x)==='finished').length;
