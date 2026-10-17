@@ -19,12 +19,13 @@ function smBuildFocus(fixtures,live,model,now,estimate=null,likely=null){
   let p=null;
   if(isUpcoming&&model){
    const val=(estimate||fhEstimate)(game,model);
-   if(['openfootball_cc0_fitted_venue_poisson','licensed_historical_venue_poisson'].includes(val?.method)&&val?.team_samples?.home>=3&&val?.team_samples?.away>=3)
+   if(validHistoricalTier(val))
     p={...val,most_likely_score:(likely||fhLikelyScore)(val.mu_home,val.mu_away)};
   }
   const forecast=p?{p1:p.p1,px:p.px,p2:p.p2,over25:p.over25,under25:p.under25,btts:p.btts,
    no_btts:p.no_btts,mu_home:p.mu_home,mu_away:p.mu_away,method:p.method,
-   confidence:'experimental',coverage:'verified_historical_inputs',validated:false,
+   confidence:p.confidence,coverage:p.tier==='team'?'verified_historical_inputs':'historical_baseline_only',
+   prediction_tier:p.tier,evidence_source:p.evidence_source,model_note:p.model_note,validated:false,
    historical_sample:p.team_samples,history_latest:p.history_latest,most_likely_score:p.most_likely_score}:
    {p1:null,px:null,p2:null,over25:null,under25:null,btts:null,no_btts:null,mu_home:null,mu_away:null,
     method:null,confidence:'unavailable',coverage:'insufficient_team_history',validated:false};
@@ -36,7 +37,12 @@ function smBuildFocus(fixtures,live,model,now,estimate=null,likely=null){
  const next=future.filter(m=>m!==featured).slice(0,6);
  const leagues=new Set(matches.map(m=>m.league_key));
  const covered=matches.filter(m=>m.model).length;
+ const tiers={team:0,partial_team:0,league:0,cross_league:0};
+ for(const m of matches)if(m.model&&Object.hasOwn(tiers,m.model.tier))tiers[m.model.tier]++;
  return{matches,featured,upcoming:next,coverage:{matches:matches.length,competitions:leagues.size,with_prediction:covered,
+  with_team_prediction:tiers.team,with_partial_team_prediction:tiers.partial_team,
+  with_league_baseline:tiers.league,with_cross_league_baseline:tiers.cross_league,
+  without_prediction:matches.filter(m=>!m.model&&!actual.has(String(m.id))).length,
   live_matches:matches.filter(m=>actual.has(String(m.id))).length},leagues_with_matches:[...leagues]};
 }
 const smResponse=(data,status=200,maxAge=0)=>new Response(JSON.stringify(data),{status,headers:{
