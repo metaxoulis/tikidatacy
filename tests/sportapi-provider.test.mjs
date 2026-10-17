@@ -33,7 +33,7 @@ test('uses X-Api-Key exclusively in HTTP headers; never in URL or returned JSON'
   let called=false;
   const sampleKey='unit-test-synthetic-value';
   const result=await fetchSportApiFixtures(sampleKey,'2026-10-16',async(url,options)=>{
-    called=true;assert.equal(url,'https://sportapi.ai/api/fixtures/date/2026-10-16');
+    called=true;assert.equal(url,'https://sportapi.ai/api/fixtures?date=2026-10-16');
     assert.equal(options.headers['X-Api-Key'],sampleKey);
     assert.equal(options.method,'GET');
     assert.equal(options.redirect,'manual');
