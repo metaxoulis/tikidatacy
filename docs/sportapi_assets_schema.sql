@@ -18,3 +18,6 @@ CREATE TABLE IF NOT EXISTS sportapi_league_assets (
   license_note TEXT NOT NULL DEFAULT 'League crest not available from documented SportAPI.ai endpoints'
 );
 CREATE INDEX IF NOT EXISTS idx_sportapi_team_assets_league ON sportapi_team_assets(observed_league_id);
+
+CREATE TABLE IF NOT EXISTS sportapi_home_cache (cache_key TEXT PRIMARY KEY,payload_json TEXT NOT NULL,expires_at INTEGER NOT NULL,saved_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS sportapi_ingest_state (job_name TEXT PRIMARY KEY,observed_at TEXT NOT NULL);
