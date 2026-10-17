@@ -506,7 +506,8 @@ async function tdPredictionsHandler(req,env,ctx){
  * Source identifiers are namespaced; no cross-provider merge without verified mapping.
  */
 const AS_ORIGIN='https://apiv2.allsportsapi.com/football/';
-const AS_MAX_BODY=1400000;
+/* Busy matchdays include nested statistics for many fixtures. Bound the *source* response at 12 MiB and return only normalized public fields. */
+const AS_MAX_BODY=12*1024*1024;
 const asString=(v,n=140)=>typeof v==='string'?v.trim().slice(0,n):'';
 const asId=v=>/^\d{1,13}$/.test(String(v??''))?String(v):null;
 const asDate=s=>{if(typeof s!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(s))return null;const ms=Date.parse(s+'T00:00:00Z');return Number.isFinite(ms)&&new Date(ms).toISOString().slice(0,10)===s?s:null;};
@@ -538,7 +539,7 @@ function asFixture(row){
 }
 function asNormalize(payload){
  if(!payload||typeof payload!=='object'||!(payload.success===1||payload.success==='1'||payload.success===true))return null;
- if(!Array.isArray(payload.result)||payload.result.length>850)return null;
+ if(!Array.isArray(payload.result)||payload.result.length>1800)return null;
  return payload.result.map(asFixture).filter(Boolean);
 }
 const asReply=(value,status=200,ttl=0)=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':ttl?'public, max-age='+ttl:'no-store','X-Content-Type-Options':'nosniff'}});

@@ -21,3 +21,6 @@ Provider returns no calibrated model probabilities. `AllSportsAPI` results are l
 
 ### Tests
 `node --test tests/allsports-provider.test.mjs`; existing `node --test tests/*.test.mjs`.
+
+### Busy-day response limits
+The v27 adapter allows up to **12 MiB** of upstream JSON (rather than 1.4 MB, which rejected valid busy weekend fixture payloads), and at most 1,800 fixture rows. The public response still returns only sanitized match fields, not all upstream event/lineup/statistics data. A source payload exceeding these limits fails closed instead of truncating fixtures silently.
