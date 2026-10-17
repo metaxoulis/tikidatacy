@@ -11,7 +11,7 @@ const FAVICON="<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 96 90\" a
  * Authentication: the secret is injected by Cloudflare as env.SPORTAPI_AI_KEY.
  * This module does not estimate predictions. Missing probabilities stay null.
  */
-const SPORTAPI_ENDPOINT = 'https://sportapi.ai/api/fixtures/date/';
+const SPORTAPI_ENDPOINT = 'https://sportapi.ai/api/fixtures?date=';
 const TEAM_MAX = 150;
 const MAX_FIXTURES = 600;
 const MAX_JSON_BYTES = 950000;
