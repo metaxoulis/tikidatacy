@@ -70,3 +70,11 @@ The historical importer uses the **Sportmonks v3 date-range endpoint**, a strict
 - Each home-feed request opportunistically dispatches one batch; a successful batch has a short lease before the next batch. Visitor-triggered sync is **not a guaranteed scheduled full import** and cannot be described as fully synchronized until the reported checkpoint reaches current data.
 - The numeric probabilities are from empirical goal history, not freeform LLM generation. In particular, outcomes, scores, post-match xG, events, premium odds, or other future-derived data must not leak into their own earlier pre-match predictions.
 - Worker model version `tiki-historical-ingestion-poisson-v6` and evaluation cache `walk_forward_historical_v6_1` are isolated from previous backtests. Backtesting remains based on previously licensed historical results and 3-day embargo; introducing additional Sportmonks seasons should trigger a new, properly time-split evaluation rather than retroactively claiming higher accuracy.
+
+## Scheduled historical sync
+
+Cloudflare Worker `tiki-data-history-scheduler` is deployed independently of the Pages site, with a Cron Trigger `0 */4 * * *` (every four hours, UTC). Script source: `workers/history-scheduler.js`.
+
+The schedule requests the normal read-only `/api/home-focus` feed. The Pages backend safely dispatches its guarded backfill in `ctx.waitUntil`, sharing D1 leases with visitor-triggered runs; the Cron Worker receives **no Sportmonks token or D1 secret**. A scheduled run is not evidence that all historical records are already imported; check `/api/model/sync-status` for the actual range and completed batches. The rollout was confirmed to have successfully imported an initial 103 finished records from 2024; older/latest data completeness remains subscription-dependent.
+
+When backfill catches up, reduce Cron frequency if provider quota or cost warrants it. Cloudflare Pages code deployments remain manual and separate from the Cron Worker.
