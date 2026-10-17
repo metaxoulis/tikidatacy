@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="el">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b131e"><meta name="description" content="Tiki-Data Match Centre: πραγματικά αποτελέσματα, ενδεκάδες, στατιστικά, γεγονότα, βαθμολογίες και πληροφορίες ομάδων.">
+<title>Tiki-Data | Match Centre · Δεδομένα Αγώνων</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/data.css">
+<script defer src="/data.js"></script>
+</head>
+<body class="td-data">
+<a class="skip-data" href="#data-main">Μετάβαση στους αγώνες</a>
+<header class="td-header">
+  <a class="td-brand" href="/"><img src="/brand.svg" width="166" height="43" alt="Tiki-Data"></a>
+  <nav class="td-toplinks" aria-label="Κύρια πλοήγηση">
+    <a href="/">Αρχική</a><a href="/predictions">Προβλέψεις</a>
+    <a href="/data" aria-current="page">Match Centre</a>
+  </nav>
+  <div class="td-live-tag"><span class="td-dot"></span> LIVE DATA</div>
+</header>
+<main id="data-main" class="td-container">
+  <section class="td-hero">
+    <div class="td-hero-copy"><p class="td-overline">TIKI-DATA / MATCH INTELLIGENCE</p>
+      <h1>Όλα τα δεδομένα.<br><em>Σε ένα γήπεδο.</em></h1>
+      <p>Πραγματικοί αγώνες, αποτελέσματα, στατιστικά, ενδεκάδες και βαθμολογίες από το SportAPI.ai — χωρίς κατασκευασμένες προβλέψεις.</p>
+      <div class="td-hero-links"><a href="/predictions" class="td-link-main">Ανάλυση μοντέλου →</a><span>Τα στοιχεία ενδέχεται να διαφέρουν ανά διοργάνωση.</span></div>
+    </div>
+    <div class="td-hero-graphic" aria-hidden="true"><div class="td-pitch"><span class="td-pitch-circle"></span><span class="td-pitch-line"></span><span class="td-pitch-end a"></span><span class="td-pitch-end b"></span></div><div class="td-hero-badge">MATCH<br>CENTRE <small>2026</small></div></div>
+  </section>
+  <section class="td-dash" aria-label="Περιεχόμενο δεδομένων">
+    <div class="td-titleline"><div><span class="td-overline">MATCH EXPLORER</span><h2>Πρόγραμμα & αποτελέσματα</h2></div><span class="td-provider">● SportAPI.ai <span class="td-provenance">· Πραγματικά δεδομένα</span></span></div>
+    <div class="td-toolbar">
+      <div class="td-days"><button type="button" id="dayPrev" aria-label="Προηγούμενη ημέρα">‹</button><input type="date" id="dayPicker" aria-label="Επιλογή ημερομηνίας"><button type="button" id="dayNext" aria-label="Επόμενη ημέρα">›</button><button type="button" id="dayToday">Σήμερα</button></div>
+      <input id="dataSearch" type="search" placeholder="Αναζήτηση ομάδας..." aria-label="Αναζήτηση ομάδας" autocomplete="off">
+      <select id="leagueFilter" aria-label="Φίλτρο διοργάνωσης"><option value="all">Όλες οι διοργανώσεις</option></select>
+      <select id="statusFilter" aria-label="Φίλτρο κατάστασης"><option value="all">Όλοι οι αγώνες</option><option value="live">Σε εξέλιξη</option><option value="finished">Ολοκληρωμένοι</option><option value="upcoming">Επόμενοι</option></select>
+    </div>
+    <div class="td-summary" aria-live="polite"><div><b id="totalGames">—</b><span>Αγώνες</span></div><div><b id="totalLeagues">—</b><span>Διοργανώσεις</span></div><div><b id="totalFinished">—</b><span>Ολοκληρωμένοι</span></div><div><b id="totalLive">—</b><span>Σε εξέλιξη</span></div></div>
+    <div id="dataStatus" class="td-status" role="status" aria-live="polite">Φόρτωση πραγματικών αγώνων…</div>
+    <div id="dataGames" class="td-games" aria-busy="true">
+      <div class="td-skeleton"></div><div class="td-skeleton"></div><div class="td-skeleton"></div>
+    </div>
+    <div class="td-footnote">Πηγή: SportAPI.ai · Ώρες στην τοπική ζώνη της συσκευής · Οι ενημερώσεις ενδέχεται να καθυστερούν λόγω προσωρινής αποθήκευσης. Δεν παρέχονται στοιχηματικές αποδόσεις ή xG από το SportAPI.ai.</div>
+  </section>
+</main>
+<div id="dataDialog" class="td-overlay" hidden>
+  <div class="td-backdrop" data-close="yes"></div>
+  <section class="td-dialog" role="dialog" aria-modal="true" aria-labelledby="detailTitle" tabindex="-1">
+    <button type="button" id="detailClose" class="td-close" aria-label="Κλείσιμο">×</button>
+    <div id="detailHeader"></div>
+    <div id="detailTabs" class="td-tabs" role="tablist" aria-label="Λεπτομέρειες"></div>
+    <div id="detailBody" class="td-dialogbody" role="tabpanel" aria-live="polite"></div>
+    <p class="td-detail-source">Πηγή: SportAPI.ai · Εμφανίζονται μόνο διαθέσιμα και επαληθεύσιμα πεδία.</p>
+  </section>
+</div>
+<footer class="td-footer"><span>© Tiki-Data · Football intelligence</span><span>Αποτελέσματα: SportAPI.ai · Πιθανότητες: ξεχωριστό μοντέλο</span></footer>
+<nav class="td-bottom" aria-label="Κινητή πλοήγηση"><a href="/">Αρχική</a><a href="/predictions">Προβλέψεις</a><a href="/data" aria-current="page">Δεδομένα</a></nav>
+</body></html>
