@@ -948,7 +948,7 @@ function smPublishedScore(row){
 }
 async function smHttp(relative,token,requestFetch=fetch){
  if(typeof token!=='string'||!token.trim())throw Error('sportmonks_not_configured');
- if(!/^(?:leagues\/date\/\d{4}-\d{2}-\d{2}|fixtures\/date\/\d{4}-\d{2}-\d{2}|livescores\/inplay)\?/.test(relative))throw Error('sportmonks_path_invalid');
+ if(!/^(?:leagues\/date\/\d{4}-\d{2}-\d{2}|fixtures\/date\/\d{4}-\d{2}-\d{2}|livescores\/inplay|predictions\/live\/probabilities)\?/.test(relative))throw Error('sportmonks_path_invalid');
  let url=SM_ROOT+relative;
  for(let attempt=0;attempt<3;attempt++){
   const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),15000);
@@ -1010,16 +1010,84 @@ async function smWeek(start,token,classify,fetcher=fetch,count=7){
  const fixtures=[...map.values()].sort((a,b)=>Date.parse(a.date)-Date.parse(b.date));
  return{fixtures,dates_checked:count,dates_successful:success.length,partial:success.length!==count};
 }
+/* Sportmonks live-only normalization. Provider inputs are untrusted; no inferred probabilities. */
+const safeText=(value,n=100)=>typeof value==='string'?value.trim().slice(0,n):'';
+const safeInt=value=>Number.isInteger(value)&&value>=0&&value<1e9?value:null;
+function safePercent(value){return typeof value==='number'&&Number.isFinite(value)&&value>=0&&value<=100?value:null}
+function normalizeLiveProbability(row){
+ if(!row||typeof row!=='object')return null;
+ const id=Number(row.fixture_id??row.fixture?.id);
+ if(!Number.isSafeInteger(id)||id<=0)return null;
+ if(row.type_id!=null&&Number(row.type_id)!==237)return null;
+ const p=row.predictions??row.probabilities??row.value;
+ if(!p||typeof p!=='object'||Array.isArray(p))return null;
+ const h=safePercent(p.home),d=safePercent(p.draw),a=safePercent(p.away);
+ if(h===null||d===null||a===null||Math.abs(h+d+a-100)>2)return null;
+ return{fixture_id:id,p1:h,px:d,p2:a,minute:safeInt(row.minute),source:'sportmonks_live',market:'1x2'};
+}
+function normalizeLiveDetails(row){
+ const events=Array.isArray(row?.events)?row.events:[];
+ const statistics=Array.isArray(row?.statistics)?row.statistics:[];
+ const lineups=Array.isArray(row?.lineups)?row.lineups:[];
+ return{
+  minute:safeInt(row?.minute??row?.time?.minute??row?.periods?.[0]?.minutes),
+  events:events.slice(-30).map(e=>{
+   const minute=safeInt(e?.minute),extra_minute=safeInt(e?.extra_minute);
+   const type=safeText(e?.type?.name??e?.type?.developer_name??e?.info??'',45);
+   const player=safeText(e?.player_name,90);
+   const related_player=safeText(e?.related_player_name,90);
+   const team_id=Number.isSafeInteger(e?.team_id)?e.team_id:null;
+   return{id:safeInt(e?.id),minute,extra_minute,type,player,related_player,team_id};
+  }).filter(e=>e.minute!==null||e.type).sort((a,b)=>(a.minute??0)-(b.minute??0)),
+  statistics:statistics.slice(0,80).map(s=>{
+   const value=s?.data?.value;
+   const number=typeof value==='number'&&Number.isFinite(value)&&Math.abs(value)<=100000?value:null;
+   const type=safeText(s?.type?.developer_name??s?.type?.name??'',45);
+   return{type,value:number,participant_id:Number.isSafeInteger(s?.participant_id)?s.participant_id:null};
+  }).filter(s=>s.type&&s.value!==null),
+  lineups:lineups.filter(s=>s?.type_id===11).slice(0,22).map(s=>({
+   player:safeText(s?.player_name,90),number:safeInt(s?.jersey_number),team_id:Number.isSafeInteger(s?.team_id)?s.team_id:null
+  })).filter(s=>s.player)
+ };
+}
+
+async function smLiveProbabilities(token,fetcher=fetch){
+ const rows=await smPages('predictions/live/probabilities',token,fetcher,{params:{},maxPages:20});
+ const map=new Map();
+ for(const row of rows){
+  const records=Array.isArray(row?.livepredictions)
+   ?row.livepredictions.map(p=>({...p,fixture_id:p.fixture_id??row.fixture_id??row.id}))
+   :[row];
+  for(const r of records){
+   const value=normalizeLiveProbability(r);
+   if(!value)continue;
+   const previous=map.get(value.fixture_id);
+   if(!previous||(value.minute??-1)>=(previous.minute??-1))map.set(value.fixture_id,value);
+  }
+ }
+ return map;
+}
 async function smInplay(token,classify,fetcher=fetch,date=new Date().toISOString().slice(0,10)){
- const [leagues,raw]=await Promise.all([
-  smLeagues(date,token,classify,fetcher),
-  smPages('livescores/inplay',token,fetcher,{params:{include:'participants;league.country;state;scores;events'},maxPages:8})]);
+ const leagues=await smLeagues(date,token,classify,fetcher);
+ if(!leagues.size)return[];
+ const ids=[...leagues.keys()].join(',');
+ const base={filters:'fixtureLeagues:'+ids};
+ let raw;
+ try{
+  raw=await smPages('livescores/inplay',token,fetcher,{params:{...base,
+   include:'participants;league.country;state;scores;events;statistics.type;lineups'},maxPages:8});
+ }catch(e){
+  if(!['sportmonks_subscription_restricted','sportmonks_upstream_400'].includes(String(e?.message)))throw e;
+  raw=await smPages('livescores/inplay',token,fetcher,{params:{...base,include:'participants;league.country;state;scores;events'},maxPages:8});
+ }
  return raw.map(row=>{
   const fixture=smNormalizeFixture(row,leagues);if(!fixture)return null;
-  const score=smPublishedScore(row);
-  return {id:fixture.id,home:fixture.home,away:fixture.away,league:fixture.league,league_key:fixture.league_key,
+  const score=smPublishedScore(row),detail=normalizeLiveDetails(row);
+  return{id:fixture.id,home:fixture.home,away:fixture.away,
+   home_id:fixture.home_id,away_id:fixture.away_id,
+   league:fixture.league,league_key:fixture.league_key,
    status:fixture.status,date:fixture.date,logos:fixture.logos,league_logo:fixture.league_logo,
-   home_score:score.home,away_score:score.away};
+   home_score:score.home,away_score:score.away,...detail};
  }).filter(Boolean);
 }
 
@@ -1131,10 +1199,15 @@ async function smLiveResponse(req,env,ctx){
  if(req.method!=='GET')return smResponse({error:'method_not_allowed'},405);
  if(!env?.SPORTMONKS_API_TOKEN)return smResponse({error:'sportmonks_not_configured'},503);
  const classify=(name,country)=>fhLeague(name,country)||
-  (String(country).toLowerCase()==='cyprus'&&/^1\.?\s*division$/i.test(String(name))?'cyprus':null);
+  (String(country).toLowerCase()==='cyprus'&&/^1\\.?\\s*division$/i.test(String(name))?'cyprus':null);
  try{
-  const games=await smInplay(env.SPORTMONKS_API_TOKEN,classify,fetch);
-  return smResponse({source:'sportmonks',updated_at:new Date().toISOString(),matches:games},200,20);
+  const [games,probabilities]=await Promise.all([
+   smInplay(env.SPORTMONKS_API_TOKEN,classify,fetch),
+   smLiveProbabilities(env.SPORTMONKS_API_TOKEN,fetch).catch(()=>new Map())
+  ]);
+  const matches=games.map(m=>({...m,live_prediction:probabilities.get(Number(String(m.id).replace(/^sportmonks-/,'')))||null}));
+  return smResponse({source:'sportmonks',updated_at:new Date().toISOString(),
+   probabilities_source:'sportmonks_live_1x2_if_subscribed',matches},200,20);
  }catch{return smResponse({error:'sportmonks_live_unavailable'},502)}
 }
 
