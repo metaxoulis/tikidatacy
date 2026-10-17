@@ -871,7 +871,7 @@ async function fhHomeResponse(req,env,ctx){
 async function smCheckAccess(req,env){
  const token=env?.SPORTMONKS_API_TOKEN;
  const reply=(v,s=200)=>new Response(JSON.stringify(v),{status:s,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
- if(!token)return reply({configured:false,authenticated:false},503);
+ if(!token)return reply({configured:false,authenticated:false,binding_exists:Object.prototype.hasOwnProperty.call(env||{},'SPORTMONKS_API_TOKEN'),binding_type:typeof token,d1_connected:!!env?.TIKI_DB},503);
  const d=new Date().toISOString().slice(0,10),u=new URL(req.url);
  const date=/^\d{4}-\d{2}-\d{2}$/.test(u.searchParams.get('date')||'')?u.searchParams.get('date'):d;
  const targets=[['leagues','https://api.sportmonks.com/v3/football/leagues/date/'+date+'?per_page=50&include=country'],['fixtures','https://api.sportmonks.com/v3/football/fixtures/date/'+date+'?per_page=5&include=participants;league.country']];
