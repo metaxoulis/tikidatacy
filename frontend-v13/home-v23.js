@@ -74,6 +74,34 @@ async function load(){
  }finally{fetching=false;}
 }
 
+function liveProb(m){
+ const p=m.live_prediction;
+ if(!p||![p.p1,p.px,p.p2].every(n=>typeof n==='number'&&n>=0&&n<=100))return '';
+ return '<div class="live-probs"><span>SPORTMONKS LIVE · 1Χ2</span><div>'+
+  '<b>1 '+pct(p.p1)+'</b><b>Χ '+pct(p.px)+'</b><b>2 '+pct(p.p2)+'</b></div></div>';
+}
+function liveDetails(m){
+ const events=Array.isArray(m.events)?m.events:[];
+ const stats=Array.isArray(m.statistics)?m.statistics:[];
+ const lineups=Array.isArray(m.lineups)?m.lineups:[];
+ const label=n=>({BALL_POSSESSION:'Κατοχή',SHOTS_TOTAL:'Σουτ',SHOTS_ON_TARGET:'Στον στόχο',CORNER_KICKS:'Κόρνερ'})[n]||'';
+ const filtered=stats.filter(s=>label(s.type)).slice(0,18);
+ const statRows=[];
+ for(const type of ['BALL_POSSESSION','SHOTS_TOTAL','SHOTS_ON_TARGET','CORNER_KICKS']){
+  const h=filtered.find(s=>s.type===type&&s.participant_id===m.home_id);
+  const a=filtered.find(s=>s.type===type&&s.participant_id===m.away_id);
+  if(h||a)statRows.push('<div class="live-stat"><b>'+esc(h?.value??'—')+'</b><span>'+esc(label(type))+'</span><b>'+esc(a?.value??'—')+'</b></div>');
+ }
+ const recent=events.slice(-10).reverse().map(e=>'<li><time>'+esc(e.minute??'—')+'′</time><span>'+esc(e.type||'Γεγονός')+(e.player?' · '+esc(e.player):'')+'</span></li>').join('');
+ const starters=side=>lineups.filter(p=>p.team_id===side).slice(0,11).map(p=>esc(p.player)).join(' · ');
+ const h=starters(m.home_id),a=starters(m.away_id);
+ if(!recent&&!statRows.length&&!h&&!a)return '';
+ return '<details class="live-details"><summary>Γεγονότα · Στατιστικά · Ενδεκάδες</summary>'+
+  (recent?'<ol class="live-events">'+recent+'</ol>':'')+
+  (statRows.length?'<div class="live-stats">'+statRows.join('')+'</div>':'')+
+  (h||a?'<div class="live-lineups"><small>Αρχική ενδεκάδα</small>'+(h?'<p><b>'+esc(m.home)+'</b> '+h+'</p>':'')+(a?'<p><b>'+esc(m.away)+'</b> '+a+'</p>':'')+'</div>':'')+
+ '</details>';
+}
 async function loadLive(){
  const root=$('liveScores');if(!root)return;
  try{
@@ -82,14 +110,16 @@ async function loadLive(){
   const json=await res.json(),games=Array.isArray(json.matches)?json.matches:[];
   if(!games.length){root.hidden=true;root.replaceChildren();return;}
   root.hidden=false;
-  root.innerHTML='<div class="overline">ΖΩΝΤΑΝΟΙ ΑΓΩΝΕΣ</div><div class="live-list">'+games.slice(0,9).map(m=>
-   '<div class="live-match"><span class="live-league">'+leagueEmblem(m.league,m.league_logo,m.league_key)+esc(m.league)+'</span>'+
-   '<span class="live-teams">'+crest(m,'home')+'<strong>'+esc(m.home)+'</strong><b class="live-score">'+
+  root.innerHTML='<div class="overline">ΖΩΝΤΑΝΟΙ ΑΓΩΝΕΣ · ΑΝΑΝΕΩΣΗ 30″</div><div class="live-list">'+games.slice(0,9).map(m=>
+   '<article class="live-match"><span class="live-league">'+leagueEmblem(m.league,m.league_logo,m.league_key)+esc(m.league)+(num(m.minute)!==null?' · '+esc(m.minute)+'′':'')+'</span>'+
+   '<div class="live-teams">'+crest(m,'home')+'<strong>'+esc(m.home)+'</strong><b class="live-score">'+
    (num(m.home_score)!==null&&num(m.away_score)!==null?esc(m.home_score+' – '+m.away_score):'LIVE')+
-   '</b><strong>'+esc(m.away)+'</strong>'+crest(m,'away')+'</span></div>').join('')+'</div>';
+   '</b><strong>'+esc(m.away)+'</strong>'+crest(m,'away')+'</div>'+
+   liveProb(m)+liveDetails(m)+'</article>').join('')+'</div>';
  }catch{root.hidden=true;}
 }
-void loadLive();setInterval(()=>{if(!document.hidden)void loadLive()},45000);
+
+void loadLive();setInterval(()=>{if(!document.hidden)void loadLive()},30000);
 
 $('year').textContent=String(new Date().getFullYear());
 void load();
