@@ -1047,7 +1047,7 @@ async function smStage(req,env){
  */
 const SM_FOCUS_CACHE_KEY='focus_sportmonks_v1';
 const SM_FINISHED=new Set(['FT','FINISHED','FULL_TIME','AET','PEN','CANCELLED','POSTPONED','DELAYED','ABANDONED']);
-function smBuildFocus(fixtures,live,model,now,estimate=fhEstimate,likely=fhLikelyScore){
+function smBuildFocus(fixtures,live,model,now,estimate=null,likely=null){
  const actual=new Map((Array.isArray(live)?live:[]).map(m=>[String(m.id),m]));
  const map=new Map();
  for(const f of [...(Array.isArray(fixtures)?fixtures:[]),...(Array.isArray(live)?live:[])]){
@@ -1061,9 +1061,9 @@ function smBuildFocus(fixtures,live,model,now,estimate=fhEstimate,likely=fhLikel
   const isUpcoming=playedAt>now+60000&&!liveMatch;
   let p=null;
   if(isUpcoming&&model){
-   const val=estimate(game,model);
+   const val=(estimate||fhEstimate)(game,model);
    if(val?.method==='openfootball_cc0_fitted_venue_poisson'&&val?.team_samples?.home>=3&&val?.team_samples?.away>=3)
-    p={...val,most_likely_score:likely(val.mu_home,val.mu_away)};
+    p={...val,most_likely_score:(likely||fhLikelyScore)(val.mu_home,val.mu_away)};
   }
   const forecast=p?{p1:p.p1,px:p.px,p2:p.p2,over25:p.over25,under25:p.under25,btts:p.btts,
    no_btts:p.no_btts,mu_home:p.mu_home,mu_away:p.mu_away,method:p.method,
