@@ -179,7 +179,7 @@ async function fhHomeResponse(req,env,ctx){
    historical_sample:m.model.team_samples,history_latest:m.model.history_latest
   })),
   leagues_with_matches:selected.leagues_available,
-  model:{name:'CC0 historical venue Poisson (experimental)',trained_at:model?.trained_at||null,historical_cutoff:model?.cutoff||null,history_leagues:Object.keys(model?.leagues||{}),validated:false,
+  model:{name:'CC0 historical venue Poisson (experimental)',historical_matches:Object.values(model?.leagues||{}).reduce((n,l)=>n+(l.matches||0),0),trained_at:model?.trained_at||null,historical_cutoff:model?.cutoff||null,history_leagues:Object.keys(model?.leagues||{}),validated:false,
    note:'Not an LLM. Pure statistical fitting to licensed OpenFootball finished scores; no verified prospective track record.'},
   fallback_reason:fixtures.length?'': 'No upstream fixtures available',data_sources:{sportapi:fhSportFixtures(sport).length,allsports:raw.length}};
  // Prospective evaluation log: only genuinely team-fitted predictions well before kickoff.
