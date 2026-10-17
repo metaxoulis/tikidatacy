@@ -41,3 +41,17 @@ html,body{width:100%;max-width:100%;overflow-x:clip}
 .crest.has-real-team>span{visibility:hidden}
 .crest img.home-crest-logo{position:absolute;inset:0;width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;z-index:2;background:transparent;padding:10%;border-radius:inherit}
 .crest img.home-crest-logo + img.home-crest-logo{z-index:3}
+
+/* Server-fed live scores: never infer results when source scores are missing. */
+.live-panel{margin:22px 0 0;min-width:0}.live-panel[hidden]{display:none}
+.live-heading{display:flex;align-items:center;gap:10px;color:#d9f9ee;font-size:12px;letter-spacing:.04em;margin:0 0 10px}
+.live-heading span:last-child{font-size:11px;color:#8dafbd;letter-spacing:0}
+.live-pulse{width:8px;height:8px;background:#f35d71;border-radius:50%;box-shadow:0 0 0 4px #ed526924}
+.live-list{display:flex;gap:12px;overflow-x:auto;padding:0 0 8px;scrollbar-width:thin}
+.live-card{min-width:260px;max-width:300px;width:280px;flex:none;padding:14px;background:#142839;border:1px solid #315065;border-radius:13px;box-sizing:border-box}
+.live-card>small{display:block;color:#9ec2d0;font-size:10px;margin-bottom:12px}
+.live-teams{display:grid;grid-template-columns:minmax(0,1fr) 48px minmax(0,1fr);align-items:center;gap:8px}
+.live-teams>div{min-width:0;display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center;font-size:10px;font-weight:750}
+.live-teams img,.live-initial{display:grid;place-items:center;width:38px;height:38px;border-radius:10px;padding:5px;background:#edf6fa;object-fit:contain;box-sizing:border-box}
+.live-initial{color:#264558;font-size:12px}.live-teams b{text-align:center;font-size:20px;color:#a9ffdc;white-space:nowrap}
+.live-teams>div span{max-width:100%;overflow-wrap:anywhere}
