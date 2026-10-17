@@ -10,13 +10,18 @@ test('all genuine fixtures remain listed even when no historic team evidence exi
  assert.equal(x.matches.length,1);assert.equal(x.matches[0].p1,null);assert.equal(x.matches[0].btts,null);
  assert.equal(x.coverage.with_prediction,0);assert.equal(x.featured.id,example.id);
 });
-test('only matched home-away observations receive Poisson outputs; never publish generic fallback',()=>{
- const ok=(f,m)=>({method:'openfootball_cc0_fitted_venue_poisson',team_samples:{home:5,away:8},
-  p1:42,px:27,p2:31,over25:53,under25:47,btts:57,no_btts:43,mu_home:1.4,mu_away:1.2});
- const out=smBuildFocus([example],[],{leagues:{}},clock,ok,()=>({score:'1-1',probability:11}));
- assert.equal(out.matches[0].p1,42);assert.equal(out.coverage.with_prediction,1);
- const bad=smBuildFocus([example],[],{},clock,()=>({...ok(),method:'generic_prior_no_licensed_history'}));
- assert.equal(bad.matches[0].p1,null);
+test('publish separately tiered team, partial and league predictions without inventing raw facts',()=>{
+ const ok=(f,m)=>({method:'openfootball_cc0_fitted_venue_poisson',tier:'team',confidence:'experimental',
+  team_samples:{home:5,away:8},p1:42,px:27,p2:31,over25:53,under25:47,btts:57,no_btts:43,mu_home:1.4,mu_away:1.2});
+ const data={leagues:{}};
+ const out=smBuildFocus([example],[],data,clock,ok,()=>({score:'1-1',probability:11}));
+ assert.equal(out.matches[0].p1,42);assert.equal(out.coverage.with_team_prediction,1);
+ const league=smBuildFocus([example],[],data,clock,()=>({...ok(),method:'league_historical_prior_poisson',tier:'league',
+ confidence:'very_low'}));
+ assert.equal(league.matches[0].p1,42);assert.equal(league.coverage.with_league_baseline,1);
+ assert.equal(league.matches[0].prediction_tier,'league');
+ const invalid=smBuildFocus([example],[],data,clock,()=>({...ok(),method:'generic_prior_no_licensed_history'}));
+ assert.equal(invalid.matches[0].p1,null);
 });
 test('live score is included and no pre-match Poisson is computed while in-play',()=>{
  const live={...example,status:'LIVE',home_score:1,away_score:0,logos:example.logos};
