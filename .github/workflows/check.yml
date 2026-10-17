@@ -25,6 +25,8 @@ jobs:
           echo "Checked $count JavaScript files"
       - name: Test SportAPI fallback normalization and key safety
         run: node --test tests/*.test.mjs
+      - name: Test isolated StatsBomb research parser (offline)
+        run: python3 -m unittest discover -s research/statsbomb -p 'test_*.py'
       - name: Run existing JavaScript model tests if present
         run: |
           if test -f test_model.js; then

@@ -6,7 +6,7 @@ const AS_ORIGIN='https://apiv2.allsportsapi.com/football/';
 const AS_MAX_BODY=1400000;
 const asString=(v,n=140)=>typeof v==='string'?v.trim().slice(0,n):'';
 const asId=v=>/^\d{1,13}$/.test(String(v??''))?String(v):null;
-const asDate=s=>typeof s==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(s)&&new Date(s+'T00:00:00Z').toISOString().slice(0,10)===s?s:null;
+const asDate=s=>{if(typeof s!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(s))return null;const ms=Date.parse(s+'T00:00:00Z');return Number.isFinite(ms)&&new Date(ms).toISOString().slice(0,10)===s?s:null;};
 const asDayInRange=s=>{const d=asDate(s);return !!d&&Math.abs(Date.parse(d+'T00:00:00Z')-Date.now())<16*86400000;};
 const asLogo=s=>typeof s==='string'&&/^https:\/\/(?:apiv2\.)?allsportsapi\.com\/logo\/[a-zA-Z0-9_./%-]{1,180}\.(?:png|jpg|jpeg|webp)$/i.test(s)?s:null;
 function asTime(row){
