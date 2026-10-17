@@ -17,5 +17,5 @@ test('old match centre redirects to prediction-only page in deployed worker',()=
  const worker=read('frontend/worker.js');
  assert(worker.includes("Location:'/predictions'"));
  assert(!worker.includes("if(path==='/data'||path==='/data/')return asset(HTML_DATA"));
- assert(worker.includes("focus-home-v2"));
+ assert(worker.includes("focus-home-v3"));
 });
