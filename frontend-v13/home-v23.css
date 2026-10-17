@@ -53,3 +53,19 @@ html,body{width:100%;max-width:100%;overflow-x:clip}
 .live-teams strong{min-width:0;overflow-wrap:anywhere;font-size:11px;font-weight:700;text-align:center}
 .live-score{color:#8ff3d4;font-size:16px;white-space:nowrap}
 @media(max-width:710px){.live-scores{padding:12px;margin:14px 0}.live-list{grid-template-columns:1fr}}
+
+/* In-play detail — compact, readable on small screens */
+.live-probs{margin-top:10px;padding:9px 10px;border:1px solid #1b696a;border-radius:9px;background:#0b2634}
+.live-probs>span{display:block;font-size:10px;letter-spacing:.06em;color:#7edac8;font-weight:800;margin-bottom:7px}
+.live-probs>div{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.live-probs b{font-variant-numeric:tabular-nums;text-align:center;font-size:12px;color:#f1fcff}
+.live-details{margin-top:11px;border-top:1px solid #2b5260;padding-top:9px;color:#c7e1eb}
+.live-details>summary{cursor:pointer;list-style-position:inside;font-size:11px;font-weight:700;color:#9dddcf}
+.live-events{padding:0;list-style:none;margin:10px 0;display:grid;gap:6px}
+.live-events li{display:grid;grid-template-columns:36px minmax(0,1fr);align-items:start;gap:7px;font-size:11px;line-height:1.5}
+.live-events time{color:#69edcf;font-variant-numeric:tabular-nums}
+.live-stat{display:grid;grid-template-columns:40px minmax(0,1fr) 40px;text-align:center;align-items:center;padding:5px 0;border-bottom:1px solid #254657;font-size:11px}
+.live-stat b{font-variant-numeric:tabular-nums;color:#edffff}
+.live-lineups{margin-top:10px;font-size:11px;line-height:1.6}
+.live-lineups small{color:#88ced5;font-weight:700}
+.live-lineups p{margin:5px 0;overflow-wrap:anywhere}
