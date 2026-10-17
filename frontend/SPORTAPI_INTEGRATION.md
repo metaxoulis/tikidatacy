@@ -33,3 +33,18 @@ Without a server-side Cloudflare secret, the additional provider is intentionall
 An authenticated request has not yet been verified. Do not claim it is active until an actual protected probe succeeds.
 
 Reference: https://sportapi.ai/docs
+
+## Verified authenticated live API response (2026-10-17)
+
+- Production Cloudflare encrypted key authenticated successfully with header `X-Api-Key` and HTTP 200.
+- Contrary to the generic docs examples, real `GET /api/fixtures/date/YYYY-MM-DD` has top-level `{success:true,date:...,data:[...]}`, **not** `{fixtures:[...]}`.
+- The source adapter now parses `data[]`, `fixtures[]`, and `data.fixtures[]` without equating a missing field to zero fixtures.
+- The observed live fixture rows contain `id`, `home_team`, `away_team`, `home_id`, `away_id`, `league_id`, `league_name`, `datetime`, `kickoff_utc`, `home_score`, `away_score`, and `status`; when kickoff is missing the UI adapter abstains rather than inventing the time.
+- Confirmed 255 rows on 2026-10-17, 51 rows on 2026-10-15, and 487 rows on 2026-08-08. **These counts are not numbers of completed/scored fixtures.**
+- Manual production provider probes were temporary and were removed from the deployed Worker after the verified parser fix.
+
+## Historical training
+
+SportAPI.ai provides potentially useful historical scores and match details. Before using any data to fit or commercially redistribute predictions, verify the provider's **storage, historical backfill and AI/model-training rights** for the account plan. Keep data from different sources separate with source IDs and collection timestamps; never overwrite OpenFootball archival rows. The research learning engine remains independently gated and must not claim improved accuracy merely because more fixtures are found.
+
+To prevent unplanned daily quota consumption, this live fallback is called only after a failed primary API request. A scheduled central historical collector / D1 source table will be implemented only after licensing, stable date coverage, validation of final statuses and source freshness, and quota budgeting are confirmed.
