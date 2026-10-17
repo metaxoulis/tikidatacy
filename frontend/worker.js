@@ -1299,8 +1299,8 @@ function smHistoryError(error){
 }
 const smHistoryLeague=(name,country)=>fhLeague(name,country)||
  (String(country).toLowerCase()==='cyprus'&&/^1\.?\s*division$/i.test(String(name))?'cyprus':null);
-async function smHistoryCache(req,callback,ctx){
- const cacheKey=new Request(req.url);
+async function smHistoryCache(key,callback,ctx){
+ const cacheKey=new Request('https://tiki-cache.local/history/'+key);
  try{const hit=await caches.default.match(cacheKey);if(hit)return hit;}catch{}
  const result=await callback();
  if(result.ok)try{ctx?.waitUntil(caches.default.put(cacheKey,result.clone()));}catch{}
@@ -1313,7 +1313,7 @@ async function smHistoryFixturesRoute(req,env,ctx){
  const page=Number(q.get('page')||1);
  if(!range||!Number.isSafeInteger(page)||page<1||page>10)
   return smResponse({error:'invalid_history_window',hint:'Use valid YYYY-MM-DD start/end within seven consecutive UTC dates; page 1-10.'},400);
- return smHistoryCache(req,async()=>{
+ return smHistoryCache('fixtures/'+range.start+'/'+range.end+'/'+page,async()=>{
   try{
    const query=new URLSearchParams({page:String(page),per_page:'50',
     include:'participants;scores;state;league.country'});
@@ -1330,7 +1330,7 @@ async function smHistoryOddsRoute(req,env,ctx){
  const q=new URL(req.url).searchParams,page=Number(q.get('page')||1);
  if(!Number.isSafeInteger(page)||page<1||page>10)
   return smResponse({error:'invalid_page',hint:'Pages 1-10 only.'},400);
- return smHistoryCache(req,async()=>{
+ return smHistoryCache('premium-odds/'+page,async()=>{
   try{
    const query=new URLSearchParams({page:String(page),per_page:'50',include:'odd'});
    const d=await smHttp('odds/premium/history?'+query,env.SPORTMONKS_API_TOKEN);
