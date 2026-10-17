@@ -18,16 +18,17 @@ const nameKey=s=>String(s||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').
 const knownTeamLogo=new Map(Object.entries(window.TIKI_LOGO_CATALOG?.teams||{}).map(([k,v])=>[nameKey(k),v]));
 function safeCatalogURL(u){return typeof u==='string'&&/^https:\/\/(?:raw\.githubusercontent\.com|media\.api-sports\.io)\//.test(u)?u:null;}
 function decorateLogo(parent,url,cls){if(!url)return;const img=document.createElement('img');img.className=cls;img.src=url;img.loading='lazy';img.decoding='async';img.alt='';img.onerror=()=>img.remove();parent.append(img);}
+const asDirectLogo=u=>typeof u==='string'&&/^https:\/\/(?:apiv2\.)?allsportsapi\.com\/logo\/[a-zA-Z0-9_./%-]{1,180}\.(?:png|jpe?g|webp)$/i.test(u)?u:null;
 const monogram=s=>String(s||'').replace(/\b(?:fc|cf|afc|sc|ac|club)\b/gi,'').trim().split(/\s+/).slice(0,2).map(x=>x[0]||'').join('').slice(0,3).toUpperCase()||'FC';
 const statusFinished=s=>['FT','FULL_TIME','FINISHED','AET','PEN','PENALTY_SHOOTOUT'].includes(String(s||'').toUpperCase());
 const statusLive=s=>['LIVE','1H','2H','HT','ET','P','BREAK','INT'].includes(String(s||'').toUpperCase());
 const readableStatus=s=>({NS:'Αναμονή',SCHEDULED:'Προγραμματισμένο',FT:'Τελικό',AET:'Παράταση',PEN:'Πέναλτι',HT:'Ημίχρονο',LIVE:'Live','1H':'1ο ημίχρονο','2H':'2ο ημίχρονο'}[s]||s||'Προγραμματισμένο');
 const statNames={shots:'Σουτ',shots_on_target:'Σουτ στην εστία',shots_off_target:'Σουτ εκτός',fouls:'Φάουλ',total_passes:'Πάσες',pass_accuracy:'Ακρίβεια πάσας %',tackles:'Τάκλιν',tackle_success:'Επιτυχημένα τάκλιν %',saves:'Αποκρούσεις',yellow_cards:'Κίτρινες',red_cards:'Κόκκινες',possession:'Κατοχή %',corners:'Κόρνερ',offsides:'Οφσάιντ'};
-const state={date:today,all:[],league:'all',status:'all',query:'',loading:false,current:null,active:'',controller:null,previousFocus:null,sequence:0};
+const state={provider:new URLSearchParams(location.search).get('source')==='allsports'?'allsports':'sportapi',activeSource:'SportAPI.ai',date:today,all:[],league:'all',status:'all',query:'',loading:false,current:null,active:'',controller:null,previousFocus:null,sequence:0};
 function setStatus(text,error=false){const n=$('dataStatus');n.textContent=text;n.classList.toggle('error',error);}
 function empty(text){return '<div class="td-empty">'+esc(text)+'</div>';}
 function message(text){return '<div class="td-msg">'+esc(text)+'</div>';}
-function errorMessage(err){return err?.message==='quota_exceeded'?'Έχει εξαντληθεί προσωρινά το ημερήσιο όριο του παρόχου. Δοκιμάστε αργότερα.':err?.message==='provider_not_configured'?'Η πηγή SportAPI.ai δεν είναι διαθέσιμη αυτή τη στιγμή.':err?.message==='date_out_of_range'?'Η ημερομηνία είναι εκτός του διαθέσιμου εύρους.': 'Τα δεδομένα δεν είναι διαθέσιμα αυτή τη στιγμή. Δοκιμάστε ξανά.';}
+function errorMessage(err){return err?.message==='quota_exceeded'?'Έχει εξαντληθεί προσωρινά το ημερήσιο όριο του παρόχου. Δοκιμάστε αργότερα.':err?.message==='provider_not_configured'?'Η επιλεγμένη πηγή δεν έχει ακόμη ρυθμιστεί. Χρειάζεται κρυπτογραφημένο Cloudflare Secret.':err?.message==='date_out_of_range'?'Η ημερομηνία είναι εκτός του διαθέσιμου εύρους.': 'Τα δεδομένα δεν είναι διαθέσιμα αυτή τη στιγμή. Δοκιμάστε ξανά.';}
 async function requestData(path,params,signal){
  const url=new URL('/api/sport/'+path,location.origin);
  Object.entries(params).forEach(([k,v])=>{if(v!==null&&v!==undefined&&v!=='')url.searchParams.set(k,String(v));});
@@ -35,6 +36,19 @@ async function requestData(path,params,signal){
  let j;try{j=await r.json()}catch{throw Error('bad_response')}
  if(!r.ok)throw Error(j?.error||'provider_unavailable');
  return j;
+}
+async function requestAllSports(date){
+ const u=new URL('/api/allsports/fixtures',location.origin);u.searchParams.set('date',date);
+ const r=await fetch(u,{headers:{Accept:'application/json'}});
+ let data;try{data=await r.json()}catch{throw Error('bad_response')}
+ if(!r.ok)throw Error(data?.error||'provider_unavailable');
+ return data;
+}
+async function updateSourceOptions(){
+ try{const r=await fetch('/api/allsports/status');if(!r.ok)return;const s=await r.json();const opt=$('providerSelect')?.querySelector('[value="allsports"]');if(!opt)return;
+ if(!s.configured){opt.textContent='AllSportsAPI · σύνδεση εκκρεμεί';opt.disabled=true;if(state.provider==='allsports'){state.provider='sportapi';$('providerSelect').value='sportapi';void loadFixtures();}}
+ else{opt.textContent='AllSportsAPI';opt.disabled=false;}
+ }catch{/* status is auxiliary; preserve primary feed */}
 }
 function setRange(){
  $('dayPicker').value=state.date;
@@ -58,39 +72,40 @@ function renderGames(){
  for(const m of list){if(!groups.has(m.league))groups.set(m.league,[]);groups.get(m.league).push(m);}
  for(const [league,rows] of groups){
   const heading=document.createElement('div');heading.className='td-league-heading';
-  const title=document.createElement('span');title.textContent=league;const mark=safeCatalogURL(verifiedLeagueLogo(league));if(mark)decorateLogo(heading,mark,'td-league-crest');heading.append(title);
+  const title=document.createElement('span');title.textContent=league;const mark=asDirectLogo(rows.find(x=>x.league_logo)?.league_logo)||safeCatalogURL(verifiedLeagueLogo(league));if(mark)decorateLogo(heading,mark,'td-league-crest');heading.append(title);
   const count=document.createElement('span');count.className='td-league-count';count.textContent=rows.length+' αγώνες';heading.append(count);
   const withStandings=rows.find(x=>x.league_id&&x.league_token);
-  if(withStandings){const btn=document.createElement('button');btn.type='button';btn.textContent='Βαθμολογία / Σκόρερ →';btn.addEventListener('click',()=>openDetail('league',withStandings));heading.append(btn);}
+  if(withStandings&&state.provider==='sportapi'){const btn=document.createElement('button');btn.type='button';btn.textContent='Βαθμολογία / Σκόρερ →';btn.addEventListener('click',()=>openDetail('league',withStandings));heading.append(btn);}
   frag.append(heading);
   for(const m of rows){
    const game=document.createElement('article');game.className='td-game';const d=new Date(m.date),hasDate=Number.isFinite(d.getTime());
    const when=document.createElement('div');when.className='td-game-time';when.textContent=hasDate?fmtTime.format(d):'—';
    const small=document.createElement('small');small.textContent=m.stage||readableStatus(m.status);when.append(small);
    const teams=document.createElement('div');teams.className='td-teams';
-   for(const side of ['home','away']){const team=document.createElement('div');team.className='td-team';const icon=document.createElement('span');icon.className='td-monogram';icon.textContent=monogram(m[side]);decorateLogo(icon,safeCatalogURL(knownTeamLogo.get(nameKey(m[side]))),'td-team-logo');decorateLogo(icon,signedTeamLogo(m.logos?.[side]),'td-team-logo');const name=document.createElement('span');name.textContent=m[side];team.append(icon,name);teams.append(team);}
+   for(const side of ['home','away']){const team=document.createElement('div');team.className='td-team';const icon=document.createElement('span');icon.className='td-monogram';icon.textContent=monogram(m[side]);decorateLogo(icon,safeCatalogURL(knownTeamLogo.get(nameKey(m[side]))),'td-team-logo');decorateLogo(icon,signedTeamLogo(m.logos?.[side])||asDirectLogo(m.logos?.[side]),'td-team-logo');const name=document.createElement('span');name.textContent=m[side];team.append(icon,name);teams.append(team);}
    const score=document.createElement('div');score.className='td-score';
    const hasScores=number(m.home_score)!==null&&number(m.away_score)!==null;
    score.textContent=hasScores?m.home_score+' : '+m.away_score:'— : —';
    const s=document.createElement('small');s.textContent=statusLive(m.status)&&number(m.minute)!==null?readableStatus(m.status)+' · '+m.minute+"'":readableStatus(m.status);if(statusLive(m.status))s.className='td-live';score.append(s);
-   const action=document.createElement('div');action.className='td-game-actions';const b=document.createElement('button');b.type='button';b.textContent='Στοιχεία →';b.setAttribute('aria-label','Στοιχεία '+m.home+' εναντίον '+m.away);b.addEventListener('click',()=>openDetail('match',m));action.append(b);
+   const action=document.createElement('div');action.className='td-game-actions';if(state.provider==='sportapi'){const b=document.createElement('button');b.type='button';b.textContent='Στοιχεία →';b.setAttribute('aria-label','Στοιχεία '+m.home+' εναντίον '+m.away);b.addEventListener('click',()=>openDetail('match',m));action.append(b);}else{const tag=document.createElement('span');tag.className='td-source-label';tag.textContent='AllSportsAPI';action.append(tag);}
    game.append(when,teams,score,action);frag.append(game);
   }
  }
  const container=$('dataGames');container.replaceChildren(frag);
  if(!list.length)container.innerHTML=empty(state.all.length?'Δεν βρέθηκαν αγώνες με αυτά τα φίλτρα.':'Δεν υπάρχουν καταχωρισμένοι αγώνες για την επιλεγμένη ημέρα.');
  container.setAttribute('aria-busy','false');
- setStatus(list.length+' αγώνες στην προβολή · '+fmtDate.format(new Date(state.date+'T12:00:00'))+' · SportAPI.ai');
+ setStatus(list.length+' αγώνες στην προβολή · '+fmtDate.format(new Date(state.date+'T12:00:00'))+' · '+state.activeSource);
 }
 async function loadFixtures(){
  const sequence=++state.sequence;state.all=[];state.league='all';setRange();state.loading=true;
  $('dataGames').setAttribute('aria-busy','true');$('dataGames').innerHTML='<div class="td-skeleton"></div><div class="td-skeleton"></div><div class="td-skeleton"></div>';
  for(const id of ['totalGames','totalLeagues','totalFinished','totalLive'])$(id).textContent='—';
- setStatus('Ανάκτηση αγώνων από το SportAPI.ai…');
+ setStatus('Ανάκτηση αγώνων από το '+(state.provider==='allsports'?'AllSportsAPI':'SportAPI.ai')+'…');
  try{
-  const data=await requestData('fixtures',{date:state.date});
+  const data=state.provider==='allsports'?await requestAllSports(state.date):await requestData('fixtures',{date:state.date});
   if(sequence!==state.sequence)return;
   state.all=Array.isArray(data?.data?.fixtures)?data.data.fixtures:[];
+  state.activeSource=data.source|| (state.provider==='allsports'?'AllSportsAPI':'SportAPI.ai');$('activeProvider').textContent=state.activeSource;
   $('totalGames').textContent=state.all.length;
   $('totalLeagues').textContent=new Set(state.all.map(x=>x.league)).size;
   $('totalFinished').textContent=state.all.filter(x=>statusKind(x)==='finished').length;
@@ -161,6 +176,9 @@ function renderSection(result,section,kind,record){
   if(id&&token){const wrap=document.createElement('div');wrap.className='td-detail-buttons';const go=document.createElement('button');go.type='button';go.textContent='Δείτε ρόστερ και τίτλους της ομάδας →';go.addEventListener('click',()=>openDetail('team',{id,token,name:record[side]}));wrap.append(go);$('detailBody').append(wrap);}
  }
 }
+$('providerSelect').value=state.provider;
+$('providerSelect').addEventListener('change',e=>{state.provider=e.target.value==='allsports'?'allsports':'sportapi';void loadFixtures();});
+void updateSourceOptions();
 $('dayPrev').addEventListener('click',()=>{state.date=shift(state.date,-1);void loadFixtures();});
 $('dayNext').addEventListener('click',()=>{state.date=shift(state.date,1);void loadFixtures();});
 $('dayToday').addEventListener('click',()=>{state.date=today;void loadFixtures();});
