@@ -910,7 +910,7 @@ async function fhHomeResponse(req,env,ctx){
    historical_sample:m.model.team_samples,history_latest:m.model.history_latest
   })),
   leagues_with_matches:selected.leagues_available,
-  model:{name:'Licensed historical venue Poisson v3 (experimental)',training_parameters:{decay_days:model?.decay_days||null,venue_prior:model?.venue_prior||null},retrospective_validation:{season:'2025-26',matches:1723,selected_brier:0.62197},retrospective_holdout:{season:'2026-27',matches:197,brier:0.61210,previous_brier:0.63480,baseline_brier:0.69416,top1:0.49746,validated_live:false},historical_matches:Object.values(model?.leagues||{}).reduce((n,l)=>n+(l.matches||0),0),trained_at:model?.trained_at||null,historical_cutoff:model?.cutoff||null,history_leagues:Object.keys(model?.leagues||{}),validated:false,
+  model:{name:'Hierarchical historical Poisson v5 (experimental)',training_parameters:{decay_days:model?.decay_days||null,venue_prior:model?.venue_prior||null},retrospective_validation:{season:'2025-26',matches:1723,selected_brier:0.62197},retrospective_holdout:{season:'2026-27',matches:197,brier:0.61210,previous_brier:0.63480,baseline_brier:0.69416,top1:0.49746,validated_live:false},historical_matches:Object.values(model?.leagues||{}).reduce((n,l)=>n+(l.matches||0),0),trained_at:model?.trained_at||null,historical_cutoff:model?.cutoff||null,history_leagues:Object.keys(model?.leagues||{}),validated:false,
    note:'Not an LLM. Pure statistical fitting to licensed OpenFootball finished scores; no verified prospective track record.'},
   fallback_reason:fixtures.length?'': 'No upstream fixtures available',data_sources:{sportapi:fhSportFixtures(sport).length,allsports:raw.length}};
  // Prospective evaluation log: only genuinely team-fitted predictions well before kickoff.
@@ -1212,7 +1212,7 @@ function liveOutlook(game,estimate){
   warning:'Simplified independent Poisson; does not adjust for injuries, red cards, substitutions, xG or extra time.'};
 }
 
-const SM_FOCUS_CACHE_KEY='focus_sportmonks_v1';
+const SM_FOCUS_CACHE_KEY='focus_hierarchical_v5';
 const SM_FINISHED=new Set(['FT','FINISHED','FULL_TIME','AET','PEN','CANCELLED','POSTPONED','DELAYED','ABANDONED']);
 function smBuildFocus(fixtures,live,model,now,estimate=null,likely=null){
  const actual=new Map((Array.isArray(live)?live:[]).map(m=>[String(m.id),m]));
@@ -1229,23 +1229,23 @@ function smBuildFocus(fixtures,live,model,now,estimate=null,likely=null){
   let p=null;
   if(isUpcoming&&model){
    const val=(estimate||fhEstimate)(game,model);
-   if(['openfootball_cc0_fitted_venue_poisson','licensed_historical_venue_poisson'].includes(val?.method)&&val?.team_samples?.home>=3&&val?.team_samples?.away>=3)
+   if(validHistoricalTier(val))
     p={...val,most_likely_score:(likely||fhLikelyScore)(val.mu_home,val.mu_away)};
   }
   const forecast=p?{p1:p.p1,px:p.px,p2:p.p2,over25:p.over25,under25:p.under25,btts:p.btts,
    no_btts:p.no_btts,mu_home:p.mu_home,mu_away:p.mu_away,method:p.method,
-   confidence:'experimental',coverage:'verified_historical_inputs',validated:false,
+   confidence:p.confidence,coverage:p.tier==='team'?'verified_historical_inputs':'historical_baseline_only',
+   prediction_tier:p.tier,evidence_source:p.evidence_source,model_note:p.model_note,validated:false,
    historical_sample:p.team_samples,history_latest:p.history_latest,most_likely_score:p.most_likely_score}:
    {p1:null,px:null,p2:null,over25:null,under25:null,btts:null,no_btts:null,mu_home:null,mu_away:null,
     method:null,confidence:'unavailable',coverage:'insufficient_team_history',validated:false};
   const leagueHistory=model?.leagues?.[game.league_key];
   const homeSample=leagueHistory?.teams?.[fhName(game.home)]?.home?.matches??0;
   const awaySample=leagueHistory?.teams?.[fhName(game.away)]?.away?.matches??0;
-  const analysis={evidence:p?'verified_team_history':'partial_or_unmatched_team_history',
-   league_results:leagueHistory?.matches??0,history_latest:leagueHistory?.last_result??null,
+  const analysis={evidence:p?.tier==='team'?'verified_team_history':p?.tier==='partial_team'?'partial_team_history':p?.tier==='league'?'league_only_history':p?.tier==='cross_league'?'pooled_cross_league_history':'not_available',
+   league_results:leagueHistory?.matches??0,history_latest:leagueHistory?.last_result??model?.global?.last_result??null,
    home_venue_matches:homeSample,away_venue_matches:awaySample,
-   explanation:p?'Experimental Poisson trained on home and away team results.':
-    'The fixture is real, but verified team-specific evidence is insufficient for numerical pre-match probabilities.'};
+   explanation:p?.model_note||'No verified historical training data available.'};
   map.set(String(game.id),{...game,...forecast,model:p,analysis});
  }
  const matches=[...map.values()].sort((a,b)=>Date.parse(a.date)-Date.parse(b.date));
@@ -1254,7 +1254,12 @@ function smBuildFocus(fixtures,live,model,now,estimate=null,likely=null){
  const next=future.filter(m=>m!==featured).slice(0,6);
  const leagues=new Set(matches.map(m=>m.league_key));
  const covered=matches.filter(m=>m.model).length;
+ const tiers={team:0,partial_team:0,league:0,cross_league:0};
+ for(const m of matches)if(m.model&&Object.hasOwn(tiers,m.model.tier))tiers[m.model.tier]++;
  return{matches,featured,upcoming:next,coverage:{matches:matches.length,competitions:leagues.size,with_prediction:covered,
+  with_team_prediction:tiers.team,with_partial_team_prediction:tiers.partial_team,
+  with_league_baseline:tiers.league,with_cross_league_baseline:tiers.cross_league,
+  without_prediction:matches.filter(m=>!m.model&&!actual.has(String(m.id))).length,
   live_matches:matches.filter(m=>actual.has(String(m.id))).length},leagues_with_matches:[...leagues]};
 }
 const smResponse=(data,status=200,maxAge=0)=>new Response(JSON.stringify(data),{status,headers:{
@@ -1291,7 +1296,7 @@ async function smFocusResponse(req,env,ctx){
     note:'Experimental statistical predictions only where both teams have matched verified licensed historical results.'},
    model_predictions_available:selected.coverage.with_prediction};
   if(db&&ctx?.waitUntil){
-   const writes=selected.matches.filter(m=>m.model&&Date.parse(m.date)>nowMs+2*3600000).map(m=>
+   const writes=selected.matches.filter(m=>m.model?.tier==='team'&&Date.parse(m.date)>nowMs+2*3600000).map(m=>
     db.prepare("INSERT OR IGNORE INTO prospective_forecast_log (fixture_key,created_at,model_version,data_cutoff,source_sync_at,ph,pd,pa) VALUES (?1,datetime('now'),?2,?3,?4,?5,?6,?7)")
      .bind(m.id+':'+m.date,model.model_version,model.cutoff,payload.updated_at,
        m.p1/100,m.px/100,m.p2/100).run());
