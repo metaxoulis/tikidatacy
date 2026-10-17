@@ -668,7 +668,7 @@ async function asPredictionResponse(req,env,ctx,url){
  * for fitted parameters; predictions are explicitly unvalidated experimental estimates.
  */
 // Time-order validation (2025-26, n=1723) selected these rates without seeing the 2026-27 holdout.
-const FH_TRAINING={version:'tiki-hierarchical-poisson-coverage-v5',decay_days:360,venue_prior:3,validated:false};
+const FH_TRAINING={version:'tiki-historical-ingestion-poisson-v6',decay_days:360,venue_prior:3,validated:false};
 const FH_LEAGUES={
  epl:{name:'Premier League',rank:7,country:/^(england|eng|en|gb|united kingdom)$/},
  laliga:{name:'La Liga',rank:6,country:/^(spain|esp|es)$/},
@@ -831,9 +831,9 @@ async function fhLoadModel(db,ctx){
   if(row&&Number(row.expires_at)>Date.now()/1000)return JSON.parse(row.payload_json);
  }catch{}
  try{
-  const result=await db.prepare("SELECT dataset_slug,match_date,home_team,away_team,home_score,away_score,'openfootball_cc0' AS source_provider FROM openfootball_matches WHERE match_status='FINISHED' AND home_score IS NOT NULL AND away_score IS NOT NULL ORDER BY match_date LIMIT 6500").all();
+  const result=await db.prepare("SELECT dataset_slug,match_date,home_team,away_team,home_score,away_score,'openfootball_cc0' AS source_provider FROM openfootball_matches WHERE match_status='FINISHED' AND home_score IS NOT NULL AND away_score IS NOT NULL ORDER BY match_date LIMIT 10000").all();
   if(!Array.isArray(result.results)||result.results.length<80)return null;
-  let sportmonks=[];try{const extra=await db.prepare("SELECT dataset_slug,match_date,home_team,away_team,home_score,away_score,'sportmonks' AS source_provider FROM sportmonks_training_results WHERE match_date <= date('now','-3 day') ORDER BY match_date LIMIT 2000").all();sportmonks=extra.results||[];}catch{}
+  let sportmonks=[];try{const extra=await db.prepare("SELECT dataset_slug,match_date,home_team,away_team,home_score,away_score,'sportmonks' AS source_provider FROM sportmonks_training_results WHERE match_date <= date('now','-3 day') ORDER BY match_date DESC LIMIT 15000").all();sportmonks=extra.results||[];}catch{}
   const model=fhTrain([...result.results,...sportmonks]);
   const task=db.prepare('INSERT INTO focus_model_snapshots(model_key,payload_json,expires_at,trained_at) VALUES(?1,?2,?3,?4) ON CONFLICT(model_key) DO UPDATE SET payload_json=excluded.payload_json,expires_at=excluded.expires_at,trained_at=excluded.trained_at').bind(key,JSON.stringify(model),Math.floor(Date.now()/1000)+21600,model.trained_at).run();
   if(ctx?.waitUntil)ctx.waitUntil(task.catch(()=>{}));else await task.catch(()=>{});
@@ -910,7 +910,7 @@ async function fhHomeResponse(req,env,ctx){
    historical_sample:m.model.team_samples,history_latest:m.model.history_latest
   })),
   leagues_with_matches:selected.leagues_available,
-  model:{name:'Hierarchical historical Poisson v5 (experimental)',training_parameters:{decay_days:model?.decay_days||null,venue_prior:model?.venue_prior||null},retrospective_validation:{season:'2025-26',matches:1723,selected_brier:0.62197},retrospective_holdout:{season:'2026-27',matches:197,brier:0.61210,previous_brier:0.63480,baseline_brier:0.69416,top1:0.49746,validated_live:false},historical_matches:Object.values(model?.leagues||{}).reduce((n,l)=>n+(l.matches||0),0),trained_at:model?.trained_at||null,historical_cutoff:model?.cutoff||null,history_leagues:Object.keys(model?.leagues||{}),validated:false,
+  model:{name:'Historical data pipeline Poisson v6 (experimental)',training_parameters:{decay_days:model?.decay_days||null,venue_prior:model?.venue_prior||null},retrospective_validation:{season:'2025-26',matches:1723,selected_brier:0.62197},retrospective_holdout:{season:'2026-27',matches:197,brier:0.61210,previous_brier:0.63480,baseline_brier:0.69416,top1:0.49746,validated_live:false},historical_matches:Object.values(model?.leagues||{}).reduce((n,l)=>n+(l.matches||0),0),trained_at:model?.trained_at||null,historical_cutoff:model?.cutoff||null,history_leagues:Object.keys(model?.leagues||{}),validated:false,
    note:'Not an LLM. Pure statistical fitting to licensed OpenFootball finished scores; no verified prospective track record.'},
   fallback_reason:fixtures.length?'': 'No upstream fixtures available',data_sources:{sportapi:fhSportFixtures(sport).length,allsports:raw.length}};
  // Prospective evaluation log: only genuinely team-fitted predictions well before kickoff.
@@ -1212,7 +1212,7 @@ function liveOutlook(game,estimate){
   warning:'Simplified independent Poisson; does not adjust for injuries, red cards, substitutions, xG or extra time.'};
 }
 
-const SM_FOCUS_CACHE_KEY='focus_hierarchical_v5';
+const SM_FOCUS_CACHE_KEY='focus_historical_v6';
 const SM_FINISHED=new Set(['FT','FINISHED','FULL_TIME','AET','PEN','CANCELLED','POSTPONED','DELAYED','ABANDONED']);
 function smBuildFocus(fixtures,live,model,now,estimate=null,likely=null){
  const actual=new Map((Array.isArray(live)?live:[]).map(m=>[String(m.id),m]));
@@ -1271,6 +1271,7 @@ async function smFocusResponse(req,env,ctx){
  if(!env?.SPORTMONKS_API_TOKEN)return smResponse({error:'sportmonks_not_configured'},503);
  const key=SM_FOCUS_CACHE_KEY,db=env?.TIKI_DB,now=Math.floor(Date.now()/1000);
  if(ctx?.waitUntil&&db)ctx.waitUntil(tdMaybeSyncHistory(env).catch(()=>{}));
+ if(ctx?.waitUntil&&db)ctx.waitUntil(tdBackfillHistory(env).catch(()=>{}));
  if(db){
   try{const old=await db.prepare("SELECT payload_json FROM sportapi_home_cache WHERE cache_key=?1 AND expires_at>?2")
    .bind(key,now).first();if(old?.payload_json)return smResponse(JSON.parse(old.payload_json),200,40);}catch{}
@@ -1595,7 +1596,7 @@ function evaluateWalkForward(records,dependencies={},config={}){
 
 return {evaluateWalkForward};
 })();
-const TD_BACKTEST_KEY='walk_forward_hierarchical_v5_1';
+const TD_BACKTEST_KEY='walk_forward_historical_v6_1';
 async function tdBacktestResponse(req,env,ctx){
  const db=env?.TIKI_DB;
  if(!db)return smResponse({error:'training_database_unavailable'},503);
@@ -1703,18 +1704,127 @@ async function tdMaybeSyncHistory(env){
 async function tdSyncStatus(req,env){
  if(!env?.TIKI_DB)return smResponse({error:'training_database_unavailable'},503);
  try{
-  const [records,cursor,lock]=await Promise.all([
+  const [records,cursor,lock,backfillCursor,backfillLock]=await Promise.all([
    env.TIKI_DB.prepare('SELECT COUNT(*) AS count,MIN(match_date) AS first_day,MAX(match_date) AS last_day FROM sportmonks_training_results').first(),
    env.TIKI_DB.prepare('SELECT payload_json,saved_at FROM sportapi_home_cache WHERE cache_key=?1').bind(TD_HISTORY_CURSOR).first(),
-   env.TIKI_DB.prepare('SELECT payload_json,saved_at FROM sportapi_home_cache WHERE cache_key=?1').bind(TD_HISTORY_LOCK).first()
+   env.TIKI_DB.prepare('SELECT payload_json,saved_at FROM sportapi_home_cache WHERE cache_key=?1').bind(TD_HISTORY_LOCK).first(),
+   env.TIKI_DB.prepare('SELECT payload_json,saved_at FROM sportapi_home_cache WHERE cache_key=?1').bind(TD_BACKFILL_CURSOR).first(),
+   env.TIKI_DB.prepare('SELECT payload_json,saved_at FROM sportapi_home_cache WHERE cache_key=?1').bind(TD_BACKFILL_LOCK).first()
   ]);
   const safe=x=>{try{return JSON.parse(x||'null')}catch{return null}};
   return smResponse({source:'sportmonks',dataset:'normalized_finished_results',
    records:records?.count||0,first_date:records?.first_day||null,last_date:records?.last_day||null,
    sync:safe(lock?.payload_json),last_attempt:lock?.saved_at||null,
-   checkpoint:safe(cursor?.payload_json),training_mode:'retrain_every_six_hours_or_when_new_results_arrive',
+   checkpoint:safe(cursor?.payload_json),historical_backfill:{cursor:safe(backfillCursor?.payload_json),status:safe(backfillLock?.payload_json),last_attempt:backfillLock?.saved_at||null},training_mode:'retrain_every_six_hours_or_when_new_results_arrive',
    accuracy_claim:'backtest_is_separate_from_prospective_accuracy'},200,100);
  }catch{return smResponse({error:'sync_status_unavailable'},503)}
+}
+
+/* API v3 historical season backfill, source-by-source with checkpoints.
+ * Run opportunistically from live page requests, never from public mutable API routes.
+ */
+const TD_BACKFILL_LOCK='sportmonks_backfill_lock_v6',TD_BACKFILL_CURSOR='sportmonks_backfill_cursor_v6';
+const tdHistoricBatch=(()=>{'use strict';/* Trusted Sportmonks historical football ingestion: bounded calendar windows.
+ * Source rows are only retained as normalized, verified final results.
+ */
+const VALID_DAY=/^\d{4}-\d{2}-\d{2}$/;
+function batchDay(s){
+ if(typeof s!=='string'||!VALID_DAY.test(s))return null;
+ const ms=Date.parse(s+'T00:00:00Z');
+ return Number.isFinite(ms)&&new Date(ms).toISOString().slice(0,10)===s?s:null;
+}
+function addBatchDays(day,shift){
+ if(!batchDay(day)||!Number.isInteger(shift)||Math.abs(shift)>3650)return null;
+ return new Date(Date.parse(day+'T00:00:00Z')+shift*86400000).toISOString().slice(0,10);
+}
+function historyBatchWindow(cursor,latest,days=28){
+ if(!batchDay(cursor)||!batchDay(latest)||cursor>latest||!Number.isInteger(days)||days<1||days>100)return null;
+ const end=addBatchDays(cursor,days-1),bounded=end>latest?latest:end;
+ return {start:cursor,end:bounded,next:addBatchDays(bounded,1),days:Math.round((Date.parse(bounded)-Date.parse(cursor))/86400000)+1};
+}
+const leagueKeys=new Set(['epl','laliga','bundesliga','seriea','ligue1','greece','cyprus']);
+function normalizedHistoricRow(match){
+ if(!match||match.source!=='sportmonks'||match.final!==true||!leagueKeys.has(match.league_key))return null;
+ const id=Number(String(match.id||'').replace(/^sportmonks-/,''));
+ const date=String(match.date||'').slice(0,10);
+ const h=match.home_score,a=match.away_score;
+ if(!Number.isSafeInteger(id)||id<=0||!batchDay(date)||!Number.isInteger(h)||!Number.isInteger(a)||
+ h<0||a<0||h>15||a>15||typeof match.home!=='string'||typeof match.away!=='string'||
+ !match.home.trim()||!match.away.trim()||match.home.trim()===match.away.trim())return null;
+ const year=Number(date.slice(0,4))-(Number(date.slice(5,7))<7?1:0),next=String((year+1)%100).padStart(2,'0');
+ return {fixture_id:id,dataset_slug:match.league_key+'-'+year+'-'+next,league_key:match.league_key,
+ match_date:date,home_team:match.home.trim().slice(0,105),away_team:match.away.trim().slice(0,105),
+ home_score:h,away_score:a,source_provider:'sportmonks'};
+}
+function filterCompletedHistoricalRows(rows,normalize){
+ if(!Array.isArray(rows)||typeof normalize!=='function')return [];
+ const seen=new Set(),out=[];
+ for(const row of rows){
+  const state=String(row?.state?.short_name??row?.state?.state??row?.state?.name??'').toUpperCase();
+  // Extra-time / penalty kick scores are not standard 90-minute results.
+  if(!['FT','FINISHED','FULL_TIME'].includes(state))continue;
+  const normalized=normalizedHistoricRow(normalize(row));
+  if(!normalized||seen.has(normalized.fixture_id))continue;
+  seen.add(normalized.fixture_id);out.push(normalized);
+ }
+ return out;
+}
+
+return {historyBatchWindow,filterCompletedHistoricalRows};})();
+async function tdBackfillHistory(env){
+ const db=env?.TIKI_DB,token=env?.SPORTMONKS_API_TOKEN;
+ if(!db||!token)return;
+ const now=Math.floor(Date.now()/1000),stamp=new Date().toISOString();
+ const lease=await db.prepare(
+  'INSERT INTO sportapi_home_cache(cache_key,payload_json,expires_at,saved_at) VALUES(?1,?2,?3,?4) ON CONFLICT(cache_key) DO UPDATE SET payload_json=excluded.payload_json,expires_at=excluded.expires_at,saved_at=excluded.saved_at WHERE sportapi_home_cache.expires_at<=?5'
+ ).bind(TD_BACKFILL_LOCK,'{"status":"running"}',now+180,stamp,now).run();
+ if(!lease?.meta?.changes)return;
+ const save=async(key,body,exp)=>{
+  await db.prepare('INSERT INTO sportapi_home_cache(cache_key,payload_json,expires_at,saved_at) VALUES(?1,?2,?3,?4) ON CONFLICT(cache_key) DO UPDATE SET payload_json=excluded.payload_json,expires_at=excluded.expires_at,saved_at=excluded.saved_at')
+  .bind(key,JSON.stringify(body),exp,stamp).run();
+ };
+ let window=null;
+ try{
+  const previous=await db.prepare('SELECT payload_json FROM sportapi_home_cache WHERE cache_key=?1').bind(TD_BACKFILL_CURSOR).first();
+  const stored=JSON.parse(previous?.payload_json||'null');
+  const latest=smAddDay(new Date().toISOString().slice(0,10),-3);
+  const cursor=typeof stored?.next==='string'?stored.next:'2024-07-01';
+  window=tdHistoricBatch.historyBatchWindow(cursor,latest,28);
+  if(!window){
+   await save(TD_BACKFILL_LOCK,{status:'completed',through:stored?.through||latest},now+86400);
+   return;
+  }
+  // League IDs come only from previously verified Sportmonks fixtures.
+  const fresh=await db.prepare('SELECT payload_json FROM sportapi_home_cache WHERE cache_key=?1').bind('focus_hierarchical_v5').first();
+  const cache=JSON.parse(fresh?.payload_json||'null');
+  const ids=new Set((cache?.matches||[]).filter(m=>FH_LEAGUES[m.league_key]&&Number.isSafeInteger(m.league_id)&&m.league_id>0).map(m=>m.league_id));
+  if(ids.size<6){
+   const sample=smAddDay(window.start,14);
+   const verified=await smLeagues(sample,token,smHistoryLeague,fetch);
+   for(const id of verified.keys())ids.add(id);
+  }
+  if(!ids.size)throw Error('backfill_no_verified_league_ids');
+  const params={include:'participants;scores;state;league.country',filters:'fixtureLeagues:'+ [...ids].join(',')};
+  const records=await smPages('fixtures/between/'+window.start+'/'+window.end,token,fetch,{params,maxPages:20});
+  const normalized=tdHistoricBatch.filterCompletedHistoricalRows(records,r=>historyMatch(r,smHistoryLeague));
+  for(let i=0;i<normalized.length;i+=30){
+   const chunk=normalized.slice(i,i+30);
+   await db.batch(chunk.map(m=>db.prepare(
+    'INSERT INTO sportmonks_training_results(fixture_id,dataset_slug,league_key,match_date,home_team,away_team,home_score,away_score,observed_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9) ON CONFLICT(fixture_id) DO UPDATE SET dataset_slug=excluded.dataset_slug,league_key=excluded.league_key,match_date=excluded.match_date,home_team=excluded.home_team,away_team=excluded.away_team,home_score=excluded.home_score,away_score=excluded.away_score,observed_at=excluded.observed_at'
+   ).bind(m.fixture_id,m.dataset_slug,m.league_key,m.match_date,m.home_team,m.away_team,m.home_score,m.away_score,stamp)));
+  }
+  // A checkpoint is durable only after every paginated page and D1 batch completes.
+  await save(TD_BACKFILL_CURSOR,{next:window.next,through:window.end,last_success:stamp,
+   last_batch:{start:window.start,end:window.end,source_rows:records.length,qualified:normalized.length,
+    verified_league_ids:ids.size},cumulative_windows:(stored?.cumulative_windows||0)+1,
+    cumulative_qualified:(stored?.cumulative_qualified||0)+normalized.length},2147483647);
+  if(normalized.length)await db.prepare('DELETE FROM focus_model_snapshots WHERE model_key=?1').bind(FH_TRAINING.version).run();
+  await save(TD_BACKFILL_LOCK,{status:'ok',through:window.end,qualified:normalized.length,remaining:window.next<=latest},now+90);
+ }catch(e){
+  const error=String(e?.message||'backfill_unknown');
+  await save(TD_BACKFILL_LOCK,{status:'retry',window,error:/sportmonks_quota_reached/.test(error)?'provider_rate_limit':
+   /sportmonks_subscription_restricted/.test(error)?'subscription_limited':'history_data_unavailable'},now+600).catch(()=>{});
+ }
 }
 
 const CSP="default-src 'none';base-uri 'none';form-action 'none';object-src 'none';frame-ancestors 'none';script-src 'self';style-src 'self' https://fonts.googleapis.com;style-src-attr 'unsafe-inline';font-src 'self' https://fonts.gstatic.com;img-src 'self' data: https://raw.githubusercontent.com https://cdn.sportmonks.com;connect-src 'self'";
