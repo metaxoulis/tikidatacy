@@ -24,7 +24,7 @@ const tdAddDays=(s,n)=>new Date(Date.parse(s+'T00:00:00Z')+86400000*n).toISOStri
 const tdStatus=row=>tdString(row.status?.short||row.status,25).toUpperCase();
 function tdISO(r){const s=tdString(r.kickoff_utc||r.datetime||r.kickoff,45);if(!s)return null;const v=/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(s)?s.replace(' ','T')+'Z':s;const ms=Date.parse(v);return /^\d{4}-\d{2}-\d{2}T/.test(v)&&Number.isFinite(ms)?new Date(ms).toISOString():null;}
 function tdPriority(name,geo=''){
-  const n=String(name||'');for(const [pattern,value] of TD_PRIORITIES){if(pattern.test(n))return value;}
+  const n=String(name||'');if(/premier league/i.test(n)&&!/^(premier league|english premier league)$/i.test(n))return 36;for(const [pattern,value] of TD_PRIORITIES){if(pattern.test(n))return value;}
   if(/^(GR|CY)$/i.test(geo))return 72;
   return 15;
 }
