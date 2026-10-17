@@ -23,6 +23,8 @@ jobs:
             count=$((count + 1))
           done < <(find . -type f -name '*.js' ! -path './node_modules/*' -print0)
           echo "Checked $count JavaScript files"
+      - name: Test SportAPI fallback normalization and key safety
+        run: node --test tests/sportapi-provider.test.mjs
       - name: Run existing JavaScript model tests if present
         run: |
           if test -f test_model.js; then
