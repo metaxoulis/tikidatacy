@@ -69,3 +69,14 @@ html,body{width:100%;max-width:100%;overflow-x:clip}
 .live-lineups{margin-top:10px;font-size:11px;line-height:1.6}
 .live-lineups small{color:#88ced5;font-weight:700}
 .live-lineups p{margin:5px 0;overflow-wrap:anywhere}
+
+/* Match Intelligence v4 on the landing page */
+.home-live-heading{display:flex;justify-content:space-between;gap:15px;align-items:center;margin-bottom:15px}
+.home-live-heading .overline{margin:0 0 3px}
+.home-live-heading small{font-size:10px;color:#9fc5cf;line-height:1.5}
+.home-live-heading a{display:inline-flex;align-items:center;white-space:nowrap;border:1px solid #398174;border-radius:9px;padding:9px 12px;color:#84e5c8;text-decoration:none;font-size:11px;font-weight:750}
+.home-live-heading a:hover{background:#1f514e}
+.home-live-context{padding:10px 11px;margin-top:12px;border:1px dashed #37646e;border-radius:8px;color:#9ec6d2;font-size:11px;line-height:1.6}
+.home-live-extra{display:flex;flex-wrap:wrap;gap:5px 11px;justify-content:space-between;border-top:1px solid #2b666b;margin-top:8px;padding-top:8px}
+.home-live-extra span{font-size:10px;color:#b2d9de;line-height:1.5}
+@media(max-width:640px){.home-live-heading{align-items:flex-start}.home-live-heading a{padding:7px 9px;font-size:10px}.home-live-heading small{font-size:9px}}
