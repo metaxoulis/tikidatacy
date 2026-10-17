@@ -33,7 +33,7 @@ test('uses X-Api-Key exclusively in HTTP headers; never in URL or returned JSON'
   let called=false;
   const sampleKey='unit-test-synthetic-value';
   const result=await fetchSportApiFixtures(sampleKey,'2026-10-16',async(url,options)=>{
-    called=true;assert.equal(url,'https://sportapi.ai/api/fixtures?date=2026-10-16');
+    called=true;assert.equal(url,'https://sportapi.ai/api/fixtures/date/2026-10-16');
     assert.equal(options.headers['X-Api-Key'],sampleKey);
     assert.equal(options.method,'GET');
     assert.equal(options.redirect,'manual');
@@ -83,4 +83,14 @@ test('real data[] fetch with 255 fixtures is accepted and protected from oversiz
   assert.equal(result?.source,'sportapi.ai');
   assert(result.matches.every(x=>x.p1===null&&x.p2===null));
   assert.equal(normalizeSportApiFixtures({success:true,data:Array.from({length:601},(_,i)=>({...match,id:i+1}))}),null);
+});
+
+test('live SportAPI response uses data array and UTC datetime with a space',()=>{
+ const data={success:true,date:'2026-10-16',data:[{id:99001,home_team:'Alpha',away_team:'Beta',league_name:'Premier League',date:'2026-10-16',datetime:'2026-10-16 11:00:00',kickoff_utc:'2026-10-16 11:00:00',status:'FT',home_score:1,away_score:0}]};
+ const out=normalizeSportApiFixtures(data);
+ assert.equal(out.length,1);
+ assert.equal(out[0].date,'2026-10-16T11:00:00.000Z');
+ assert.equal(out[0].status,'FINISHED');
+ assert.equal(out[0].home_score,1);
+ assert.equal(out[0].p1,null);
 });

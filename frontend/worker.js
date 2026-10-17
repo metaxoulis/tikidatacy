@@ -11,7 +11,7 @@ const FAVICON="<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 96 90\" a
  * Authentication: the secret is injected by Cloudflare as env.SPORTAPI_AI_KEY.
  * This module does not estimate predictions. Missing probabilities stay null.
  */
-const SPORTAPI_ENDPOINT = 'https://sportapi.ai/api/fixtures?date=';
+const SPORTAPI_ENDPOINT = 'https://sportapi.ai/api/fixtures/date/';
 const TEAM_MAX = 150;
 const MAX_FIXTURES = 600;
 const MAX_JSON_BYTES = 950000;
@@ -38,9 +38,13 @@ function safeGoals(v) {
   return typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 25 ? v : null;
 }
 function safeTime(row) {
-  const candidate = row.datetime || row.kickoff_utc || row.kickoff || row.start_time || row.start_at;
-  if (typeof candidate !== 'string' || !/\d{4}-\d{2}-\d{2}T/.test(candidate)) return null;
-  const millis = Date.parse(candidate);
+  const candidate = row.kickoff_utc || row.datetime || row.kickoff || row.start_time || row.start_at;
+  if (typeof candidate !== 'string') return null;
+  // SportAPI may send UTC time as YYYY-MM-DD HH:MM:SS (without T/Z).
+  const iso = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(candidate)
+    ? candidate.replace(' ', 'T') + 'Z' : candidate;
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(iso)) return null;
+  const millis = Date.parse(iso);
   return Number.isFinite(millis) ? new Date(millis).toISOString() : null;
 }
 function normalizeSportApiFixtures(payload) {
