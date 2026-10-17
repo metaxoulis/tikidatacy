@@ -75,11 +75,20 @@ async function load(){
 }
 
 function liveProb(m){
- const p=m.live_prediction;
- if(!p||![p.p1,p.px,p.p2].every(n=>typeof n==='number'&&n>=0&&n<=100))return '';
- return '<div class="live-probs"><span>SPORTMONKS LIVE · 1Χ2</span><div>'+
-  '<b>1 '+pct(p.p1)+'</b><b>Χ '+pct(p.px)+'</b><b>2 '+pct(p.p2)+'</b></div></div>';
+ const p=m.live_outlook||m.live_prediction;
+ const own=!!m.live_outlook;
+ if(!p||![p.p1,p.px,p.p2].every(n=>typeof n==='number'&&n>=0&&n<=100)){
+  return '<div class="home-live-context">Πραγματικό σκορ και γεγονότα σε εξέλιξη · δεν υπάρχουν αρκετά δεδομένα για αξιόπιστα ποσοστά.</div>';
+ }
+ const headline=own?'TIKI-DATA · LIVE POISSON (ΠΕΙΡΑΜΑΤΙΚΟ)':'SPORTMONKS · LIVE 1Χ2';
+ const next=own&&p.next_goal?'<div class="home-live-extra"><span>Επόμενο γκολ · '+esc(m.home)+' '+pct(p.next_goal.home)+' · '+esc(m.away)+' '+pct(p.next_goal.away)+'</span>'+
+   '<span>Κανένα άλλο γκολ '+pct(p.next_goal.none)+'</span></div>':'';
+ return '<div class="live-probs"><span>'+headline+'</span><div>'+
+  '<b>1 '+pct(p.p1)+'</b><b>Χ '+pct(p.px)+'</b><b>2 '+pct(p.p2)+'</b></div>'+
+  (own?'<div class="home-live-extra"><span>Over 2.5 '+pct(p.over25)+'</span><span>GG '+pct(p.btts)+'</span></div>':'')+
+  next+'</div>';
 }
+
 function liveDetails(m){
  const events=Array.isArray(m.events)?m.events:[];
  const stats=Array.isArray(m.statistics)?m.statistics:[];
@@ -110,7 +119,7 @@ async function loadLive(){
   const json=await res.json(),games=Array.isArray(json.matches)?json.matches:[];
   if(!games.length){root.hidden=true;root.replaceChildren();return;}
   root.hidden=false;
-  root.innerHTML='<div class="overline">ΖΩΝΤΑΝΟΙ ΑΓΩΝΕΣ · ΑΝΑΝΕΩΣΗ 30″</div><div class="live-list">'+games.slice(0,9).map(m=>
+  root.innerHTML='<div class="home-live-heading"><div><div class="overline">ΖΩΝΤΑΝΟΙ ΑΓΩΝΕΣ · ΑΝΑΝΕΩΣΗ 30″</div><small>Επιβεβαιωμένα στοιχεία Sportmonks · εκτιμήσεις Tiki-Data όπου επαρκούν τα δεδομένα</small></div><a href="/predictions?filter=live">Όλα τα live →</a></div><div class="live-list">'+games.slice(0,9).map(m=>
    '<article class="live-match"><span class="live-league">'+leagueEmblem(m.league,m.league_logo,m.league_key)+esc(m.league)+(num(m.minute)!==null?' · '+esc(m.minute)+'′':'')+'</span>'+
    '<div class="live-teams">'+crest(m,'home')+'<strong>'+esc(m.home)+'</strong><b class="live-score">'+
    (num(m.home_score)!==null&&num(m.away_score)!==null?esc(m.home_score+' – '+m.away_score):'LIVE')+
