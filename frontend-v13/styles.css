@@ -331,3 +331,13 @@ body.modern-predictions{background:radial-gradient(ellipse at 75% 0,rgba(34,211,
 .modern-predictions .layout{max-width:1320px;margin:0 auto}.modern-predictions .sidebar{background:transparent;border-right:1px solid rgba(180,219,236,.14)}.modern-predictions .main{padding-top:28px}.modern-predictions .top-actions{margin-left:auto}
 @media(max-width:950px){.modern-predictions .topbar{gap:18px;padding:0 16px}.modern-predictions .brand,.modern-predictions .brand img{width:148px}.modern-predictions .desktop-nav{gap:16px}.modern-predictions .desktop-nav a{font-size:12px}}
 @media(max-width:700px){.modern-predictions .topbar{height:64px}.modern-predictions .brand,.modern-predictions .brand img{width:145px}.modern-predictions .desktop-nav{display:none}.modern-predictions .main{padding-top:16px}.modern-predictions .bottom-nav{background:#0b131ef5;border-top:1px solid rgba(180,219,236,.18)}.modern-predictions .bottom-nav a span{font-size:11px;font-weight:700;color:inherit;line-height:1.7}.modern-predictions .bottom-nav a[aria-current="page"]{color:#34f5c5}}
+
+/* Full-coverage forecast UI / clearly disclose baselines */
+.prediction-source-control{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:8px 10px 8px auto}
+.prediction-source-control label{font-size:11px;font-weight:700;color:#a1b6c4}
+.prediction-source-control select,.prediction-source-control input{min-height:35px;background:#112c3b;color:#dcf8ed;border:1px solid #3a6672;border-radius:8px;padding:5px 10px;font-size:12px;max-width:260px}
+.prediction-source-control input[hidden]{display:none}
+.fixture-coverage-note{font-size:10px;color:#91afc0;display:block;padding-top:3px}
+.fixture-link{display:flex;flex-direction:column;align-items:stretch;gap:3px}
+.fixture-quality{font-size:10px;line-height:1.3;color:#a1c0cb;font-weight:500;text-align:center;display:block;margin-top:3px}
+@media(max-width:750px){.prediction-source-control{width:100%;margin:8px 0 12px}.prediction-source-control select{max-width:100%;flex:1}.prediction-source-control label{font-size:10px}.fixture-quality{font-size:9px}}
