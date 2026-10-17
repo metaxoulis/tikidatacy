@@ -1034,7 +1034,7 @@ function normalizeLiveDetails(row){
  const statistics=Array.isArray(row?.statistics)?row.statistics:[];
  const lineups=Array.isArray(row?.lineups)?row.lineups:[];
  return{
-  minute:safeInt(row?.minute??row?.time?.minute??row?.periods?.[0]?.minutes),
+  minute:safeInt(row?.currentPeriod?.minutes??(Array.isArray(row?.periods)?[...row.periods].filter(p=>p&&Number.isInteger(p.minutes)&&[1,2].includes(p.type_id)).sort((a,b)=>Number(b.sort_order||0)-Number(a.sort_order||0))[0]?.minutes:null)??row?.minute??row?.time?.minute),
   events:events.slice(-30).map(e=>{
    const minute=safeInt(e?.minute),extra_minute=safeInt(e?.extra_minute);
    const type=safeText(e?.type?.name??e?.type?.developer_name??e?.info??'',45);
@@ -1079,7 +1079,7 @@ async function smInplay(token,classify,fetcher=fetch,date=new Date().toISOString
  let raw;
  try{
   raw=await smPages('livescores/inplay',token,fetcher,{params:{...base,
-   include:'participants;league.country;state;scores;events;statistics.type;lineups'},maxPages:8});
+   include:'participants;league.country;state;scores;events;statistics.type;lineups;periods;currentPeriod'},maxPages:8});
  }catch(e){
   if(!['sportmonks_subscription_restricted','sportmonks_upstream_400'].includes(String(e?.message)))throw e;
   raw=await smPages('livescores/inplay',token,fetcher,{params:{...base,include:'participants;league.country;state;scores;events'},maxPages:8});
@@ -1117,6 +1117,41 @@ async function smStage(req,env){
  * OpenFootball CC0 finished scores continue to train the independent, experimental Poisson model.
  * Never publish league priors as team-specific forecasts.
  */
+/* Tiki-Data in-play what-if engine: conditional independent Poisson, not a certified forecast. */
+const FITTED=new Set(['openfootball_cc0_fitted_venue_poisson','licensed_historical_venue_poisson']);
+const percent=x=>Math.round(x*10000)/100;
+const pmf=(lambda,max=11)=>{const p=[Math.exp(-lambda)];for(let k=1;k<=max;k++)p.push(p[k-1]*lambda/k);return p;};
+function liveOutlook(game,estimate){
+ const h=game?.home_score,a=game?.away_score,minute=game?.minute;
+ if(!Number.isInteger(h)||!Number.isInteger(a)||h<0||a<0||h>15||a>15)return null;
+ if(!Number.isInteger(minute)||minute<0||minute>=90)return null;
+ if(!FITTED.has(estimate?.method)||estimate?.team_samples?.home<3||estimate?.team_samples?.away<3)return null;
+ const lh=estimate.mu_home,la=estimate.mu_away;
+ if(!Number.isFinite(lh)||!Number.isFinite(la)||lh<=0||la<=0||lh>5||la>5)return null;
+ const frac=(90-minute)/90,muH=lh*frac,muA=la*frac;
+ const H=pmf(muH),A=pmf(muA);
+ let total=0,one=0,draw=0,two=0,over=0,gg=0,top={p:-1,h,a};
+ for(let i=0;i<H.length;i++)for(let j=0;j<A.length;j++){
+  const w=H[i]*A[j],gh=h+i,ga=a+j;
+  total+=w;
+  if(gh>ga)one+=w;else if(gh===ga)draw+=w;else two+=w;
+  if(gh+ga>=3)over+=w;
+  if(gh>0&&ga>0)gg+=w;
+  if(w>top.p)top={p:w,h:gh,a:ga};
+ }
+ if(total<.98||total>1.01)return null;
+ const sum=muH+muA,noGoal=Math.exp(-sum),anyGoal=1-noGoal;
+ return {source:'tiki_conditional_poisson_v1',experimental:true,validated:false,
+  based_on:'verified_team_fitted_prematch_rates_plus_actual_score_and_match_minute',
+  fixture_id:game.id,minute,observed_score:[h,a],remaining_standard_minutes:90-minute,
+  remaining_expected_goals:{home:Number(muH.toFixed(3)),away:Number(muA.toFixed(3))},
+  p1:percent(one/total),px:percent(draw/total),p2:percent(two/total),
+  over25:percent(over/total),under25:percent(1-over/total),btts:percent(gg/total),
+  next_goal:{home:percent(anyGoal*muH/sum),away:percent(anyGoal*muA/sum),none:percent(noGoal)},
+  most_likely_final:{score:top.h+'-'+top.a,probability:percent(top.p/total)},
+  warning:'Simplified independent Poisson; does not adjust for injuries, red cards, substitutions, xG or extra time.'};
+}
+
 const SM_FOCUS_CACHE_KEY='focus_sportmonks_v1';
 const SM_FINISHED=new Set(['FT','FINISHED','FULL_TIME','AET','PEN','CANCELLED','POSTPONED','DELAYED','ABANDONED']);
 function smBuildFocus(fixtures,live,model,now,estimate=null,likely=null){
@@ -1143,7 +1178,15 @@ function smBuildFocus(fixtures,live,model,now,estimate=null,likely=null){
    historical_sample:p.team_samples,history_latest:p.history_latest,most_likely_score:p.most_likely_score}:
    {p1:null,px:null,p2:null,over25:null,under25:null,btts:null,no_btts:null,mu_home:null,mu_away:null,
     method:null,confidence:'unavailable',coverage:'insufficient_team_history',validated:false};
-  map.set(String(game.id),{...game,...forecast,model:p});
+  const leagueHistory=model?.leagues?.[game.league_key];
+  const homeSample=leagueHistory?.teams?.[fhName(game.home)]?.home?.matches??0;
+  const awaySample=leagueHistory?.teams?.[fhName(game.away)]?.away?.matches??0;
+  const analysis={evidence:p?'verified_team_history':'partial_or_unmatched_team_history',
+   league_results:leagueHistory?.matches??0,history_latest:leagueHistory?.last_result??null,
+   home_venue_matches:homeSample,away_venue_matches:awaySample,
+   explanation:p?'Experimental Poisson trained on home and away team results.':
+    'The fixture is real, but verified team-specific evidence is insufficient for numerical pre-match probabilities.'};
+  map.set(String(game.id),{...game,...forecast,model:p,analysis});
  }
  const matches=[...map.values()].sort((a,b)=>Date.parse(a.date)-Date.parse(b.date));
  const future=matches.filter(m=>Date.parse(m.date)>now&&!actual.has(String(m.id)));
@@ -1206,14 +1249,22 @@ async function smLiveResponse(req,env,ctx){
  if(!env?.SPORTMONKS_API_TOKEN)return smResponse({error:'sportmonks_not_configured'},503);
  const classify=(name,country)=>fhLeague(name,country)||
   (String(country).toLowerCase()==='cyprus'&&/^1\.?\s*division$/i.test(String(name))?'cyprus':null);
- const cacheKey=new Request('https://tiki-cache.local/sportmonks/live-v2');
+ const cacheKey=new Request('https://tiki-cache.local/sportmonks/live-intelligence-v4');
  try{const hit=await caches.default.match(cacheKey);if(hit)return hit;}catch{}
  try{
-  const [games,probabilities]=await Promise.all([
+  const [games,probabilities,model]=await Promise.all([
    smInplay(env.SPORTMONKS_API_TOKEN,classify,fetch),
-   smLiveProbabilities(env.SPORTMONKS_API_TOKEN,fetch).catch(()=>new Map())
+   smLiveProbabilities(env.SPORTMONKS_API_TOKEN,fetch).catch(()=>new Map()),
+   fhLoadModel(env?.TIKI_DB,ctx).catch(()=>null)
   ]);
-  const matches=games.map(m=>({...m,live_prediction:probabilities.get(Number(String(m.id).replace(/^sportmonks-/,'')))||null}));
+  const matches=games.map(m=>{
+   const provider=probabilities.get(Number(String(m.id).replace(/^sportmonks-/,'')))||null;
+   const fitted=model?fhEstimate(m,model):null;
+   const outcome=liveOutlook(m,fitted);
+   return {...m,live_prediction:provider,live_outlook:outcome,
+    model_coverage:{home:fitted?.team_samples?.home??0,away:fitted?.team_samples?.away??0},
+    analysis_provenance:outcome?'tiki_conditional_poisson_v1':provider?'sportmonks_live_1x2':'factual_live_data_only'};
+  });
   const out=smResponse({source:'sportmonks',updated_at:new Date().toISOString(),
    probabilities_source:'sportmonks_live_1x2_if_subscribed',matches},200,20);
   try{ctx?.waitUntil(caches.default.put(cacheKey,out.clone()));}catch{}
