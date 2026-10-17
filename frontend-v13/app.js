@@ -58,7 +58,7 @@ const pct=v=>num(v)===null?'—':v.toLocaleString('el-GR',{maximumFractionDigits
 const kt=d=>{const x=new Date(d);return Number.isNaN(+x)?'unknown':x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0')};
 const dateFmt=(d,mode='short')=>new Intl.DateTimeFormat('el-GR',mode==='full'?{weekday:'long',day:'numeric',month:'long'}:mode==='weekday'?{weekday:'short',day:'numeric',month:'short'}:{day:'2-digit',month:'2-digit'}).format(new Date(d));
 const clock=d=>new Intl.DateTimeFormat('el-GR',{hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(d));
-const inProgress=m=>['LIVE','1H','2H','HT','ET','BREAK','1ST_HALF','2ND_HALF'].includes(String(m?.status||'').toUpperCase());
+const inProgress=m=>['LIVE','1H','2H','1ST','2ND','HT','ET','BREAK','1ST_HALF','2ND_HALF','HALF_TIME'].includes(String(m?.status||'').toUpperCase());
 const liveForecast=m=>m?.live_outlook||m?.live_prediction||null;
 const liveForecastSource=m=>m?.live_outlook?'TIKI-DATA LIVE · ΠΕΙΡΑΜΑΤΙΚΟ':m?.live_prediction?'SPORTMONKS LIVE · 1Χ2':'LIVE ΧΩΡΙΣ ΔΙΑΘΕΣΙΜΗ ΠΙΘΑΝΟΤΗΤΑ';
 function valid(m){return [m.p1,m.px,m.p2].every(v=>num(v)!==null&&v>=0&&v<=100)&&Math.abs(m.p1+m.px+m.p2-100)<2}

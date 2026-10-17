@@ -26,7 +26,7 @@ const num=n=>typeof n==='number'&&Number.isFinite(n)?n:null;
 const pct=n=>num(n)===null?'—':n.toLocaleString('el-GR',{maximumFractionDigits:1})+'%';
 const fmtDate=new Intl.DateTimeFormat('el-GR',{weekday:'short',day:'numeric',month:'short'});
 const fmtTime=new Intl.DateTimeFormat('el-GR',{hour:'2-digit',minute:'2-digit',hour12:false});
-const isLive=m=>['LIVE','1H','2H','HT','ET','BREAK'].includes(m?.status);
+const isLive=m=>['LIVE','1H','2H','1ST','2ND','HT','ET','BREAK','HALF_TIME'].includes(m?.status);
 const isDone=m=>['FT','AET','PEN','FINISHED','FULL_TIME'].includes(m?.status);
 function crest(m,side){const name=m[side]||'Ομάδα';const url=safeLogo(m.logos?.[side]),known=hKnownTeamLogo(name);
   return '<span class="crest fallback'+(url||known?' has-real-team':'')+'">'+(known?'<img class="home-crest-logo" loading="lazy" decoding="async" src="'+esc(known)+'" alt="Έμβλημα '+esc(name)+'">':'')+(url?'<img class="home-crest-logo" loading="lazy" decoding="async" src="'+esc(url)+'" alt="Έμβλημα '+esc(name)+'">':'')+'<span>'+esc(initial(name))+'</span></span>';}
