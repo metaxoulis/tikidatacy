@@ -66,7 +66,7 @@ function renderGames(){
    const score=document.createElement('div');score.className='td-score';
    const hasScores=number(m.home_score)!==null&&number(m.away_score)!==null;
    score.textContent=hasScores?m.home_score+' : '+m.away_score:'— : —';
-   const s=document.createElement('small');s.textContent=readableStatus(m.status);if(statusLive(m.status))s.className='td-live';score.append(s);
+   const s=document.createElement('small');s.textContent=statusLive(m.status)&&number(m.minute)!==null?readableStatus(m.status)+' · '+m.minute+"'":readableStatus(m.status);if(statusLive(m.status))s.className='td-live';score.append(s);
    const action=document.createElement('div');action.className='td-game-actions';const b=document.createElement('button');b.type='button';b.textContent='Στοιχεία →';b.setAttribute('aria-label','Στοιχεία '+m.home+' εναντίον '+m.away);b.addEventListener('click',()=>openDetail('match',m));action.append(b);
    game.append(when,teams,score,action);frag.append(game);
   }
@@ -150,6 +150,10 @@ function renderSection(result,section,kind,record){
  else if(section==='h2h')html=prettyH2H(data);
  else if(section==='overview')html=panel('Αγώνας',row('Διοργάνωση',record.league)+row('Κατάσταση',readableStatus(record.status))+row('Γύρος',record.stage)+row('Γήπεδο',data?.venue||'—')+row('Διαιτητής',data?.referee||'—'))+(data?.events?.length?prettyEvents(data.events):'');
  $('detailBody').innerHTML=html||message('Δεν υπάρχουν διαθέσιμες πληροφορίες.');
+ if(kind==='match'&&(state.active==='home'||state.active==='away')){
+  const side=state.active,id=record[side+'_id'],token=record[side+'_token'];
+  if(id&&token){const wrap=document.createElement('div');wrap.className='td-detail-buttons';const go=document.createElement('button');go.type='button';go.textContent='Δείτε ρόστερ και τίτλους της ομάδας →';go.addEventListener('click',()=>openDetail('team',{id,token,name:record[side]}));wrap.append(go);$('detailBody').append(wrap);}
+ }
 }
 $('dayPrev').addEventListener('click',()=>{state.date=shift(state.date,-1);void loadFixtures();});
 $('dayNext').addEventListener('click',()=>{state.date=shift(state.date,1);void loadFixtures();});
