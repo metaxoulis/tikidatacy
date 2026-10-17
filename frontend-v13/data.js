@@ -12,6 +12,12 @@ const shift=(value,n)=>{const d=new Date(value+'T12:00:00');d.setDate(d.getDate(
 const maybeNum=n=>typeof n==='number'&&Number.isFinite(n)?new Intl.NumberFormat('el-GR',{maximumFractionDigits:1}).format(n):'—';
 const number=n=>typeof n==='number'&&Number.isFinite(n)?n:null;
 const txt=(s,max=160)=>String(s??'').slice(0,max);
+const signedTeamLogo=u=>typeof u==='string'&&/^\/api\/logo\/team\/\d{1,13}\?sig=[0-9a-f]{64}$/.test(u)?u:null;
+function verifiedLeagueLogo(name){const t=String(name||'').toLowerCase();const l=window.TIKI_LOGO_CATALOG?.leagues||{};const key=/(?:premier league|english premier)/i.test(t)?'epl':/bundesliga/i.test(t)?'bundesliga':/(?:la liga|laliga|primera divisi)/i.test(t)?'laliga':/serie a/i.test(t)?'seriea':/(?:ligue 1|ligue1)/i.test(t)?'ligue1':/(?:super league.*gree|greek super|greece.*super)/i.test(t)?'greece':null;return key?l[key]||null:null;}
+const nameKey=s=>String(s||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^\p{L}\p{N}]+/gu,' ').trim().toLowerCase();
+const knownTeamLogo=new Map(Object.entries(window.TIKI_LOGO_CATALOG?.teams||{}).map(([k,v])=>[nameKey(k),v]));
+function safeCatalogURL(u){return typeof u==='string'&&/^https:\/\/(?:raw\.githubusercontent\.com|media\.api-sports\.io)\//.test(u)?u:null;}
+function decorateLogo(parent,url,cls){if(!url)return;const img=document.createElement('img');img.className=cls;img.src=url;img.loading='lazy';img.decoding='async';img.alt='';img.onerror=()=>img.remove();parent.append(img);}
 const monogram=s=>String(s||'').replace(/\b(?:fc|cf|afc|sc|ac|club)\b/gi,'').trim().split(/\s+/).slice(0,2).map(x=>x[0]||'').join('').slice(0,3).toUpperCase()||'FC';
 const statusFinished=s=>['FT','FULL_TIME','FINISHED','AET','PEN','PENALTY_SHOOTOUT'].includes(String(s||'').toUpperCase());
 const statusLive=s=>['LIVE','1H','2H','HT','ET','P','BREAK','INT'].includes(String(s||'').toUpperCase());
@@ -52,7 +58,7 @@ function renderGames(){
  for(const m of list){if(!groups.has(m.league))groups.set(m.league,[]);groups.get(m.league).push(m);}
  for(const [league,rows] of groups){
   const heading=document.createElement('div');heading.className='td-league-heading';
-  const title=document.createElement('span');title.textContent=league;heading.append(title);
+  const title=document.createElement('span');title.textContent=league;const mark=safeCatalogURL(verifiedLeagueLogo(league));if(mark)decorateLogo(heading,mark,'td-league-crest');heading.append(title);
   const count=document.createElement('span');count.className='td-league-count';count.textContent=rows.length+' αγώνες';heading.append(count);
   const withStandings=rows.find(x=>x.league_id&&x.league_token);
   if(withStandings){const btn=document.createElement('button');btn.type='button';btn.textContent='Βαθμολογία / Σκόρερ →';btn.addEventListener('click',()=>openDetail('league',withStandings));heading.append(btn);}
@@ -62,7 +68,7 @@ function renderGames(){
    const when=document.createElement('div');when.className='td-game-time';when.textContent=hasDate?fmtTime.format(d):'—';
    const small=document.createElement('small');small.textContent=m.stage||readableStatus(m.status);when.append(small);
    const teams=document.createElement('div');teams.className='td-teams';
-   for(const side of ['home','away']){const team=document.createElement('div');team.className='td-team';const icon=document.createElement('span');icon.className='td-monogram';icon.textContent=monogram(m[side]);const name=document.createElement('span');name.textContent=m[side];team.append(icon,name);teams.append(team);}
+   for(const side of ['home','away']){const team=document.createElement('div');team.className='td-team';const icon=document.createElement('span');icon.className='td-monogram';icon.textContent=monogram(m[side]);decorateLogo(icon,safeCatalogURL(knownTeamLogo.get(nameKey(m[side]))),'td-team-logo');decorateLogo(icon,signedTeamLogo(m.logos?.[side]),'td-team-logo');const name=document.createElement('span');name.textContent=m[side];team.append(icon,name);teams.append(team);}
    const score=document.createElement('div');score.className='td-score';
    const hasScores=number(m.home_score)!==null&&number(m.away_score)!==null;
    score.textContent=hasScores?m.home_score+' : '+m.away_score:'— : —';
