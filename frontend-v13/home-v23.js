@@ -21,7 +21,7 @@ function markets(m){
  if(!p)return '<div class="unavailable"><strong>Πρόβλεψη μη διαθέσιμη</strong>Δεν υπάρχουν αρκετά αξιόπιστα δεδομένα βαθμολογίας για τις δύο ομάδες. Δεν εμφανίζουμε τυχαία ποσοστά.<p class="market-caption">Οι εκτιμήσεις προστίθενται αυτόματα όταν το δείγμα επαρκεί.</p></div>';
  const vals=[p.p1,p.px,p.p2],best=vals.indexOf(Math.max(...vals));
  return '<div class="side-label">ΥΠΟΛΟΓΙΣΜΕΝΕΣ ΠΙΘΑΝΟΤΗΤΕΣ</div><div class="triple">'+['1','Χ','2'].map((n,i)=>'<div'+(i===best?' class="best"':'')+'><small>'+n+'</small><b>'+pct(vals[i])+'</b></div>').join('')+'</div><div class="other-markets"><div><small>OVER 2.5</small><b>'+pct(p.over25)+'</b></div><div><small>GG / BTTS</small><b>'+pct(p.btts)+'</b></div></div>'+
- '<p class="model-note">Προσωρινό Poisson από πραγματικές βαθμολογίες SportAPI.ai. Δεν έχει επικυρωθεί με backtest. Εκτίμηση πριν από τον αγώνα, όχι live in-play odds.</p>';
+ '<p class="model-note">Προσωρινό Poisson από πραγματικά ιστορικά αποτελέσματα ή βαθμολογίες SportAPI.ai. Χαμηλή βεβαιότητα: χωρίς επικυρωμένο backtest. Πρόβλεψη πριν τον αγώνα — όχι in-play πιθανότητα.</p>';
 }
 function featured(m){
  if(!m){$('featuredContent').innerHTML='<div class="loading">Δεν υπάρχουν διαθέσιμοι αγώνες αυτή τη στιγμή. <a href="/data" class="feat-details">Δες το πρόγραμμα →</a></div>';return;}

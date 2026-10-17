@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {tdFixture,tdPriority,tdModelFromStandings,tdProbabilities} from '../frontend/sportapi-home.mjs';
+import {tdFixture,tdPriority,tdModelFromStandings,tdModelFromRecent,tdRecentRates,tdProbabilities} from '../frontend/sportapi-home.mjs';
 import {tdSignedLogo} from '../frontend/sportapi-logo.mjs';
 import {webcrypto} from 'node:crypto';
 globalThis.crypto??=webcrypto;
@@ -33,4 +33,19 @@ test('signed logo never leaks provider key in publicly visible asset URLs',async
  const path=await tdSignedLogo(key,'123456');
  assert.match(path,/^\/api\/logo\/team\/123456\?sig=[0-9a-f]{64}$/);
  assert(!path.includes(key));assert.equal(await tdSignedLogo(key,'1/2'),null);
+});
+
+test('SportAPI finished-match fallback never includes future scores and abstains with little history',()=>{
+ const base='2026-10-25';
+ const make=(team,opponent,home)=>Array.from({length:10},(_,i)=>({date:'2026-10-'+String(i+1).padStart(2,'0'),home_team:home?team:opponent,away_team:home?opponent:team,home_score:i%3,away_score:i%2}));
+ const h={matches:make('Everton','Club X',true).concat([{date:'2026-11-02',home_team:'Everton',away_team:'Club X',home_score:20,away_score:0}])};
+ const a={matches:make('Chelsea','Club Y',false)};
+ const m=tdModelFromRecent(h,a,{home:'Everton',away:'Chelsea',date:base+'T16:00:00Z'});
+ assert(m);assert.equal(m.matches_sampled.home,10);assert.equal(m.matches_sampled.away,10);
+ assert.equal(m.method,'provisional_poisson_recent_results');
+ assert(Math.abs(m.p1+m.px+m.p2-100)<1e-8);
+ const modified={matches:h.matches.filter(x=>x.date<base)};
+ assert.deepEqual(tdModelFromRecent(h,a,{home:'Everton',away:'Chelsea',date:base+'T16:00:00Z'}),
+                  tdModelFromRecent(modified,a,{home:'Everton',away:'Chelsea',date:base+'T16:00:00Z'}));
+ assert.equal(tdRecentRates({matches:h.matches.slice(0,3)},'Everton',base),null);
 });
