@@ -26,7 +26,7 @@ function sanitizeFinishedScores(records,now=Date.now()){
 }
 const asProbability=x=>finiteProbability(x)?x/100:null;
 function modeledProbs(estimate){
- if(!estimate||!['openfootball_cc0_fitted_venue_poisson'].includes(estimate.method)||
+ if(!estimate||!['openfootball_cc0_fitted_venue_poisson','licensed_historical_venue_poisson'].includes(estimate.method)||
   estimate.team_samples?.home<3||estimate.team_samples?.away<3)return null;
  const triple=[estimate.p1,estimate.px,estimate.p2].map(asProbability);
  const over=asProbability(estimate.over25),gg=asProbability(estimate.btts);
@@ -112,7 +112,7 @@ function evaluateWalkForward(records,dependencies={},config={}){
   period=next;foldCount++;
  }
  const leagues=Object.fromEntries([...perLeague].map(([k,v])=>[k,summarize(v)]));
- return {method:'monthly_expanding_window',source:'openfootball_cc0',model_version:config.model_version||'tiki-home-venue-poisson-research-v2',
+ return {method:'monthly_expanding_window',source:'openfootball_cc0',model_version:config.model_version||'tiki-home-venue-poisson-learning-v3',
   created_at:new Date(now).toISOString(),start,end_exclusive:period,
   embargo_days:3,training_only_before_test:true,
   evaluated_months:folds.length,skipped_untrained_fixtures:skipped,
