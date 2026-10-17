@@ -58,6 +58,8 @@ async function asRequestFixtures(secret,date,fetchImpl=fetch){
 async function asPublicResponse(req,env,ctx,url){
  if(req.method!=='GET')return asReply({error:'method_not_allowed'},405);
  if(url.pathname==='/api/allsports/status')return asReply({source:'AllSportsAPI',configured:!!env?.ALLSPORTS_API_KEY},200,0);
+ if(url.pathname==='/api/allsports/predictions')return asPredictionResponse(req,env,ctx,url);
+ if(url.pathname!=='/api/allsports/fixtures')return asReply({error:'not_found'},404);
  if(!env?.ALLSPORTS_API_KEY)return asReply({error:'provider_not_configured',source:'AllSportsAPI'},503);
  const date=url.searchParams.get('date');if(!asDayInRange(date))return asReply({error:'date_out_of_range'},400);
  if([...url.searchParams.keys()].some(x=>x!=='date'))return asReply({error:'invalid_query'},400);
@@ -71,4 +73,23 @@ async function asPublicResponse(req,env,ctx,url){
  try{ctx?.waitUntil?.(cache?.put(key,response.clone()))}catch{}
  return response;
 }
-export {asFixture,asNormalize,asRequestFixtures,asPublicResponse,asLogo,asDayInRange};
+async function asPredictionResponse(req,env,ctx,url){
+ const u=new URL(url.toString());u.pathname='/api/allsports/fixtures';
+ const r=await asPublicResponse(req,env,ctx,u);
+ if(!r.ok)return r;
+ const body=await r.json();
+ const fixtures=body?.data?.fixtures;
+ if(!Array.isArray(fixtures))return asReply({error:'invalid_provider_data'},502);
+ const covered=cvForecastAll(fixtures);
+ const matches=covered.map(({fixture,model})=>({
+  ...fixture,p1:model.p1,px:model.px,p2:model.p2,
+  over25:model.over25,under25:model.under25,btts:model.btts,no_btts:model.no_btts,
+  mu_home:model.mu_home,mu_away:model.mu_away,
+  coverage:model.coverage,confidence:model.confidence,method:model.method,
+  retrospective:model.retrospective,validated:false
+ }));
+ return asReply({source:'AllSportsAPI',date:body.date,matches,
+  model:{name:'tiered_poisson_coverage',coverage:'all_returned_fixtures',generic_baseline_is_not_team_specific:true,validated:false},
+  generated_at:new Date().toISOString()},200,600);
+}
+export {asFixture,asNormalize,asRequestFixtures,asPublicResponse,asPredictionResponse,asLogo,asDayInRange};
