@@ -37,8 +37,22 @@ test('homepage never renders empty league or finished games, selects actual futu
   {id:'3',league_key:'laliga',date:past,home:'X',away:'Y',provider:'sportapi.ai',status:'FT'}
  ];
  const selected=fhSelect(rows,null);
- assert.equal(selected.fixtures_available,2);
- assert.equal(selected.upcoming.length,1);
- assert.deepEqual(new Set(selected.leagues_available),new Set(['Premier League','Κυπριακή Α΄ Κατηγορία']));
+ assert.equal(selected.fixtures_available,0);
+ assert.equal(selected.upcoming.length,0);
+ assert.deepEqual(selected.leagues_available,[]);
  assert.equal(fhSelect([],null).featured,null);
+});
+
+test('published home predictions abstain when either side lacks actual licensed team history',()=>{
+ const upcoming='2099-10-19T18:00:00Z';
+ const fixture={id:'up-1',provider:'sportapi.ai',league_key:'epl',league:'English Premier League',home:'Arsenal',away:'Chelsea',date:upcoming,status:'NS'};
+ const absent=fhSelect([fixture],null);
+ assert.equal(absent.matches.length,0);assert.equal(absent.featured,null);assert.deepEqual(absent.leagues_available,[]);
+ const rows=[];
+ for(let i=0;i<100;i++){rows.push({dataset_slug:'epl-2024-25',match_date:new Date(Date.UTC(2025,0,i+1)).toISOString().slice(0,10),home_team:i%2?'Arsenal':'Chelsea',away_team:i%2?'Chelsea':'Arsenal',home_score:2,away_score:1});}
+ const trained=fhTrain(rows,new Date('2026-10-17T10:00:00Z'));
+ const released=fhSelect([fixture],trained);
+ assert.equal(released.matches.length,1);
+ assert.equal(released.matches[0].model.method,'openfootball_cc0_fitted_venue_poisson');
+ assert.equal(released.matches[0].model.validated,false);
 });
