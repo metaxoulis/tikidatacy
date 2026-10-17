@@ -157,7 +157,12 @@ function renderOverview(){
  if(!n('#overviewMatches'))return;
  n('#overviewMatches').textContent=String(state.all.length);
  n('#overviewLive').textContent=String(state.all.filter(inProgress).length);
- n('#overviewPredicted').textContent=String(state.all.filter(m=>valid(m)&&!inProgress(m)).length);
+ const estimates=state.all.filter(m=>valid(m)&&!inProgress(m));
+ n('#overviewPredicted').textContent=String(estimates.length);
+ if(n('#overviewPredictedDetail')){
+  const fitted=estimates.filter(m=>m.prediction_tier==='team').length;
+  n('#overviewPredictedDetail').textContent=fitted+' πλήρεις · '+(estimates.length-fitted)+' βασικές';
+ }
  n('#overviewUpdated').textContent=state.liveUpdatedAt?'Live ενημέρωση: '+new Date(state.liveUpdatedAt).toLocaleTimeString('el-GR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'Αναμονή live ροής…';
 }
 function reconcileMatches(){
