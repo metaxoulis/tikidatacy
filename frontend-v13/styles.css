@@ -321,3 +321,13 @@ body{background:#071723}
   .home-main{padding:11px 11px 93px}
   .topbar{border-radius:0}
 }
+
+/* v25 — unified three-page navigation */
+body.modern-predictions{background:radial-gradient(ellipse at 75% 0,rgba(34,211,238,.055),transparent 38%),#0b131e;color:#edf6fe}
+.modern-predictions .app{width:100%}.modern-predictions .topbar{height:75px;max-width:1320px;margin:0 auto;padding:0 36px;gap:40px;position:relative;background:transparent;box-shadow:none;border-bottom:1px solid rgba(180,219,236,.14);backdrop-filter:none}
+.modern-predictions .brand{flex:none;width:168px;height:auto}.modern-predictions .brand img{width:168px;height:42px;object-fit:contain}
+.modern-predictions .desktop-nav{gap:30px}.modern-predictions .desktop-nav a{padding:0;position:relative;border:0;background:none;color:#94b8ca;font-size:13px;font-weight:700}
+.modern-predictions .desktop-nav a:hover,.modern-predictions .desktop-nav a.nav-current{background:none;color:#34f5c5}.modern-predictions .desktop-nav a.nav-current::after{content:"";height:2px;position:absolute;left:0;right:0;bottom:0;background:#34f5c5}
+.modern-predictions .layout{max-width:1320px;margin:0 auto}.modern-predictions .sidebar{background:transparent;border-right:1px solid rgba(180,219,236,.14)}.modern-predictions .main{padding-top:28px}.modern-predictions .top-actions{margin-left:auto}
+@media(max-width:950px){.modern-predictions .topbar{gap:18px;padding:0 16px}.modern-predictions .brand,.modern-predictions .brand img{width:148px}.modern-predictions .desktop-nav{gap:16px}.modern-predictions .desktop-nav a{font-size:12px}}
+@media(max-width:700px){.modern-predictions .topbar{height:64px}.modern-predictions .brand,.modern-predictions .brand img{width:145px}.modern-predictions .desktop-nav{display:none}.modern-predictions .main{padding-top:16px}.modern-predictions .bottom-nav{background:#0b131ef5;border-top:1px solid rgba(180,219,236,.18)}.modern-predictions .bottom-nav a span{font-size:11px;font-weight:700;color:inherit;line-height:1.7}.modern-predictions .bottom-nav a[aria-current="page"]{color:#34f5c5}}
