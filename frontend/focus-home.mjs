@@ -136,69 +136,103 @@ function fhSelect(fixtures,model,limit=7){
   fixtures_available:vetted.length,real_fixtures_seen:group.length,
   leagues_available:[...new Set(vetted.map(m=>m.league_key))].map(k=>FH_LEAGUES[k].name)};
 }
-function fhSportFixtures(b,secret){
- const raw=Array.isArray(b?._fixtures)?b._fixtures:[];
- const selected=[b?.featured,...(b?.upcoming||[])].filter(Boolean);
- const known=new Map(selected.map(m=>[String(m.id),m.logos||{}]));
- return raw.map(m=>({id:'sportapi-'+m.id,provider:'sportapi.ai',league_key:fhLeague(m.league,m.geo),league:m.league,
-  home:m.home,away:m.away,date:m.date,status:m.status,home_score:m.home_score,away_score:m.away_score,
-  logos:known.get(String(m.id))||{home:null,away:null},league_logo:null}));
-}
-function fhAllFixtures(list){
- return list.map(m=>({...m,league_key:fhLeague(m.league,m.country||'')}));
-}
 const fhJSON=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':status===200?'public,max-age=600':'no-store','X-Content-Type-Options':'nosniff'}});
+/* Sportmonks live fixtures alone feed the UI. Training remains CC0 and separate. */
+function fhSMLeague(name,country){
+ const mapped=fhLeague(name,country);
+ if(mapped)return mapped;
+ if(fhText(country)==='cyprus'&&fhText(name).replace(/[.\s]+/g,' ').trim()==='1 division')return 'cyprus';
+ return null;
+}
+function fhSMDisplay(fixtures,model){
+ const now=Date.now(),eligible=fixtures.filter(fhFuture);
+ const matches=eligible.map(m=>{
+  const estimate=fhEstimate(m,model);
+  const covered=estimate.method==='openfootball_cc0_fitted_venue_poisson'&&
+    estimate.team_samples?.home>=3&&estimate.team_samples?.away>=3;
+  return {...m,model:covered?{...estimate,most_likely_score:fhLikelyScore(estimate.mu_home,estimate.mu_away)}:null};
+ }).sort((a,b)=>Date.parse(a.date)-Date.parse(b.date));
+ const featured=matches.find(m=>m.model)||matches[0]||null;
+ return{matches,featured,upcoming:matches.filter(m=>m!==featured).slice(0,6),
+   predictions_available:matches.filter(m=>!!m.model).length};
+}
 async function fhHomeResponse(req,env,ctx){
  if(req.method!=='GET')return fhJSON({error:'method_not_allowed'},405);
+ if(!env?.SPORTMONKS_API_TOKEN)return fhJSON({error:'sportmonks_not_configured',message:'Η υπηρεσία αγώνων δεν έχει ρυθμιστεί.'},503);
  const cache=typeof caches!=='undefined'?caches.default:null;
- const cacheKey=new Request('https://tiki-cache.local/focus-home-v3');
+ const cacheKey=new Request('https://tiki-cache.local/focus-home-v4');
  try{const hit=await cache?.match(cacheKey);if(hit)return hit;}catch{}
- try{if(env?.TIKI_DB){const row=await env.TIKI_DB.prepare("SELECT payload_json FROM sportapi_home_cache WHERE cache_key='focus_v3' AND expires_at>?1").bind(Math.floor(Date.now()/1000)).first();if(row?.payload_json)return fhJSON(JSON.parse(row.payload_json));}}catch{}
- const today=new Date().toISOString().slice(0,10);
- const days=[today,tdAddDays(today,1),tdAddDays(today,2)];
- const allTask=env?.ALLSPORTS_API_KEY?Promise.allSettled(days.map(async date=>{
-  const url=new URL('https://tiki-data.pages.dev/api/allsports/fixtures?date='+date);
-  const resp=await asPublicResponse(new Request(url),env,ctx,url);
-  if(!resp.ok)return [];
-  const data=await resp.json();
-  return Array.isArray(data?.data?.fixtures)?data.data.fixtures:[];
- })):Promise.resolve([]);
- const sportTask=env?.SPORTAPI_AI_KEY?tdBundle(env,ctx).catch(()=>null):Promise.resolve(null);
- const [allResult,sport,model]=await Promise.all([allTask,sportTask,fhLoadModel(env?.TIKI_DB,ctx)]);
- const raw=(allResult||[]).flatMap(v=>v.status==='fulfilled'?v.value:[]);
- const fixtures=[...fhSportFixtures(sport),...fhAllFixtures(raw)];
- const selected=fhSelect(fixtures,model);
- const result={source:'SportAPI.ai + AllSportsAPI',updated_at:new Date().toISOString(),range:days,
-  coverage:{matches:selected.fixtures_available,competitions:selected.leagues_available.length},
-  featured:selected.featured,upcoming:selected.upcoming,
-  matches:selected.matches.map(m=>({
-   id:m.id,league:m.league,league_key:m.league_key,home:m.home,away:m.away,date:m.date,
-   status:m.status,logos:m.logos,league_logo:m.league_logo,
-   p1:m.model.p1,px:m.model.px,p2:m.model.p2,over25:m.model.over25,under25:m.model.under25,
-   btts:m.model.btts,no_btts:m.model.no_btts,mu_home:m.model.mu_home,mu_away:m.model.mu_away,
-   most_likely_score:m.model.most_likely_score,confidence:'experimental',
-   coverage:'verified_historical_inputs',method:m.model.method,validated:false,
-   historical_sample:m.model.team_samples,history_latest:m.model.history_latest
-  })),
-  leagues_with_matches:selected.leagues_available,
-  model:{name:'CC0 historical venue Poisson v2 (experimental)',training_parameters:{decay_days:model?.decay_days||null,venue_prior:model?.venue_prior||null},retrospective_validation:{season:'2025-26',matches:1723,selected_brier:0.62197},retrospective_holdout:{season:'2026-27',matches:197,brier:0.61210,previous_brier:0.63480,baseline_brier:0.69416,top1:0.49746,validated_live:false},historical_matches:Object.values(model?.leagues||{}).reduce((n,l)=>n+(l.matches||0),0),trained_at:model?.trained_at||null,historical_cutoff:model?.cutoff||null,history_leagues:Object.keys(model?.leagues||{}),validated:false,
-   note:'Not an LLM. Pure statistical fitting to licensed OpenFootball finished scores; no verified prospective track record.'},
-  fallback_reason:fixtures.length?'': 'No upstream fixtures available',data_sources:{sportapi:fhSportFixtures(sport).length,allsports:raw.length}};
- // Prospective evaluation log: only genuinely team-fitted predictions well before kickoff.
- // Never backdate forecasts and never count generic no-data priors as learned predictions.
- if(env?.TIKI_DB&&ctx?.waitUntil&&model){
-  const now=Date.now(),eligible=selected.matches.filter(m=>
-    m&&m.model?.method==='openfootball_cc0_fitted_venue_poisson'&&Date.parse(m.date)>now+2*3600000);
-  if(eligible.length){
-   const writes=eligible.map(m=>env.TIKI_DB.prepare(
-     "INSERT OR IGNORE INTO prospective_forecast_log (fixture_key,created_at,model_version,data_cutoff,source_sync_at,ph,pd,pa) VALUES (?1,datetime('now'),?2,?3,?4,?5,?6,?7)")
-     .bind(m.provider+':'+m.id+':'+m.date,model.model_version,model.cutoff,result.updated_at,m.model.p1/100,m.model.px/100,m.model.p2/100).run());
-   ctx.waitUntil(Promise.allSettled(writes));
+ try{if(env?.TIKI_DB){
+  const r=await env.TIKI_DB.prepare("SELECT payload_json FROM sportapi_home_cache WHERE cache_key='focus_v4' AND expires_at>?1")
+   .bind(Math.floor(Date.now()/1000)).first();
+  if(r?.payload_json)return fhJSON(JSON.parse(r.payload_json));
+ }}catch{}
+ try{
+  const today=new Date().toISOString().slice(0,10);
+  const [week,model]=await Promise.all([
+   smWeek(today,env.SPORTMONKS_API_TOKEN,fhSMLeague,fetch,7),
+   fhLoadModel(env?.TIKI_DB,ctx)]);
+  const selection=fhSMDisplay(week.fixtures,model);
+  const shown=m=>({
+   id:m.id,league:m.league,league_key:m.league_key,date:m.date,status:m.status,
+   home:m.home,away:m.away,logos:m.logos,league_logo:m.league_logo,
+   model:m.model||null,home_score:null,away_score:null,
+   p1:m.model?.p1??null,px:m.model?.px??null,p2:m.model?.p2??null,
+   over25:m.model?.over25??null,under25:m.model?.under25??null,
+   btts:m.model?.btts??null,no_btts:m.model?.no_btts??null,
+   mu_home:m.model?.mu_home??null,mu_away:m.model?.mu_away??null,
+   most_likely_score:m.model?.most_likely_score??null,
+   coverage:m.model?'verified_historical_inputs':'no_team_specific_evidence',
+   method:m.model?.method??null,validated:false,
+   history_latest:m.model?.history_latest??null,
+   historical_sample:m.model?.team_samples??null});
+  const result={
+   source:'Sportmonks',updated_at:new Date().toISOString(),
+   range:Array.from({length:7},(_,i)=>smAddDay(today,i)),
+   coverage:{matches:selection.matches.length,competitions:new Set(selection.matches.map(m=>m.league_key)).size,
+    predictions:selection.predictions_available},
+   featured:selection.featured?shown(selection.featured):null,
+   upcoming:selection.upcoming.map(shown),matches:selection.matches.map(shown),
+   leagues_with_matches:[...new Set(selection.matches.map(m=>m.league_key))].map(k=>FH_LEAGUES[k]?.name||k),
+   incomplete_week:week.partial,dates_successful:week.dates_successful,
+   model:{name:'CC0 historical venue Poisson v2 (experimental)',training_parameters:{
+    decay_days:model?.decay_days||null,venue_prior:model?.venue_prior||null},
+    historical_matches:Object.values(model?.leagues||{}).reduce((n,l)=>n+(l.matches||0),0),
+    trained_at:model?.trained_at||null,historical_cutoff:model?.cutoff||null,
+    validated:false,note:'Πιθανότητες μόνο όταν υπάρχουν αντιστοιχισμένα τελικά αποτελέσματα των δύο ομάδων.'}
+  };
+  if(env?.TIKI_DB&&ctx?.waitUntil&&model){
+   const eligible=selection.matches.filter(m=>m.model&&Date.parse(m.date)>Date.now()+2*3600000);
+   if(eligible.length)ctx.waitUntil(Promise.allSettled(eligible.map(m=>
+    env.TIKI_DB.prepare("INSERT OR IGNORE INTO prospective_forecast_log (fixture_key,created_at,model_version,data_cutoff,source_sync_at,ph,pd,pa) VALUES (?1,datetime('now'),?2,?3,?4,?5,?6,?7)")
+    .bind('sportmonks:'+m.id+':'+m.date,model.model_version,model.cutoff,result.updated_at,
+      m.model.p1/100,m.model.px/100,m.model.p2/100).run())));
   }
+  const response=fhJSON(result,200);
+  try{ctx?.waitUntil?.(cache?.put(cacheKey,response.clone()))}catch{}
+  if(env?.TIKI_DB&&ctx?.waitUntil){
+   ctx.waitUntil(env.TIKI_DB.prepare("INSERT INTO sportapi_home_cache(cache_key,payload_json,expires_at,saved_at) VALUES('focus_v4',?1,?2,?3) ON CONFLICT(cache_key) DO UPDATE SET payload_json=excluded.payload_json,expires_at=excluded.expires_at,saved_at=excluded.saved_at")
+    .bind(JSON.stringify(result),Math.floor(Date.now()/1000)+300,new Date().toISOString()).run().catch(()=>{}));
+  }
+  return response;
+ }catch(e){
+  const reason=String(e?.message||'sportmonks_unavailable').slice(0,90);
+  return fhJSON({error:'sportmonks_unavailable',reason,message:'Οι τρέχοντες αγώνες δεν είναι διαθέσιμοι.'},503);
  }
- const response=fhJSON(result,200);
- try{ctx?.waitUntil?.(cache?.put(cacheKey,response.clone()))}catch{}
- if(env?.TIKI_DB&&ctx?.waitUntil){const payload=JSON.stringify(result);ctx.waitUntil(env.TIKI_DB.prepare("INSERT INTO sportapi_home_cache(cache_key,payload_json,expires_at,saved_at) VALUES('focus_v3',?1,?2,?3) ON CONFLICT(cache_key) DO UPDATE SET payload_json=excluded.payload_json,expires_at=excluded.expires_at,saved_at=excluded.saved_at").bind(payload,Math.floor(Date.now()/1000)+600,new Date().toISOString()).run().catch(()=>{}));}
- return response;
 }
-export {fhLeague,fhName,fhTrain,fhEstimate,fhSelect,fhHomeResponse,FH_LEAGUES};
+async function fhLiveResponse(req,env,ctx){
+ if(req.method!=='GET')return fhJSON({error:'method_not_allowed'},405);
+ if(!env?.SPORTMONKS_API_TOKEN)return fhJSON({error:'not_configured'},503);
+ const key=new Request('https://tiki-cache.local/sportmonks-inplay-v1');
+ const cache=typeof caches!=='undefined'?caches.default:null;
+ try{const hit=await cache?.match(key);if(hit)return hit;}catch{}
+ try{
+  const list=await smInplay(env.SPORTMONKS_API_TOKEN,fhSMLeague);
+  const response=new Response(JSON.stringify({updated_at:new Date().toISOString(),matches:list}),{
+   status:200,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'public,max-age=20'}});
+  try{ctx?.waitUntil?.(cache?.put(key,response.clone()))}catch{}
+  return response;
+ }catch{return fhJSON({error:'live_unavailable',matches:[]},503)}
+}
+
+export {fhLeague,fhName,fhTrain,fhEstimate,fhSelect,fhHomeResponse,fhLiveResponse,fhSMLeague,fhSMDisplay,FH_LEAGUES};
