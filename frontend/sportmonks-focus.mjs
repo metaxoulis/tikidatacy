@@ -19,7 +19,7 @@ function smBuildFocus(fixtures,live,model,now,estimate=null,likely=null){
   let p=null;
   if(isUpcoming&&model){
    const val=(estimate||fhEstimate)(game,model);
-   if(val?.method==='openfootball_cc0_fitted_venue_poisson'&&val?.team_samples?.home>=3&&val?.team_samples?.away>=3)
+   if(['openfootball_cc0_fitted_venue_poisson','licensed_historical_venue_poisson'].includes(val?.method)&&val?.team_samples?.home>=3&&val?.team_samples?.away>=3)
     p={...val,most_likely_score:(likely||fhLikelyScore)(val.mu_home,val.mu_away)};
   }
   const forecast=p?{p1:p.p1,px:p.px,p2:p.p2,over25:p.over25,under25:p.under25,btts:p.btts,
