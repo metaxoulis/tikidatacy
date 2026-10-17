@@ -17,7 +17,7 @@ test('publish separately tiered team, partial and league predictions without inv
  const out=smBuildFocus([example],[],data,clock,ok,()=>({score:'1-1',probability:11}));
  assert.equal(out.matches[0].p1,42);assert.equal(out.coverage.with_team_prediction,1);
  const league=smBuildFocus([example],[],data,clock,()=>({...ok(),method:'league_historical_prior_poisson',tier:'league',
- confidence:'very_low'}));
+ confidence:'very_low'}),()=>({score:'1-1',probability:11}));
  assert.equal(league.matches[0].p1,42);assert.equal(league.coverage.with_league_baseline,1);
  assert.equal(league.matches[0].prediction_tier,'league');
  const invalid=smBuildFocus([example],[],data,clock,()=>({...ok(),method:'generic_prior_no_licensed_history'}));
