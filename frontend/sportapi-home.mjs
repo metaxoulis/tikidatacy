@@ -168,7 +168,7 @@ async function tdStoreAssets(db,all,now){
 async function tdBundle(env,ctx){
  const cached=await (async()=>{try{
   if(!env.TIKI_DB)return null;
-  const row=await env.TIKI_DB.prepare("SELECT payload_json FROM sportapi_home_cache WHERE cache_key='home_v23' AND expires_at > ?1").bind(Math.floor(Date.now()/1000)).first();
+  const row=await env.TIKI_DB.prepare("SELECT payload_json FROM sportapi_home_cache WHERE cache_key='home_v24' AND expires_at > ?1").bind(Math.floor(Date.now()/1000)).first();
   return row?JSON.parse(row.payload_json):null;
  }catch{return null}})();
  if(cached?.source==='SportAPI.ai')return cached;
@@ -177,7 +177,7 @@ async function tdBundle(env,ctx){
  if(env.TIKI_DB&&ctx?.waitUntil){
   const payload=JSON.stringify(result);
   ctx.waitUntil((async()=>{
-   try{await env.TIKI_DB.prepare("INSERT INTO sportapi_home_cache(cache_key,payload_json,expires_at,saved_at) VALUES('home_v23',?1,?2,?3) ON CONFLICT(cache_key) DO UPDATE SET payload_json=excluded.payload_json,expires_at=excluded.expires_at,saved_at=excluded.saved_at")
+   try{await env.TIKI_DB.prepare("INSERT INTO sportapi_home_cache(cache_key,payload_json,expires_at,saved_at) VALUES('home_v24',?1,?2,?3) ON CONFLICT(cache_key) DO UPDATE SET payload_json=excluded.payload_json,expires_at=excluded.expires_at,saved_at=excluded.saved_at")
       .bind(payload,Math.floor(Date.now()/1000)+600,new Date().toISOString()).run();}catch{}
    await tdStoreAssets(env.TIKI_DB,result._fixtures,new Date());
   })());
@@ -186,7 +186,7 @@ async function tdBundle(env,ctx){
 }
 async function tdHomeHandler(req,env,ctx){
  if(!env?.SPORTAPI_AI_KEY)return tdPublicJSON({error:'provider_not_configured'},503);
- const cacheKey=new Request('https://tiki-cache.local/td/home-v23');
+ const cacheKey=new Request('https://tiki-cache.local/td/home-v24');
  try{const cached=await caches.default.match(cacheKey);if(cached)return cached;}catch{}
  const result=await tdBundle(env,ctx);
  if(!result.coverage.matches)return tdPublicJSON({error:'provider_unavailable'},503);
@@ -197,7 +197,7 @@ async function tdHomeHandler(req,env,ctx){
 }
 async function tdPredictionsHandler(req,env,ctx){
  if(!env?.SPORTAPI_AI_KEY)return tdPublicJSON({error:'provider_not_configured',matches:[]},503);
- const cacheKey=new Request('https://tiki-cache.local/td/predictions-v23');
+ const cacheKey=new Request('https://tiki-cache.local/td/predictions-v24');
  try{const cached=await caches.default.match(cacheKey);if(cached)return cached;}catch{}
  const b=await tdBundle(env,ctx);if(!b.coverage.matches)return tdPublicJSON({error:'provider_unavailable',matches:[]},503);
  const modeled=new Map([b.featured,...b.upcoming].filter(Boolean).map(m=>[m.id,m.model]));
