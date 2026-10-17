@@ -885,7 +885,7 @@ async function smCheckAccess(req,env){
    results.push({endpoint:kind,http_status:res.status,items:items.length,paginated:!!payload.pagination?.has_more,
     sample_leagues:kind==='leagues'?items.slice(0,35).map(x=>({league:String(x.name||'').slice(0,60),country:String(x.country?.name||'').slice(0,40)})):undefined,
     sample_participants:kind==='fixtures'?items.filter(x=>Array.isArray(x.participants)).length:undefined});
-  }catch{results.push({endpoint:kind,error:'request_failed'});}
+  }catch(e){const message=String(e?.message||'').toLowerCase();const reason=e?.name==='AbortError'?'timeout':message.includes('redirect')?'redirect':message.includes('certificate')?'tls':message.includes('fetch')?'fetch_error':message.includes('invalid')?'invalid_response':'unknown_error';results.push({endpoint:kind,error:reason,error_type:String(e?.name||'Error').slice(0,32)});}
  }
  return reply({configured:true,checked_date:date,results},200);
 }
