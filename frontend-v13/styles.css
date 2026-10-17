@@ -385,3 +385,23 @@ body.modern-predictions{background:radial-gradient(ellipse at 75% 0,rgba(34,211,
 }
 @media(min-width:741px){.mobile-match-cell{display:none!important}}
 @media(max-width:365px){.modern-predictions .brand{width:148px!important}.modern-predictions .icon-btn.account{display:none}.td-mobile-card{padding:11px 9px}.td-mobile-name{font-size:12px}}
+
+/* v34 — show a competition IMAGE only, never a superimposed league acronym. */
+.league-badge.has-real-logo,.small-league.has-real-logo,.tab-league.has-real-logo,.side-league .league-badge.has-real-logo{
+ position:relative;isolation:isolate;font-size:0!important;line-height:0!important;color:transparent!important;overflow:hidden;
+}
+.league-badge.has-real-logo .league-image,.small-league.has-real-logo .league-image,.tab-league.has-real-logo .league-image{
+ position:relative;inset:auto;display:block;width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;
+ border:0;padding:2px;margin:0;background:#eaf3f7;border-radius:inherit;z-index:2;
+}
+.league-fallback{font-size:9px;line-height:1;white-space:nowrap;color:#a3d5da;font-weight:800;display:grid;place-items:center;}
+.league-logo .small-league{width:30px;height:30px;min-width:30px;}
+@media(max-width:740px){
+ html,body,.app{max-width:100%;overflow-x:clip}
+ .modern-predictions .layout,.modern-predictions .main,.modern-predictions .results,.modern-predictions .table-scroll,.modern-predictions .matches-table,.modern-predictions .matches-table tbody,.modern-predictions .matches-table tr,.modern-predictions .td-mobile-card{min-width:0;max-width:100%;box-sizing:border-box}
+ .td-mobile-meta{min-width:0;max-width:100%}
+ .td-mobile-meta .small-league{width:30px;min-width:30px;height:30px}
+ .td-mobile-teams{width:100%;max-width:100%;min-width:0}
+ .td-mobile-team,.td-mobile-name{min-width:0;max-width:100%;overflow-wrap:anywhere}
+ .td-mobile-card{overflow:hidden}
+}

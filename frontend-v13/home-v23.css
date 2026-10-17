@@ -15,3 +15,23 @@
 .forecast-result span{font-size:11px;color:var(--muted)}.forecast-result strong{font-size:21px;color:var(--mint);letter-spacing:.5px}.forecast-result small{color:var(--muted);font-size:11px}
 .model-note{line-height:1.65}.up-footer small{display:block;margin-top:5px;color:var(--muted);font-size:10px;line-height:1.45}
 \n@media(max-width:720px){.nav{height:67px;position:relative;justify-content:center;padding-inline:12px}.nav .logo{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:block;width:clamp(150px,46vw,190px);margin:0;z-index:2}.nav .logo img{width:100%;height:auto;max-height:55px;object-fit:contain}.nav .nav-right{margin-left:auto;visibility:hidden;pointer-events:none}}\n
+/* v34 — contain homepage match cards and show verified crests only. */
+html,body{width:100%;max-width:100%;overflow-x:clip}
+.shell,.hero,.feature,.feature-grid,.feature-main,.feature-side,.featured-teams,.ft-team,.upcoming-grid,.upcoming-card,.up-match,.up-team{min-width:0;max-width:100%;box-sizing:border-box}
+.home-league-logo{display:inline-block;flex:none;width:28px!important;height:28px!important;max-width:28px;max-height:28px;object-fit:contain;vertical-align:middle;border-radius:7px;background:#eef7f9;padding:3px;margin:0 8px 0 0}
+.feature-top b,.f-league{display:inline-flex;align-items:center;gap:4px;min-width:0;overflow-wrap:anywhere}
+.up-meta span:first-child{min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.crest img.home-crest-logo{display:block;position:absolute;inset:9%;width:82%;height:82%;max-width:82%;max-height:82%;object-fit:contain;background:var(--card);z-index:2}
+.crest img.home-crest-logo + img.home-crest-logo{z-index:3}
+@media(max-width:710px){
+ .shell{padding-inline:14px}
+ .feature-top{display:flex;flex-wrap:wrap;gap:7px;min-width:0}
+ .feature-top b{font-size:11px;min-width:0}
+ .upcoming-grid,.upcoming-card{width:100%;max-width:100%;overflow:hidden}
+ .up-meta{gap:6px;flex-wrap:wrap}
+ .up-meta span:first-child{white-space:normal;overflow-wrap:anywhere}
+ .up-match{grid-template-columns:minmax(0,1fr) 26px minmax(0,1fr)}
+ .up-team b,.ft-team b{font-size:12px;max-width:100%;overflow-wrap:anywhere;white-space:normal}
+ .feat-bottom{min-width:0;max-width:100%}
+ .f-league{min-width:0;max-width:100%;white-space:normal}
+}
