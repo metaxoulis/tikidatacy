@@ -56,3 +56,13 @@ test('published home predictions abstain when either side lacks actual licensed 
  assert.equal(released.matches[0].model.method,'openfootball_cc0_fitted_venue_poisson');
  assert.equal(released.matches[0].model.validated,false);
 });
+
+test('new trained hyperparameters are stored and used consistently, with no holdout score leakage',()=>{
+ const data=[];
+ for(let i=0;i<95;i++)data.push({dataset_slug:'epl-2025-26',match_date:new Date(Date.UTC(2025,7,1+i)).toISOString().slice(0,10),home_team:i%2?'Arsenal':'Chelsea',away_team:i%2?'Chelsea':'Arsenal',home_score:i%2?2:1,away_score:i%2?0:1});
+ const a=fhTrain(data,new Date('2026-10-17T12:00:00Z'));
+ assert.equal(a.model_version,'tiki-home-venue-poisson-research-v2');
+ assert.equal(a.decay_days,360);assert.equal(a.venue_prior,3);
+ const b=fhTrain([...data,{dataset_slug:'epl-2026-27',match_date:'2026-10-16',home_team:'Arsenal',away_team:'Chelsea',home_score:14,away_score:14}],new Date('2026-10-17T12:00:00Z'));
+ assert.deepEqual(b.leagues.epl,a.leagues.epl);
+});
