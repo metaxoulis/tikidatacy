@@ -1,4 +1,4 @@
-/* Tiki-Data v23 — SportAPI.ai only. No legacy API and no client-side secrets. */
+/* Tiki-Data v23 — Sportmonks live fixtures and CC0 historical Poisson. */
 (()=>{'use strict';
 const $=id=>document.getElementById(id);
 function verifiedLeagueLogo(name){const t=String(name||'').toLowerCase();const l=window.TIKI_LOGO_CATALOG?.leagues||{};const key=/(?:premier league|english premier)/i.test(t)?'epl':/bundesliga/i.test(t)?'bundesliga':/(?:la liga|laliga|primera divisi)/i.test(t)?'laliga':/serie a/i.test(t)?'seriea':/(?:ligue 1|ligue1)/i.test(t)?'ligue1':/(?:super league.*gree|greek super|greece.*super)/i.test(t)?'greece':null;return key?l[key]||null:null;}
@@ -6,7 +6,7 @@ const leagueEmblem=(name,explicit,key=null)=>{const l=window.TIKI_LOGO_CATALOG?.
 if(!$('featuredContent'))return;
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
 const initial=x=>String(x||'FC').trim().split(/\s+/).filter(w=>!/(?:FC|CF|AC|SC|AFC)$/i.test(w)).slice(0,2).map(x=>x[0]||'').join('').slice(0,3).toUpperCase()||'FC';
-const safeLogo=x=>typeof x==='string'&&(/^\/api\/logo\/team\/\d{1,13}\?sig=[0-9a-f]{64}$/.test(x)||/^https:\/\/(?:apiv2\.)?allsportsapi\.com\/logo\/[a-zA-Z0-9_./%-]{1,180}\.(?:png|jpe?g|webp)$/i.test(x))?x:null;
+const safeLogo=x=>typeof x==='string'&&/^https:\/\/cdn\.sportmonks\.com\/images\/[\w/%.-]{1,190}\.(?:png|jpe?g|webp|svg)$/i.test(x)?x:null;
 
 const hNorm=x=>String(x||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^\p{L}\p{N}]+/gu,' ').trim().toLowerCase();
 const hMap=new Map(Object.entries(window.TIKI_LOGO_CATALOG?.teams||{}).map(([key,value])=>[hNorm(key),value]));
@@ -41,7 +41,7 @@ function markets(m){
  '<div class="forecast-result"><span>Πιθανότερο σκορ (εκτίμηση)</span><strong>'+esc(p.most_likely_score?.score||'—')+'</strong><small>'+pct(p.most_likely_score?.probability)+'</small></div>'+ '<p class="model-note">'+(p.method==='openfootball_cc0_fitted_venue_poisson'?'Πειραματικό μοντέλο από καταγεγραμμένα ιστορικά αποτελέσματα · '+esc(p.data_points)+' αγώνες · στοιχεία έως '+esc(p.history_latest):'Πολύ χαμηλή αξιοπιστία: δεν υπάρχουν επιβεβαιωμένα ιστορικά στοιχεία των δύο ομάδων. Χρησιμοποιείται γενικό υπόδειγμα, όχι εξατομικευμένη πρόβλεψη.')+' Καμία εκτίμηση δεν έχει πιστοποιημένη ακρίβεια.</p>';
 }
 function featured(m){
- if(!m){$('featuredContent').innerHTML='<div class="loading">Δεν υπάρχουν επερχόμενοι αγώνες με επαρκή τεκμηριωμένα ιστορικά στοιχεία για το επόμενο τριήμερο.</div>';return;}
+ if(!m){$('featuredContent').innerHTML='<div class="loading">Δεν υπάρχουν καταχωρισμένοι αγώνες αυτή τη στιγμή.</div>';return;}
  $('featuredContent').innerHTML='<div class="feature-top"><b>'+leagueEmblem(m.league,m.league_logo,m.league_key)+esc(m.league)+'</b><span>'+(isLive(m)?'● LIVE':isDone(m)?'ΤΕΛΙΚΟ':'ΕΠΟΜΕΝΟΣ ΑΓΩΝΑΣ')+' · '+esc(when(m))+'</span></div>'+
  '<div class="feature-grid"><div class="feature-main"><div class="featured-teams"><div class="ft-team">'+crest(m,'home')+'<b>'+esc(m.home)+'</b></div><div class="vs"><strong>'+esc(score(m))+'</strong>'+(isLive(m)?'LIVE':'FOOTBALL')+'</div><div class="ft-team">'+crest(m,'away')+'<b>'+esc(m.away)+'</b></div></div><div class="feat-bottom"><span class="f-league">'+leagueEmblem(m.league,m.league_logo,m.league_key)+esc(m.league)+'</span><a href="/predictions" class="feat-details">Πλήρη στοιχεία αγώνα →</a></div></div><aside class="feature-side">'+markets(m)+'</aside></div>';
  $('featuredContent').setAttribute('aria-busy','false');
@@ -73,6 +73,24 @@ async function load(){
   $('refreshStatus').textContent='Η ενημέρωση δεν είναι διαθέσιμη';
  }finally{fetching=false;}
 }
+
+async function loadLive(){
+ const root=$('liveScores');if(!root)return;
+ try{
+  const res=await fetch('/api/live',{cache:'no-store',headers:{Accept:'application/json'}});
+  if(!res.ok)throw Error('live_unavailable');
+  const json=await res.json(),games=Array.isArray(json.matches)?json.matches:[];
+  if(!games.length){root.hidden=true;root.replaceChildren();return;}
+  root.hidden=false;
+  root.innerHTML='<div class="overline">ΖΩΝΤΑΝΟΙ ΑΓΩΝΕΣ</div><div class="live-list">'+games.slice(0,9).map(m=>
+   '<div class="live-match"><span class="live-league">'+leagueEmblem(m.league,m.league_logo,m.league_key)+esc(m.league)+'</span>'+
+   '<span class="live-teams">'+crest(m,'home')+'<strong>'+esc(m.home)+'</strong><b class="live-score">'+
+   (num(m.home_score)!==null&&num(m.away_score)!==null?esc(m.home_score+' – '+m.away_score):'LIVE')+
+   '</b><strong>'+esc(m.away)+'</strong>'+crest(m,'away')+'</span></div>').join('')+'</div>';
+ }catch{root.hidden=true;}
+}
+void loadLive();setInterval(()=>{if(!document.hidden)void loadLive()},45000);
+
 $('year').textContent=String(new Date().getFullYear());
 void load();
 setInterval(()=>{if(!document.hidden)void load()},180000);

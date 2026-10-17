@@ -41,3 +41,15 @@ html,body{width:100%;max-width:100%;overflow-x:clip}
 .crest.has-real-team>span{visibility:hidden}
 .crest img.home-crest-logo{position:absolute;inset:0;width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;z-index:2;background:transparent;padding:10%;border-radius:inherit}
 .crest img.home-crest-logo + img.home-crest-logo{z-index:3}
+
+.live-scores{margin:22px 0 14px;padding:18px;border:1px solid #235266;border-radius:16px;background:#0e2938}
+.live-scores[hidden]{display:none}.live-scores>.overline{margin-bottom:14px;color:#34f5c5}
+.live-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,310px),1fr));gap:10px}
+.live-match{min-width:0;overflow:hidden;padding:12px;border:1px solid #2e5768;border-radius:12px;background:#122f42}
+.live-league{display:flex;align-items:center;gap:4px;color:#9ec7d4;font-size:11px;margin-bottom:10px}
+.live-league .home-league-logo{width:22px!important;height:22px!important}
+.live-teams{display:grid;grid-template-columns:28px minmax(0,1fr) auto minmax(0,1fr) 28px;align-items:center;gap:6px;font-size:11px}
+.live-teams .crest{width:28px;height:28px;border-radius:8px}
+.live-teams strong{min-width:0;overflow-wrap:anywhere;font-size:11px;font-weight:700;text-align:center}
+.live-score{color:#8ff3d4;font-size:16px;white-space:nowrap}
+@media(max-width:710px){.live-scores{padding:12px;margin:14px 0}.live-list{grid-template-columns:1fr}}
