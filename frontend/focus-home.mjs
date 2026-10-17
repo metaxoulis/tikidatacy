@@ -77,15 +77,21 @@ function fhTrain(rows,asOfDate=new Date()){
  return {model_version:'tiki-home-venue-poisson-research-v1',trained_at:new Date(asOfDate).toISOString(),cutoff:new Date(cutoff).toISOString().slice(0,10),status:'experimental_unvalidated',leagues:result};
 }
 function fhLikelyScore(lh,la){let top={score:'—',prob:0};let mass=0;const poisson=(lambda,n)=>Math.exp(-lambda)*Math.pow(lambda,n)/[1,1,2,6,24,120,720,5040][n];for(let i=0;i<=7;i++)for(let j=0;j<=7;j++){const p=poisson(lh,i)*poisson(la,j);mass+=p;if(p>top.prob)top={score:i+'-'+j,prob:p};}return{score:top.score,probability:top.prob/mass*100};}
+function fhPoisson(h,a){
+ const pmf=l=>{const p=[Math.exp(-l)];for(let i=1;i<=12;i++)p.push(p[i-1]*l/i);return p;};
+ const x=pmf(h),y=pmf(a);let sum=0,one=0,draw=0,two=0,over=0,gg=0;
+ for(let i=0;i<x.length;i++)for(let j=0;j<y.length;j++){const v=x[i]*y[j];sum+=v;if(i>j)one+=v;else if(i===j)draw+=v;else two+=v;if(i+j>2)over+=v;if(i>0&&j>0)gg+=v;}
+ return{p1:100*one/sum,px:100*draw/sum,p2:100*two/sum,over25:100*over/sum,under25:100*(1-over/sum),btts:100*gg/sum,no_btts:100*(1-gg/sum),mu_home:h,mu_away:a};
+}
 function fhEstimate(fixture,model){
  const profile=model?.leagues?.[fixture.league_key];
- if(!profile)return{...cvPoisson(1.42,1.16),method:'generic_prior_no_licensed_history',confidence:'very_low',data_points:0,model_status:'not_trained_for_league',validated:false};
+ if(!profile)return{...fhPoisson(1.42,1.16),method:'generic_prior_no_licensed_history',confidence:'very_low',data_points:0,model_status:'not_trained_for_league',validated:false};
  const home=profile.teams[fhName(fixture.home)]?.home,away=profile.teams[fhName(fixture.away)]?.away;
  if(!home||!away||home.matches<3||away.matches<3)
-  return {...cvPoisson(profile.hmean,profile.amean),method:'historical_league_baseline_no_verified_team_match',confidence:'very_low',data_points:profile.matches,model_status:'team_history_unmatched',validated:false,history_latest:profile.last_result};
+  return {...fhPoisson(profile.hmean,profile.amean),method:'historical_league_baseline_no_verified_team_match',confidence:'very_low',data_points:profile.matches,model_status:'team_history_unmatched',validated:false,history_latest:profile.last_result};
  const lh=fhClamp(profile.hmean*(home.for/profile.hmean)*(away.against/profile.amean),.35,3.6);
  const la=fhClamp(profile.amean*(away.for/profile.amean)*(home.against/profile.hmean),.35,3.6);
- return {...cvPoisson(lh,la),method:'openfootball_cc0_fitted_venue_poisson',confidence:'experimental',data_points:profile.matches,team_samples:{home:home.matches,away:away.matches},model_status:'trained_historical_unvalidated',history_latest:profile.last_result,validated:false};
+ return {...fhPoisson(lh,la),method:'openfootball_cc0_fitted_venue_poisson',confidence:'experimental',data_points:profile.matches,team_samples:{home:home.matches,away:away.matches},model_status:'trained_historical_unvalidated',history_latest:profile.last_result,validated:false};
 }
 async function fhLoadModel(db,ctx){
  if(!db)return null;
