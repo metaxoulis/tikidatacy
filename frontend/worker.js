@@ -668,7 +668,7 @@ async function asPredictionResponse(req,env,ctx,url){
  * for fitted parameters; predictions are explicitly unvalidated experimental estimates.
  */
 // Time-order validation (2025-26, n=1723) selected these rates without seeing the 2026-27 holdout.
-const FH_TRAINING={version:'tiki-home-venue-poisson-research-v2',decay_days:360,venue_prior:3,validated:false};
+const FH_TRAINING={version:'tiki-home-venue-poisson-learning-v3',decay_days:360,venue_prior:3,validated:false};
 const FH_LEAGUES={
  epl:{name:'Premier League',rank:7,country:/^(england|eng|en|gb|united kingdom)$/},
  laliga:{name:'La Liga',rank:6,country:/^(spain|esp|es)$/},
@@ -704,14 +704,17 @@ const fhName=x=>{
 const fhClamp=(x,a,b)=>Math.min(b,Math.max(a,x));
 function fhTrain(rows,asOfDate=new Date()){
  const cutoff=Date.parse(new Date(asOfDate).toISOString().slice(0,10)+'T00:00:00Z')-3*86400000;
- const groups=new Map(),allow=new Set(['epl','laliga','bundesliga','seriea','ligue1','greece']);
+ const groups=new Map(),allow=new Set(['epl','laliga','bundesliga','seriea','ligue1','greece','cyprus']),seen=new Set();
  for(const r of rows){
   const league=String(r.dataset_slug||'').split('-').slice(0,-2).join('-');
   const date=Date.parse(String(r.match_date||'')+'T00:00:00Z');
   const gh=r.home_score,ga=r.away_score;
   if(!allow.has(league)||!Number.isFinite(date)||date>=cutoff||!Number.isInteger(gh)||!Number.isInteger(ga)||gh<0||ga<0||gh>15||ga>15)continue;
+  const home=fhName(r.home_team),away=fhName(r.away_team);
+  const matchKey=league+'|'+String(r.match_date)+'|'+home+'|'+away;
+  if(seen.has(matchKey))continue;seen.add(matchKey);
   if(!groups.has(league))groups.set(league,[]);
-  groups.get(league).push({day:date,home:fhName(r.home_team),away:fhName(r.away_team),gh,ga});
+  groups.get(league).push({day:date,home,away,gh,ga,source:r.source_provider==='sportmonks'?'sportmonks':'openfootball_cc0'});
  }
  const result={};
  for(const [league,list] of groups){
@@ -739,7 +742,7 @@ function fhTrain(rows,asOfDate=new Date()){
    }
    profiles[name]=rec;
   }
-  result[league]={league,trained_from:'OpenFootball CC0-1.0 historical finished scores',matches:list.length,last_result:new Date(Math.max(...list.map(x=>x.day))).toISOString().slice(0,10),hmean:lh,amean:la,teams:profiles};
+  result[league]={league,trained_from:'Licensed finalized match results (source counts below)',source_counts:{openfootball_cc0:list.filter(x=>x.source==='openfootball_cc0').length,sportmonks:list.filter(x=>x.source==='sportmonks').length},matches:list.length,last_result:new Date(Math.max(...list.map(x=>x.day))).toISOString().slice(0,10),hmean:lh,amean:la,teams:profiles};
  }
  return {model_version:FH_TRAINING.version,trained_at:new Date(asOfDate).toISOString(),cutoff:new Date(cutoff).toISOString().slice(0,10),decay_days:FH_TRAINING.decay_days,venue_prior:FH_TRAINING.venue_prior,status:'experimental_unvalidated',leagues:result};
 }
@@ -758,7 +761,7 @@ function fhEstimate(fixture,model){
   return {...fhPoisson(profile.hmean,profile.amean),method:'historical_league_baseline_no_verified_team_match',confidence:'very_low',data_points:profile.matches,model_status:'team_history_unmatched',validated:false,history_latest:profile.last_result};
  const lh=fhClamp(profile.hmean*(home.for/profile.hmean)*(away.against/profile.amean),.35,3.6);
  const la=fhClamp(profile.amean*(away.for/profile.amean)*(home.against/profile.hmean),.35,3.6);
- return {...fhPoisson(lh,la),method:'openfootball_cc0_fitted_venue_poisson',confidence:'experimental',data_points:profile.matches,team_samples:{home:home.matches,away:away.matches},model_status:'trained_historical_unvalidated',history_latest:profile.last_result,validated:false};
+ return {...fhPoisson(lh,la),method:profile.source_counts?.sportmonks?'licensed_historical_venue_poisson':'openfootball_cc0_fitted_venue_poisson',confidence:'experimental',data_points:profile.matches,team_samples:{home:home.matches,away:away.matches},model_status:'trained_historical_unvalidated',history_latest:profile.last_result,validated:false};
 }
 async function fhLoadModel(db,ctx){
  if(!db)return null;
@@ -768,9 +771,10 @@ async function fhLoadModel(db,ctx){
   if(row&&Number(row.expires_at)>Date.now()/1000)return JSON.parse(row.payload_json);
  }catch{}
  try{
-  const result=await db.prepare("SELECT dataset_slug,match_date,home_team,away_team,home_score,away_score FROM openfootball_matches WHERE match_status='FINISHED' AND home_score IS NOT NULL AND away_score IS NOT NULL LIMIT 6500").all();
+  const result=await db.prepare("SELECT dataset_slug,match_date,home_team,away_team,home_score,away_score,'openfootball_cc0' AS source_provider FROM openfootball_matches WHERE match_status='FINISHED' AND home_score IS NOT NULL AND away_score IS NOT NULL ORDER BY match_date LIMIT 6500").all();
   if(!Array.isArray(result.results)||result.results.length<80)return null;
-  const model=fhTrain(result.results);
+  let sportmonks=[];try{const extra=await db.prepare("SELECT dataset_slug,match_date,home_team,away_team,home_score,away_score,'sportmonks' AS source_provider FROM sportmonks_training_results WHERE match_date <= date('now','-3 day') ORDER BY match_date LIMIT 2000").all();sportmonks=extra.results||[];}catch{}
+  const model=fhTrain([...result.results,...sportmonks]);
   const task=db.prepare('INSERT INTO focus_model_snapshots(model_key,payload_json,expires_at,trained_at) VALUES(?1,?2,?3,?4) ON CONFLICT(model_key) DO UPDATE SET payload_json=excluded.payload_json,expires_at=excluded.expires_at,trained_at=excluded.trained_at').bind(key,JSON.stringify(model),Math.floor(Date.now()/1000)+21600,model.trained_at).run();
   if(ctx?.waitUntil)ctx.waitUntil(task.catch(()=>{}));else await task.catch(()=>{});
   return model;
@@ -790,7 +794,7 @@ function fhSelect(fixtures,model,limit=7){
  const group=[...dedup.values()],vetted=[];
  for(const m of group){
   const estimate=fhEstimate(m,model);
-  if(estimate.method!=='openfootball_cc0_fitted_venue_poisson'||!estimate.team_samples
+  if(!['openfootball_cc0_fitted_venue_poisson','licensed_historical_venue_poisson'].includes(estimate.method)||!estimate.team_samples
    ||estimate.team_samples.home<3||estimate.team_samples.away<3)continue;
   vetted.push({...m,model:{...estimate,most_likely_score:fhLikelyScore(estimate.mu_home,estimate.mu_away)}});
  }
@@ -853,7 +857,7 @@ async function fhHomeResponse(req,env,ctx){
  // Never backdate forecasts and never count generic no-data priors as learned predictions.
  if(env?.TIKI_DB&&ctx?.waitUntil&&model){
   const now=Date.now(),eligible=selected.matches.filter(m=>
-    m&&m.model?.method==='openfootball_cc0_fitted_venue_poisson'&&Date.parse(m.date)>now+2*3600000);
+    m&&['openfootball_cc0_fitted_venue_poisson','licensed_historical_venue_poisson'].includes(m.model?.method)&&Date.parse(m.date)>now+2*3600000);
   if(eligible.length){
    const writes=eligible.map(m=>env.TIKI_DB.prepare(
      "INSERT OR IGNORE INTO prospective_forecast_log (fixture_key,created_at,model_version,data_cutoff,source_sync_at,ph,pd,pa) VALUES (?1,datetime('now'),?2,?3,?4,?5,?6,?7)")
@@ -998,7 +1002,7 @@ async function smDay(date,token,classify,fetcher=fetch){
  const leagues=await smLeagues(date,token,classify,fetcher);
  if(!leagues.size)return[];
  const ids=[...leagues.keys()].join(',');
- const raw=await smPages('fixtures/date/'+date,token,fetcher,{params:{include:'participants;league.country;state',filters:'fixtureLeagues:'+ids}});
+ const raw=await smPages('fixtures/date/'+date,token,fetcher,{params:{include:'participants;league.country;state;scores',filters:'fixtureLeagues:'+ids}});
  return raw.map(f=>smNormalizeFixture(f,leagues)).filter(Boolean);
 }
 async function smWeek(start,token,classify,fetcher=fetch,count=7){
@@ -1130,7 +1134,7 @@ function smBuildFocus(fixtures,live,model,now,estimate=null,likely=null){
   let p=null;
   if(isUpcoming&&model){
    const val=(estimate||fhEstimate)(game,model);
-   if(val?.method==='openfootball_cc0_fitted_venue_poisson'&&val?.team_samples?.home>=3&&val?.team_samples?.away>=3)
+   if(['openfootball_cc0_fitted_venue_poisson','licensed_historical_venue_poisson'].includes(val?.method)&&val?.team_samples?.home>=3&&val?.team_samples?.away>=3)
     p={...val,most_likely_score:(likely||fhLikelyScore)(val.mu_home,val.mu_away)};
   }
   const forecast=p?{p1:p.p1,px:p.px,p2:p.p2,over25:p.over25,under25:p.under25,btts:p.btts,
@@ -1373,7 +1377,7 @@ function sanitizeFinishedScores(records,now=Date.now()){
 }
 const asProbability=x=>finiteProbability(x)?x/100:null;
 function modeledProbs(estimate){
- if(!estimate||!['openfootball_cc0_fitted_venue_poisson'].includes(estimate.method)||
+ if(!estimate||!['openfootball_cc0_fitted_venue_poisson','licensed_historical_venue_poisson'].includes(estimate.method)||
   estimate.team_samples?.home<3||estimate.team_samples?.away<3)return null;
  const triple=[estimate.p1,estimate.px,estimate.p2].map(asProbability);
  const over=asProbability(estimate.over25),gg=asProbability(estimate.btts);
