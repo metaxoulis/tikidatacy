@@ -435,3 +435,74 @@ body.modern-predictions{background:radial-gradient(ellipse at 75% 0,rgba(34,211,
  .modern-predictions .td-mobile-team .table-crest{width:52px!important;height:52px!important;min-width:52px!important;border-radius:15px}
  .td-mobile-teams{gap:6px;grid-template-columns:minmax(0,1fr) 24px minmax(0,1fr)}
 }
+
+/* Tiki-Data V4: consistent premium Match Intelligence layout */
+.intelligence-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) minmax(145px,.9fr);gap:9px;margin:0 0 16px}
+.insight-stat,.insight-origin{display:flex;align-items:center;gap:12px;border:1px solid #294b5b;background:linear-gradient(120deg,#102d40,#0c2636);border-radius:13px;padding:13px 15px;min-width:0}
+.insight-stat strong{display:block;color:#f2fffd;font-size:24px;font-weight:850;line-height:1.1;letter-spacing:-.045em;font-variant-numeric:tabular-nums}
+.insight-stat small,.insight-origin span{display:block;color:#9bbdca;font-size:10px;line-height:1.5;margin-top:4px}
+.insight-icon{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;color:#83f4d0;background:#173d46;font-size:18px}
+.insight-pulse,.live-filter-dot{display:inline-block;width:8px;height:8px;background:#42edb4;border-radius:50%;box-shadow:0 0 0 4px #28dea324}
+.insight-pulse{width:11px;height:11px;flex:0 0 11px;margin:0 13px 0 10px}
+.insight-live{border-color:#286a62}
+.insight-origin{display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:0}
+.insight-origin small{color:#72e5c1;font-weight:850;letter-spacing:.08em;font-size:9px}
+.live-filter-dot{height:7px;width:7px;margin-right:5px}
+.fixture-brief{display:inline-block;max-width:440px;line-height:1.5;white-space:normal;color:#92bbca;font-weight:480;font-size:10px;margin-top:3px}
+.td-mobile-insight{font-size:11px;line-height:1.6;color:#a6d2da;border-top:1px solid #2e51604f;padding:9px 0 4px}
+.modern-predictions .match-line:has(.fixture-brief){height:auto}
+.intel-modal{width:min(820px,100%);max-height:min(93vh,900px);border-radius:19px;border-color:#365b6a;background:#0c2130;box-shadow:0 35px 110px #000c}
+.intel-modal-head{padding:18px 25px;background:#0f2938;position:sticky;top:0;z-index:10}
+.intel-modal-head h2{font-size:20px;letter-spacing:-.03em}
+.intel-body{padding:22px 26px 28px}
+.intel-mast{display:flex;justify-content:space-between;gap:10px;align-items:center}
+.intel-kicker{letter-spacing:.05em;font-size:11px;color:#9cbfc9;font-weight:850}
+.intel-tag{border:1px solid #365667;background:#142f40;color:#cbe7ed;border-radius:99px;font-size:10px;font-weight:800;padding:6px 11px}
+.intel-tag.on-air{background:#113d37;color:#78efd0;border-color:#347d66}
+.intel-teams{display:grid;grid-template-columns:minmax(0,1fr) 85px minmax(0,1fr);align-items:center;gap:18px;margin:19px 0 20px;padding:20px 12px 18px;border-radius:14px;background:radial-gradient(ellipse at center,#1b4c5570,#0d2738 68%);border:1px solid #2e5560}
+.intel-team{display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;min-width:0}
+.intel-team .featured-crest{height:72px;width:72px;min-width:72px}
+.intel-team strong{font-weight:780;color:#e9faff;line-height:1.35;font-size:14px;overflow-wrap:anywhere}
+.intel-center{text-align:center}
+.intel-center b{font-size:clamp(24px,4vw,39px);font-weight:850;color:#edfff7;letter-spacing:-.06em;white-space:nowrap;font-variant-numeric:tabular-nums}
+.intel-center small{display:block;color:#8bc6cc;font-size:10px;white-space:nowrap;margin-top:3px}
+.intel-section-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:23px 0 11px}
+.intel-section-head h3{font-size:14px;letter-spacing:-.015em;margin:0;color:#e7fafc;font-weight:850}
+.intel-section-head>span{color:#7cbec7;font-size:9px;font-weight:800;letter-spacing:.055em;text-align:right}
+.intel-1x2{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+.intel-outcome{border:1px solid #2c5261;background:#112f40;border-radius:12px;padding:13px;min-width:0}
+.intel-outcome.emphasis{background:linear-gradient(140deg,#195045,#163b42);border-color:#3b9d83}
+.intel-outcome span{display:block;color:#a9cbd5;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.intel-outcome b{display:block;color:#edfff8;font-variant-numeric:tabular-nums;font-size:23px;letter-spacing:-.05em;margin:8px 0 10px}
+.intel-track{height:5px;border-radius:5px;background:#1f4754;overflow:hidden}
+.intel-track i{display:block;height:100%;border-radius:5px;background:linear-gradient(90deg,#29bcd0,#5de7b0)}
+.intel-markets{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.intel-metric{background:#102d40;border:1px solid #2f5263;border-radius:12px;padding:12px 10px;min-width:0}
+.intel-metric small{display:block;font-size:10px;line-height:1.45;color:#9fc8cf}
+.intel-metric b{display:block;font-size:18px;letter-spacing:-.03em;color:#eafaff;font-variant-numeric:tabular-nums;margin-top:6px}
+.intel-metric>span{font-size:10px;color:#7ee1c0}
+.intel-next{margin-top:11px;border:1px solid #245e60;background:#0e333d;border-radius:13px;padding:13px}
+.intel-next>strong{font-size:11px;color:#a6eada;display:block;margin-bottom:10px}
+.intel-next>div{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.intel-absence{border:1px dashed #3d6270;color:#a8cad4;border-radius:11px;padding:15px;font-size:12px;line-height:1.6}
+.intel-narrative{display:grid;gap:9px}
+.intelligence-note{display:flex;gap:13px;align-items:flex-start;border:1px solid #2c4c5d;background:linear-gradient(110deg,#122f3e,#0e2636);border-radius:11px;padding:13px 15px}
+.note-count{color:#5ee8bc;font-size:11px;font-weight:850;padding-top:2px}
+.intelligence-note strong{font-size:12px;color:#e6f9fc}
+.intelligence-note p{margin:6px 0 0;color:#a6c5d2;font-size:11.5px;line-height:1.75}
+.analysis-facts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.analysis-facts section{min-width:0;border:1px solid #2c5261;border-radius:12px;background:#102b3a;padding:13px}
+.analysis-facts section:last-child:nth-child(odd){grid-column:1/-1}
+.analysis-facts h3{font-size:11px;color:#9de3d1;margin:0 0 10px}
+.analysis-facts p{color:#b0cbd5;font-size:11px;line-height:1.7;overflow-wrap:anywhere}
+.analysis-stats{display:grid;gap:5px}
+.analysis-stat{display:grid;grid-template-columns:40px minmax(0,1fr) 40px;gap:6px;align-items:center;font-variant-numeric:tabular-nums;font-size:11px;border-bottom:1px solid #294b57;padding:5px 0}
+.analysis-stat span{text-align:center;color:#9fbeca}
+.analysis-stat b:first-child{text-align:left}.analysis-stat b:last-child{text-align:right}
+.analysis-events{list-style:none;padding:0;margin:0;display:grid;gap:7px}
+.analysis-events li{display:grid;grid-template-columns:39px minmax(0,1fr);gap:7px;font-size:11px;color:#bdd7de;line-height:1.5}
+.analysis-events time{color:#63dec2;font-weight:800}
+.analysis-muted{padding:13px;border:1px dashed #385865;border-radius:10px;color:#94b8c8;font-size:11px}
+.intel-caveat{margin-top:24px;border-top:1px solid #335567;padding-top:13px;color:#8fb2c3;font-size:10px;line-height:1.8}
+@media(max-width:1050px){.intelligence-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.insight-origin{align-items:flex-start}}
+@media(max-width:640px){.intelligence-summary{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.insight-stat,.insight-origin{padding:10px 9px;gap:8px}.insight-stat strong{font-size:19px}.insight-icon{width:28px;height:28px}.insight-stat small,.insight-origin span{font-size:9px}.insight-pulse{margin:0 6px 0 5px}.intel-modal{max-height:94dvh;border-radius:13px}.modal-backdrop{padding:9px}.intel-modal-head{padding:14px 16px}.intel-body{padding:12px 14px 20px}.intel-teams{grid-template-columns:minmax(0,1fr) 65px minmax(0,1fr);gap:6px;margin:12px 0;padding:15px 5px}.intel-team .featured-crest{width:51px;height:51px;min-width:51px}.intel-team strong{font-size:11px}.intel-center b{font-size:24px}.intel-outcome{padding:10px 7px}.intel-outcome b{font-size:18px}.intel-outcome span{font-size:9px}.intel-markets{grid-template-columns:repeat(2,minmax(0,1fr))}.analysis-facts{grid-template-columns:1fr}.analysis-facts section:last-child:nth-child(odd){grid-column:auto}.intel-section-head>span{font-size:8px}.intelligence-note{padding:10px}}
