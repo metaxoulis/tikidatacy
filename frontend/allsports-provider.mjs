@@ -26,7 +26,7 @@ function asFixture(row){
  const status=finished?'FT':live?(raw==='Half Time'?'HT':'LIVE'):'NS';
  const [home_score,away_score]=asScore(row.event_final_result||row.event_ft_result);
  return {id:'allsports-'+id,provider_id:id,provider:'allsportsapi',home,away,date,
-  league:asString(row.league_name)||'Διοργάνωση',league_id:asId(row.league_key),
+  league:asString(row.league_name)||'Διοργάνωση',league_id:asId(row.league_key),country:asString(row.country_name||row.country||row.country_iso2,64),
   home_id:asId(row.home_team_key),away_id:asId(row.away_team_key),
   status,minute:live&&/^\d{1,3}$/.test(raw)?Math.min(130,Number(raw)):null,
   home_score,away_score,stage:asString(row.league_round||row.stage_name,65),

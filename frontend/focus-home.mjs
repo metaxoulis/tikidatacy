@@ -76,6 +76,7 @@ function fhTrain(rows,asOfDate=new Date()){
  }
  return {model_version:'tiki-home-venue-poisson-research-v1',trained_at:new Date(asOfDate).toISOString(),cutoff:new Date(cutoff).toISOString().slice(0,10),status:'experimental_unvalidated',leagues:result};
 }
+function fhLikelyScore(lh,la){let top={score:'—',prob:0};let mass=0;const poisson=(lambda,n)=>Math.exp(-lambda)*Math.pow(lambda,n)/[1,1,2,6,24,120,720,5040][n];for(let i=0;i<=7;i++)for(let j=0;j<=7;j++){const p=poisson(lh,i)*poisson(la,j);mass+=p;if(p>top.prob)top={score:i+'-'+j,prob:p};}return{score:top.score,probability:top.prob/mass*100};}
 function fhEstimate(fixture,model){
  const profile=model?.leagues?.[fixture.league_key];
  if(!profile)return{...cvPoisson(1.42,1.16),method:'generic_prior_no_licensed_history',confidence:'very_low',data_points:0,model_status:'not_trained_for_league',validated:false};
@@ -114,7 +115,7 @@ function fhSelect(fixtures,model,limit=7){
  const group=[...dedup.values()],first=[],seen=new Set();
  for(const m of group){if(!seen.has(m.league_key)){first.push(m);seen.add(m.league_key);}}
  const picks=[...first,...group.filter(m=>!first.includes(m))].slice(0,limit);
- const next=picks.map(m=>({...m,model:fhEstimate(m,model)}));
+ const next=picks.map(m=>{const estimate=fhEstimate(m,model);return {...m,model:{...estimate,most_likely_score:fhLikelyScore(estimate.mu_home,estimate.mu_away)}};});
  return {featured:next[0]||null,upcoming:next.slice(1),fixtures_available:group.length,leagues_available:[...new Set(group.map(m=>m.league_key))].map(k=>FH_LEAGUES[k].name)};
 }
 function fhSportFixtures(b,secret){
@@ -134,6 +135,7 @@ async function fhHomeResponse(req,env,ctx){
  const cache=typeof caches!=='undefined'?caches.default:null;
  const cacheKey=new Request('https://tiki-cache.local/focus-home-v1');
  try{const hit=await cache?.match(cacheKey);if(hit)return hit;}catch{}
+ try{if(env?.TIKI_DB){const row=await env.TIKI_DB.prepare("SELECT payload_json FROM sportapi_home_cache WHERE cache_key='focus_v1' AND expires_at>?1").bind(Math.floor(Date.now()/1000)).first();if(row?.payload_json)return fhJSON(JSON.parse(row.payload_json));}}catch{}
  const today=new Date().toISOString().slice(0,10);
  const days=[today,tdAddDays(today,1),tdAddDays(today,2)];
  const allTask=env?.ALLSPORTS_API_KEY?Promise.allSettled(days.map(async date=>{
@@ -157,6 +159,7 @@ async function fhHomeResponse(req,env,ctx){
   fallback_reason:fixtures.length?'': 'No upstream fixtures available',data_sources:{sportapi:fhSportFixtures(sport).length,allsports:raw.length}};
  const response=fhJSON(result,200);
  try{ctx?.waitUntil?.(cache?.put(cacheKey,response.clone()))}catch{}
+ if(env?.TIKI_DB&&ctx?.waitUntil){const payload=JSON.stringify(result);ctx.waitUntil(env.TIKI_DB.prepare("INSERT INTO sportapi_home_cache(cache_key,payload_json,expires_at,saved_at) VALUES('focus_v1',?1,?2,?3) ON CONFLICT(cache_key) DO UPDATE SET payload_json=excluded.payload_json,expires_at=excluded.expires_at,saved_at=excluded.saved_at").bind(payload,Math.floor(Date.now()/1000)+600,new Date().toISOString()).run().catch(()=>{}));}
  return response;
 }
 export {fhLeague,fhName,fhTrain,fhEstimate,fhSelect,fhHomeResponse,FH_LEAGUES};
