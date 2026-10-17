@@ -201,10 +201,90 @@ function update(){drawMode();renderOverview();if(state.feed==='loading'){renderL
 function persistFav(){try{localStorage.setItem(STORAGE,JSON.stringify([...state.favorites]))}catch{}}
 function toggleFavorite(id){if(state.favorites.has(String(id)))state.favorites.delete(String(id));else state.favorites.add(String(id));persistFav();update()}
 async function fetchFixtures(){const requestId=++state.requestId;state.feed='loading';state.error='';update();try{const url='/api/home-focus';const r=await fetch(url,{headers:{Accept:'application/json'},cache:'no-store'});const json=await r.json();if(requestId!==state.requestId)return;if(!r.ok||!Array.isArray(json.matches))throw new Error(json?.message||'Δεν επιστράφηκαν επαληθεύσιμες αναλύσεις αγώνων.');state.base=json.matches.filter(m=>m&&m.id!=null&&m.home&&m.away&&m.date&&Number.isFinite(Date.parse(m.date)));reconcileMatches();state.feed='ready';$('.status-dot')?.classList.add('connected');if($('#feedStatus'))$('#feedStatus').textContent='Δεδομένα συνδεδεμένα';update()}catch(e){if(state.requestId===requestId){state.all=[];state.base=[];state.error=String(e?.message||e).slice(0,120);state.feed='error';$('.status-dot')?.classList.remove('connected');if($('#feedStatus'))$('#feedStatus').textContent='Σφάλμα δεδομένων';update()}}}
-function evidenceNote(m){return 'Προσαρμογή Poisson σε καταγεγραμμένα τελικά αποτελέσματα με στοιχεία έδρας των δύο ομάδων. Τελευταίο ιστορικό αποτέλεσμα στη βάση: '+String(m.history_latest||'μη διαθέσιμο')+'. Δεν έχει επικυρωμένη προγνωστική ακρίβεια.'}
-function showModal(id){const m=state.all.find(x=>String(x.id)===String(id));if(!m)return;state.modalRestore=document.activeElement;const p=valid(m)?[m.p1,m.px,m.p2]:[null,null,null],max=p.every(x=>x!==null)?Math.max(...p):null;const label=(key,val)=>'<div class="modal-cell"><small>'+esc(key)+'</small><b>'+esc(pct(val))+'</b></div>';
-$('#modalMount').innerHTML='<div class="modal-backdrop" data-close-backdrop="1"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle"><div class="modal-header"><div><span class="section-kicker">'+esc(lname(m.league))+'</span><h2 id="modalTitle">Ανάλυση αγώνα</h2></div><button class="modal-close" data-close-modal="1" aria-label="Κλείσιμο">×</button></div><div class="modal-body"><div class="modal-teams"><div class="modal-team">'+crest(m.home,'featured-crest',m.logos?.home)+esc(m.home)+'</div><span class="modal-vs">VS</span><div class="modal-team">'+crest(m.away,'featured-crest',m.logos?.away)+esc(m.away)+'</div></div><div class="modal-date">'+esc(dateFmt(m.date,'full'))+' · '+esc(clock(m.date))+'</div><div class="modal-section">ΠΙΘΑΝΟΤΗΤΕΣ 1 / Χ / 2</div><div class="modal-probs">'+p.map((v,i)=>'<div class="modal-cell'+(v!==null&&v===max?' best':'')+'"><small>'+['1 · Γηπεδούχος','X · Ισοπαλία','2 · Φιλοξενούμενος'][i]+'</small><b>'+esc(pct(v))+'</b></div>').join('')+'</div><div class="modal-section">ΑΝΑΛΥΣΗ ΓΚΟΛ</div><div class="modal-other">'+label('Over 2.5',m.over25)+label('Under 2.5',m.under25)+label('BTTS Ναι',m.btts)+label('BTTS Όχι',m.no_btts)+'<div class="modal-cell"><small>λ γκολ γηπεδούχου</small><b>'+(num(m.mu_home)===null?'—':m.mu_home.toFixed(2))+'</b></div><div class="modal-cell"><small>λ γκολ φιλοξενούμενου</small><b>'+(num(m.mu_away)===null?'—':m.mu_away.toFixed(2))+'</b></div>'+'</div>'+(Array.isArray(m.scorelines)&&m.scorelines.length?'<div class="modal-section">ΠΙΘΑΝΑ ΣΚΟΡ</div><div class="modal-other">'+m.scorelines.slice(0,4).map(s=>label(s.score,s.prob)).join('')+'</div>':'')+'<p class="modal-disclaimer">'+esc(evidenceNote(m))+(m.retrospective?' Πρόκειται για εκ των υστέρων υπολογισμό, όχι αρχειοθετημένη πρόβλεψη πριν τον αγώνα.':'')+' Πιθανότητες πειραματικού Poisson — όχι στοιχηματική σύσταση, χωρίς τεκμηριωμένο backtest.</p></div></section></div>';document.body.style.overflow='hidden';$('[data-close-modal]').focus()}
-function closeModal(){if(!$('#modalMount').innerHTML)return;$('#modalMount').innerHTML='';document.body.style.overflow='';state.modalRestore?.focus?.({preventScroll:true})}
+function evidenceNote(m){
+ const e=m.analysis||{},sample=e.home_venue_matches??m.historical_sample?.home??0,away=e.away_venue_matches??m.historical_sample?.away??0;
+ return 'Ιστορικό: '+sample+' εντός έδρας αγώνες '+m.home+' / '+away+' εκτός έδρας '+m.away+
+ '. Αγώνες του πρωταθλήματος στη βάση: '+(e.league_results??'—')+'. Δεδομένα έως '+(e.history_latest||m.history_latest||'μη διαθέσιμο')+'.';
+}
+function insightNarrative(m){
+ const live=inProgress(m),forecast=live?liveForecast(m):valid(m)?m:null;
+ const scored=num(m.home_score)!==null&&num(m.away_score)!==null,minutes=num(m.minute);
+ const notes=[];
+ if(live){
+  if(scored){
+   const diff=m.home_score-m.away_score;
+   notes.push({title:'Εικόνα αγώνα',body:diff===0?'Το σκορ είναι ισόπαλο ('+m.home_score+'–'+m.away_score+'). Το αποτέλεσμα παραμένει ανοιχτό.':
+    (diff>0?m.home:m.away)+' προηγείται με '+m.home_score+'–'+m.away_score+'. Η ομάδα που χάνει χρειάζεται τουλάχιστον '+Math.abs(diff)+' γκολ για την ισοπαλία.'});
+  }else notes.push({title:'Εικόνα αγώνα',body:'Ο αγώνας είναι σε εξέλιξη. Αναμένεται έγκυρη ενημέρωση σκορ.'});
+  if(m.live_outlook)notes.push({title:'Πιθανή συνέχεια',body:'Με βάση το πραγματικό σκορ και το '+minutes+'ο λεπτό, το ανεξάρτητο Poisson εκτιμά '+Number(m.live_outlook.remaining_expected_goals.home).toFixed(2)+' γκολ για '+m.home+' και '+Number(m.live_outlook.remaining_expected_goals.away).toFixed(2)+' για '+m.away+' στον εναπομείναντα κανονικό χρόνο. Δεν λαμβάνει υπόψη κάρτες και απουσίες.'});
+  else if(m.live_prediction)notes.push({title:'Τρέχουσα πρόβλεψη',body:'Υπάρχουν live πιθανότητες 1Χ2 από το Sportmonks. Δεν υπάρχουν επαρκή δεδομένα για δική μας τεκμηριωμένη αριθμητική πρόβλεψη επιμέρους αγορών.'});
+  else notes.push({title:'Σενάρια',body:'Το ισόπαλο, η ανατροπή ή η διατήρηση του σκορ εξαρτώνται από τον χρόνο, τα γεγονότα και τη δυναμική του αγώνα. Χωρίς αξιόπιστα στοιχεία δεν δίνουμε κατασκευασμένα ποσοστά.'});
+ }else if(forecast){
+  const vals=[forecast.p1,forecast.px,forecast.p2],j=vals.indexOf(Math.max(...vals));
+  notes.push({title:'Ισορροπία 1Χ2',body:'Το '+['προβάδισμα της γηπεδούχου','ενδεχόμενο ισοπαλίας','προβάδισμα της φιλοξενούμενης'][j]+' έχει τη μεγαλύτερη μοντελοποιημένη πιθανότητα ('+pct(vals[j])+'). Παραμένει εκτίμηση, όχι βέβαιο αποτέλεσμα.'});
+  if(num(m.mu_home)!==null&&num(m.mu_away)!==null)notes.push({title:'Ρυθμός γκολ',body:'Η ιστορική προσαρμογή Poisson δίνει μέση παραγωγή '+m.mu_home.toFixed(2)+' / '+m.mu_away.toFixed(2)+' γκολ. Over 2.5: '+pct(m.over25)+' · GG: '+pct(m.btts)+'.'});
+  notes.push({title:'Ποιότητα δεδομένων',body:evidenceNote(m)});
+ }else{
+  notes.push({title:'Τι γνωρίζουμε',body:'Πραγματική αναμέτρηση '+m.home+' – '+m.away+' στη διοργάνωση '+lname(m.league)+', '+dateFmt(m.date,'full')+' στις '+clock(m.date)+'.'});
+  notes.push({title:'Τι λείπει',body:'Δεν υπάρχουν αρκετά επαληθευμένα ιστορικά δεδομένα και των δύο ομάδων για προσωποποιημένες πιθανότητες 1Χ2, Over ή GG.'});
+  notes.push({title:'Ιστορική βάση',body:evidenceNote(m)});
+ }
+ return notes.map((n,i)=>'<article class="intelligence-note"><span class="note-count">0'+(i+1)+'</span><div><strong>'+esc(n.title)+'</strong><p>'+esc(n.body)+'</p></div></article>').join('');
+}
+function liveDetailPanel(m){
+ if(!inProgress(m))return '';
+ const events=Array.isArray(m.events)?m.events:[],stats=Array.isArray(m.statistics)?m.statistics:[],lineups=Array.isArray(m.lineups)?m.lineups:[];
+ const names={BALL_POSSESSION:'Κατοχή μπάλας',SHOTS_TOTAL:'Σουτ',SHOTS_ON_TARGET:'Σουτ στον στόχο',CORNER_KICKS:'Κόρνερ',FOULS:'Φάουλ',YELLOWCARDS:'Κίτρινες κάρτες',RED_CARDS:'Κόκκινες κάρτες'};
+ const ids={home:m.home_id,away:m.away_id};
+ const rows=Object.entries(names).map(([type,label])=>{
+  const h=stats.find(x=>x.type===type&&x.participant_id===ids.home),a=stats.find(x=>x.type===type&&x.participant_id===ids.away);
+  return h||a?'<div class="analysis-stat"><b>'+esc(h?.value??'—')+'</b><span>'+esc(label)+'</span><b>'+esc(a?.value??'—')+'</b></div>':'';
+ }).filter(Boolean).join('');
+ const items=events.slice(-14).reverse().map(e=>'<li><time>'+esc(e.minute??'—')+'′</time><span>'+esc(e.type||'Γεγονός')+(e.player?' · '+esc(e.player):'')+'</span></li>').join('');
+ const starters=team=>lineups.filter(x=>x.team_id===team).slice(0,11).map(x=>(x.number?x.number+' · ':'')+x.player).join(', ');
+ const home=starters(ids.home),away=starters(ids.away);
+ if(!rows&&!items&&!home&&!away)return '<p class="analysis-muted">Δεν έχουν διατεθεί ακόμη αναλυτικά γεγονότα ή στατιστικά από τον πάροχο.</p>';
+ return '<div class="analysis-facts">'+(rows?'<section><h3>Στατιστική αναμέτρησης</h3><div class="analysis-stats">'+rows+'</div></section>':'')+
+  (items?'<section><h3>Χρονολόγιο αγώνα</h3><ol class="analysis-events">'+items+'</ol></section>':'')+
+  (home||away?'<section><h3>Αρχικές ενδεκάδες</h3>'+(home?'<p><b>'+esc(m.home)+'</b> · '+esc(home)+'</p>':'')+(away?'<p><b>'+esc(m.away)+'</b> · '+esc(away)+'</p>':'')+'</section>':'')+'</div>';
+}
+function showModal(id,refresh=false){
+ const m=state.all.find(x=>String(x.id)===String(id));if(!m)return;
+ const old=$('.modal'),scroll=old?.scrollTop||0;
+ if(!refresh)state.modalRestore=document.activeElement;
+ state.selectedId=String(id);
+ const live=inProgress(m),p=live?liveForecast(m):valid(m)?m:null;
+ const nums=p?[p.p1,p.px,p.p2]:[null,null,null],max=nums.every(v=>num(v)!==null)?Math.max(...nums):null;
+ const modelSource=live?liveForecastSource(m):valid(m)?'TIKI-DATA POISSON V3 · ΠΡΙΝ ΤΟΝ ΑΓΩΝΑ':'ΧΩΡΙΣ ΤΕΚΜΗΡΙΩΜΕΝΗ ΑΡΙΘΜΗΤΙΚΗ ΠΡΟΒΛΕΨΗ';
+ const label=(key,val)=>'<div class="intel-metric"><small>'+esc(key)+'</small><b>'+esc(pct(val))+'</b></div>';
+ const bestScore=live?m.live_outlook?.most_likely_final:m.most_likely_score;
+ const over=live?m.live_outlook?.over25:m.over25,under=live?m.live_outlook?.under25:m.under25,gg=live?m.live_outlook?.btts:m.btts;
+ const next=live&&m.live_outlook?.next_goal;
+ const mast='<div class="intel-mast"><span class="intel-kicker">'+esc(lname(m.league))+'</span>'+
+  '<span class="intel-tag'+(live?' on-air':'')+'">'+(live?'● LIVE '+(num(m.minute)!==null?m.minute+'′':''):esc(clock(m.date)))+'</span></div>';
+ const teams='<div class="intel-teams"><div class="intel-team">'+crest(m.home,'featured-crest',m.logos?.home)+'<strong>'+esc(m.home)+'</strong></div>'+
+  '<div class="intel-center"><b>'+(live&&num(m.home_score)!==null?esc(m.home_score+' : '+m.away_score):'VS')+'</b><small>'+esc(dateFmt(m.date,'weekday'))+'</small></div>'+
+  '<div class="intel-team">'+crest(m.away,'featured-crest',m.logos?.away)+'<strong>'+esc(m.away)+'</strong></div></div>';
+ const probabilities='<div class="intel-section-head"><h3>'+(live?'Πιθανή τελική έκβαση':'Ανάλυση τελικού αποτελέσματος')+'</h3><span>'+esc(modelSource)+'</span></div>'+
+  (p?'<div class="intel-1x2">'+nums.map((v,i)=>'<div class="intel-outcome'+(max===v?' emphasis':'')+'"><span>'+['1 · '+m.home,'Χ · Ισοπαλία','2 · '+m.away][i].replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</span><b>'+esc(pct(v))+'</b><div class="intel-track"><i style="width:'+Math.min(100,Math.max(0,v))+'%"></i></div></div>').join('')+'</div>':
+  '<div class="intel-absence">Δεν δημοσιεύουμε ποσοστά χωρίς αντιστοιχισμένα ιστορικά στοιχεία ή live δεδομένα του παρόχου.</div>');
+ const markets='<div class="intel-section-head"><h3>Γκολ & σενάρια</h3><span>'+(live?'ΜΕ ΒΑΣΗ ΤΟ ΤΡΕΧΟΝ ΣΚΟΡ':'PRE-MATCH ESTIMATE')+'</span></div>'+
+  '<div class="intel-markets">'+label('Over 2.5',over)+label('Under 2.5',under)+label('GG / BTTS',gg)+
+  '<div class="intel-metric"><small>Πιθανότερο τελικό σκορ</small><b>'+esc(bestScore?.score||'—')+'</b>'+(num(bestScore?.probability)!==null?'<span>'+pct(bestScore.probability)+'</span>':'')+'</div></div>'+
+  (next?'<div class="intel-next"><strong>Ποιος μπορεί να σκοράρει το επόμενο γκολ;</strong><div>'+
+   label(m.home,next.home)+label(m.away,next.away)+label('Κανένα άλλο γκολ',next.none)+'</div></div>':'');
+ const body='<div class="intel-section-head"><h3>Τι μπορεί να συμβεί;</h3><span>ΕΡΜΗΝΕΙΑ ΔΕΔΟΜΕΝΩΝ</span></div><div class="intel-narrative">'+insightNarrative(m)+'</div>';
+ const details=live?'<div class="intel-section-head"><h3>Δεδομένα αγώνα σε εξέλιξη</h3><span>SPORTMONKS EVENTS</span></div>'+liveDetailPanel(m):'';
+ const caveat='<div class="intel-caveat">Η ανάλυση είναι πειραματική, δεν προβλέπει με βεβαιότητα μελλοντικά γεγονότα και δεν αποτελεί στοιχηματική σύσταση. '+
+  (live&&m.live_outlook?'Το live Poisson δεν λαμβάνει υπόψη αποβολές, τραυματισμούς, αλλαγές και καθυστερήσεις. ':'')+
+  'Όπου δεν υπάρχει επαρκής τεκμηρίωση εμφανίζεται «—» αντί για κατασκευασμένα ποσοστά.</div>';
+ $('#modalMount').innerHTML='<div class="modal-backdrop" data-close-backdrop="1"><section class="modal intel-modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">'+
+  '<div class="modal-header intel-modal-head"><div><span class="section-kicker">TIKI-DATA · MATCH INTELLIGENCE</span><h2 id="modalTitle">Ανάλυση αγώνα</h2></div><button class="modal-close" data-close-modal="1" aria-label="Κλείσιμο">×</button></div>'+
+  '<div class="modal-body intel-body">'+mast+teams+probabilities+markets+body+details+caveat+'</div></section></div>';
+ document.body.style.overflow='hidden';
+ if(refresh){$('.modal').scrollTop=scroll;}else $('[data-close-modal]').focus();
+}
+function closeModal(){if(!$('#modalMount').innerHTML)return;$('#modalMount').innerHTML='';state.selectedId=null;document.body.style.overflow='';state.modalRestore?.focus?.({preventScroll:true})}
 let popTimeout=0;function notice(title,body){const el=$('#actionPopover');el.innerHTML='<strong>'+esc(title)+'</strong><p>'+esc(body)+'</p>';el.hidden=!el.hidden}
 document.addEventListener('click',e=>{const l=e.target.closest('[data-league]');if(l){setLeague(l.dataset.league);return}const d=e.target.closest('[data-day]');if(d){setDay(d.dataset.day);return}const q=e.target.closest('[data-quick]');if(q){setMode(q.dataset.quick);return}const f=e.target.closest('[data-favorite]');if(f){toggleFavorite(f.dataset.favorite);return}const o=e.target.closest('[data-open]');if(o){showModal(o.dataset.open);return}if(e.target.closest('#spotDetails')||e.target.closest('#statsAnalyze')){showModal(state.featuredId);return}if(e.target.closest('[data-reset-filters]')){resetAllFilters();return}if(e.target.closest('#refreshBtn')){fetchFixtures();return}if(e.target.closest('#loadMore')){state.limit+=100;renderTable();return}if(e.target.closest('#todayBtn')){const first=filteredBase()[0];setDay(first?kt(first.date):'all');return}if(e.target.closest('#notifyBtn')){notice('Ειδοποιήσεις','Δεν έχει συνδεθεί υπηρεσία ειδοποιήσεων. Οι προβλέψεις ενημερώνονται με βάση τα διαθέσιμα ιστορικά δεδομένα.');return}if(e.target.closest('#profileBtn')){notice('Guest access','Μπορείς να δεις αγώνες και να κρατήσεις αγαπημένα σε αυτή τη συσκευή, χωρίς σύνδεση.');return}if(e.target.hasAttribute('data-close-modal')||e.target.hasAttribute('data-close-backdrop')){closeModal();return}});
 const searchInput=$('#globalSearch');if(searchInput){searchInput.value=IS_PREDICTIONS?String(params.get('q')||''):'';if(IS_PREDICTIONS){searchInput.addEventListener('input',e=>{state.query=e.target.value.trim().toLocaleLowerCase();state.day='all';state.limit=100;syncSearch();update()})}else{searchInput.placeholder='Αναζήτηση στις προβλέψεις…';searchInput.addEventListener('keydown',e=>{if(e.key==='Enter'&&searchInput.value.trim()){location.href='/predictions?q='+encodeURIComponent(searchInput.value.trim())}})}}
