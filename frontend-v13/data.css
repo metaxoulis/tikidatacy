@@ -12,3 +12,8 @@
 .td-team-logo{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;padding:8%;background:#e9f0f6;filter:drop-shadow(0 1px 1px #1b293a3d)}
 .td-league-crest{width:26px;height:26px;border-radius:8px;object-fit:contain;background:#e9f0f6;padding:4px;margin-right:8px;vertical-align:middle}
 .td-header{max-width:1320px;margin:0 auto}
+
+/* Tiki-Data v26: independent second provider selector */
+#providerSelect{border-color:rgba(52,245,197,.38);background:#112d37;color:#dcfff4;font-weight:750;flex:0 1 235px}
+.td-source-label{font-size:10px;color:#93b4c5;padding:5px 8px;border:1px solid rgba(174,206,231,.15);border-radius:8px}
+@media(max-width:630px){#providerSelect{flex:1 1 100%}}

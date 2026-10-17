@@ -23,14 +23,14 @@
   <section class="td-hero">
     <div class="td-hero-copy"><p class="td-overline">TIKI-DATA / MATCH INTELLIGENCE</p>
       <h1>Όλα τα δεδομένα.<br><em>Σε ένα γήπεδο.</em></h1>
-      <p>Πραγματικοί αγώνες, αποτελέσματα, στατιστικά, ενδεκάδες και βαθμολογίες από το SportAPI.ai — χωρίς κατασκευασμένες προβλέψεις.</p>
+      <p>Πραγματικοί αγώνες και αποτελέσματα από SportAPI.ai και AllSportsAPI. Οι λεπτομέρειες διαφέρουν ανά πηγή — χωρίς κατασκευασμένες προβλέψεις.</p>
       <div class="td-hero-links"><a href="/predictions" class="td-link-main">Ανάλυση μοντέλου →</a><span>Τα στοιχεία ενδέχεται να διαφέρουν ανά διοργάνωση.</span></div>
     </div>
     <div class="td-hero-graphic" aria-hidden="true"><div class="td-pitch"><span class="td-pitch-circle"></span><span class="td-pitch-line"></span><span class="td-pitch-end a"></span><span class="td-pitch-end b"></span></div><div class="td-hero-badge">MATCH<br>CENTRE <small>2026</small></div></div>
   </section>
   <section class="td-dash" aria-label="Περιεχόμενο δεδομένων">
-    <div class="td-titleline"><div><span class="td-overline">MATCH EXPLORER</span><h2>Πρόγραμμα & αποτελέσματα</h2></div><span class="td-provider">● SportAPI.ai <span class="td-provenance">· Πραγματικά δεδομένα</span></span></div>
-    <div class="td-toolbar">
+    <div class="td-titleline"><div><span class="td-overline">MATCH EXPLORER</span><h2>Πρόγραμμα & αποτελέσματα</h2></div><span class="td-provider">● <span id="activeProvider">SportAPI.ai</span> <span class="td-provenance">· Πραγματικά δεδομένα</span></span></div>
+    <div class="td-toolbar"><select id="providerSelect" aria-label="Πηγή δεδομένων"><option value="sportapi">SportAPI.ai</option><option value="allsports">AllSportsAPI (δεύτερη πηγή)</option></select>
       <div class="td-days"><button type="button" id="dayPrev" aria-label="Προηγούμενη ημέρα">‹</button><input type="date" id="dayPicker" aria-label="Επιλογή ημερομηνίας"><button type="button" id="dayNext" aria-label="Επόμενη ημέρα">›</button><button type="button" id="dayToday">Σήμερα</button></div>
       <input id="dataSearch" type="search" placeholder="Αναζήτηση ομάδας..." aria-label="Αναζήτηση ομάδας" autocomplete="off">
       <select id="leagueFilter" aria-label="Φίλτρο διοργάνωσης"><option value="all">Όλες οι διοργανώσεις</option></select>
@@ -41,7 +41,7 @@
     <div id="dataGames" class="td-games" aria-busy="true">
       <div class="td-skeleton"></div><div class="td-skeleton"></div><div class="td-skeleton"></div>
     </div>
-    <div class="td-footnote">Πηγή: SportAPI.ai · Ώρες στην τοπική ζώνη της συσκευής · Οι ενημερώσεις ενδέχεται να καθυστερούν λόγω προσωρινής αποθήκευσης. Δεν παρέχονται στοιχηματικές αποδόσεις ή xG από το SportAPI.ai.</div>
+    <div class="td-footnote">Πηγές: SportAPI.ai / AllSportsAPI (ανάλογα με την επιλογή) · Ώρες στην τοπική ζώνη της συσκευής · Οι ενημερώσεις ενδέχεται να καθυστερούν λόγω προσωρινής αποθήκευσης. Οι πιθανότητες μοντέλου διατίθενται ξεχωριστά στη σελίδα Προβλέψεις.</div>
   </section>
 </main>
 <div id="dataDialog" class="td-overlay" hidden>
@@ -54,6 +54,6 @@
     <p class="td-detail-source">Πηγή: SportAPI.ai · Εμφανίζονται μόνο διαθέσιμα και επαληθεύσιμα πεδία.</p>
   </section>
 </div>
-<footer class="td-footer"><span>© Tiki-Data · Football intelligence</span><span>Αποτελέσματα: SportAPI.ai · Πιθανότητες: ξεχωριστό μοντέλο</span></footer>
+<footer class="td-footer"><span>© Tiki-Data · Football intelligence</span><span>Αποτελέσματα: SportAPI.ai / AllSportsAPI · Πιθανότητες: ξεχωριστό μοντέλο</span></footer>
 <nav class="td-bottom" aria-label="Κινητή πλοήγηση"><a href="/">Αρχική</a><a href="/predictions">Προβλέψεις</a><a href="/data" aria-current="page">Match Centre</a></nav>
 </body></html>
