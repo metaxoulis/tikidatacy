@@ -99,19 +99,81 @@ async function tdHomeBundle(secret){
   featured:enriched[0]||null,upcoming:enriched.slice(1,4),
   live:ongoing.filter(x=>x.priority>=50).slice(0,2).map(m=>({...m,model:null})),
   integrity:{fixtures_provider:'SportAPI.ai',model_basis:'SportAPI.ai current standings only',model_status:'provisional_unvalidated',in_play_probabilities:false},
-  fallback_reason:data.some(x=>!x.ok)?'Some days unavailable':null};
+  fallback_reason:data.some(x=>!x.ok)?'Some days unavailable':null,_fixtures:all};
 }
 function tdPublicJSON(j,status=200,maxage=0){
  return new Response(JSON.stringify(j),{status,headers:{'Content-Type':'application/json; charset=utf-8','X-Content-Type-Options':'nosniff','Cache-Control':maxage?'public,max-age='+maxage:'no-store'}});
+}
+async function tdStoreAssets(db,all,now){
+ if(!db||!Array.isArray(all))return;
+ try{
+  const last=await db.prepare("SELECT observed_at FROM sportapi_ingest_state WHERE job_name='asset_daily'").first();
+  if(last?.observed_at&&Date.now()-Date.parse(last.observed_at)<18*3600000)return;
+  const teams=new Map(),leagues=new Map();
+  for(const m of all){
+   if(m.league_id&&!leagues.has(m.league_id))leagues.set(m.league_id,m);
+   for(const side of ['home','away']){
+    const id=m[side+'_id'];if(id&&!teams.has(id))teams.set(id,{id,name:m[side],league:m.league_id});
+   }
+  }
+  const nowIso=new Date().toISOString();const items=[];
+  for(const m of teams.values())items.push(db.prepare(
+   "INSERT INTO sportapi_team_assets (provider_team_id,team_name,logo_endpoint,observed_league_id,observed_at) VALUES (?1,?2,?3,?4,?5) ON CONFLICT(provider_team_id) DO UPDATE SET team_name=excluded.team_name,observed_league_id=excluded.observed_league_id,observed_at=excluded.observed_at"
+  ).bind(m.id,m.name,'https://sportapi.ai/api/teams/'+m.id+'/logo',m.league,nowIso));
+  for(const m of leagues.values())items.push(db.prepare(
+   "INSERT INTO sportapi_league_assets (provider_league_id,league_name,country_geo,logo_endpoint,observed_at) VALUES (?1,?2,?3,NULL,?4) ON CONFLICT(provider_league_id) DO UPDATE SET league_name=excluded.league_name,country_geo=excluded.country_geo,observed_at=excluded.observed_at"
+  ).bind(m.league_id,m.league,m.geo,nowIso));
+  for(let i=0;i<items.length;i+=75)await db.batch(items.slice(i,i+75));
+  await db.prepare("INSERT INTO sportapi_ingest_state (job_name,observed_at) VALUES('asset_daily',?1) ON CONFLICT(job_name) DO UPDATE SET observed_at=excluded.observed_at").bind(nowIso).run();
+ }catch{/* historical asset catalog is auxiliary; never prevent public fixtures */}
+}
+async function tdBundle(env,ctx){
+ const cached=await (async()=>{try{
+  if(!env.TIKI_DB)return null;
+  const row=await env.TIKI_DB.prepare("SELECT payload_json FROM sportapi_home_cache WHERE cache_key='home_v23' AND expires_at > ?1").bind(Math.floor(Date.now()/1000)).first();
+  return row?JSON.parse(row.payload_json):null;
+ }catch{return null}})();
+ if(cached?.source==='SportAPI.ai')return cached;
+ const result=await tdHomeBundle(env.SPORTAPI_AI_KEY);
+ if(!result.coverage.matches)return result;
+ if(env.TIKI_DB&&ctx?.waitUntil){
+  const payload=JSON.stringify(result);
+  ctx.waitUntil((async()=>{
+   try{await env.TIKI_DB.prepare("INSERT INTO sportapi_home_cache(cache_key,payload_json,expires_at,saved_at) VALUES('home_v23',?1,?2,?3) ON CONFLICT(cache_key) DO UPDATE SET payload_json=excluded.payload_json,expires_at=excluded.expires_at,saved_at=excluded.saved_at")
+      .bind(payload,Math.floor(Date.now()/1000)+600,new Date().toISOString()).run();}catch{}
+   await tdStoreAssets(env.TIKI_DB,result._fixtures,new Date());
+  })());
+ }
+ return result;
 }
 async function tdHomeHandler(req,env,ctx){
  if(!env?.SPORTAPI_AI_KEY)return tdPublicJSON({error:'provider_not_configured'},503);
  const cacheKey=new Request('https://tiki-cache.local/td/home-v23');
  try{const cached=await caches.default.match(cacheKey);if(cached)return cached;}catch{}
- const result=await tdHomeBundle(env.SPORTAPI_AI_KEY);
+ const result=await tdBundle(env,ctx);
  if(!result.coverage.matches)return tdPublicJSON({error:'provider_unavailable'},503);
- const response=tdPublicJSON(result,200,180);
+ const safe={...result};delete safe._fixtures;
+ const response=tdPublicJSON(safe,200,600);
  try{ctx?.waitUntil?.(caches.default.put(cacheKey,response.clone()))}catch{}
  return response;
 }
-export {tdFixture,tdPriority,tdModelFromStandings,tdProbabilities,tdHomeBundle,tdHomeHandler};
+async function tdPredictionsHandler(req,env,ctx){
+ if(!env?.SPORTAPI_AI_KEY)return tdPublicJSON({error:'provider_not_configured',matches:[]},503);
+ const cacheKey=new Request('https://tiki-cache.local/td/predictions-v23');
+ try{const cached=await caches.default.match(cacheKey);if(cached)return cached;}catch{}
+ const b=await tdBundle(env,ctx);if(!b.coverage.matches)return tdPublicJSON({error:'provider_unavailable',matches:[]},503);
+ const modeled=new Map([b.featured,...b.upcoming].filter(Boolean).map(m=>[m.id,m.model]));
+ const matches=b._fixtures.map(m=>({
+   id:'sportapi-'+m.id,league:m.league,date:m.date,home:m.home,away:m.away,
+   p1:modeled.get(m.id)?.p1??null,px:modeled.get(m.id)?.px??null,p2:modeled.get(m.id)?.p2??null,
+   over25:modeled.get(m.id)?.over25??null,under25:modeled.get(m.id)?.under25??null,
+   btts:modeled.get(m.id)?.btts??null,no_btts:modeled.get(m.id)?.no_btts??null,
+   home_score:m.home_score,away_score:m.away_score,status:m.status,
+   provider:'sportapi.ai',home_id:m.home_id,away_id:m.away_id,league_id:m.league_id
+ }));
+ const response=tdPublicJSON({demo:false,source:'SportAPI.ai',matches,model:{name:'provisional_poisson_standings',available_on_selected_games_only:true,validated:false},
+  generated_at:b.updated_at,coverage:b.coverage},200,600);
+ try{ctx?.waitUntil?.(caches.default.put(cacheKey,response.clone()))}catch{}
+ return response;
+}
+export {tdFixture,tdPriority,tdModelFromStandings,tdProbabilities,tdHomeBundle,tdHomeHandler,tdPredictionsHandler,tdStoreAssets};
