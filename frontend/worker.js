@@ -948,7 +948,7 @@ function smPublishedScore(row){
 }
 async function smHttp(relative,token,requestFetch=fetch){
  if(typeof token!=='string'||!token.trim())throw Error('sportmonks_not_configured');
- if(!/^(?:leagues\/date\/\d{4}-\d{2}-\d{2}|fixtures\/date\/\d{4}-\d{2}-\d{2}|livescores\/inplay|predictions\/live\/probabilities)\?/.test(relative))throw Error('sportmonks_path_invalid');
+ if(!/^(?:leagues\/date\/\d{4}-\d{2}-\d{2}|fixtures\/date\/\d{4}-\d{2}-\d{2}|livescores\/inplay|predictions\/live\/probabilities|fixtures\/between\/\d{4}-\d{2}-\d{2}\/\d{4}-\d{2}-\d{2}|odds\/premium\/history)\?/.test(relative))throw Error('sportmonks_path_invalid');
  let url=SM_ROOT+relative;
  for(let attempt=0;attempt<3;attempt++){
   const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),15000);
@@ -1215,6 +1215,134 @@ async function smLiveResponse(req,env,ctx){
  }catch{return smResponse({error:'sportmonks_live_unavailable'},502)}
 }
 
+/* Tiki-Data Sportmonks historical records — bounded, sanitized, independently testable. */
+const historyDay = value => {
+ const s=String(value??'');
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(s))return null;
+ const t=Date.parse(s+'T00:00:00Z');
+ return Number.isFinite(t)&&new Date(t).toISOString().slice(0,10)===s?s:null;
+};
+function historyWindow(start,end,now=Date.now()){
+ const a=historyDay(start),b=historyDay(end);
+ if(!a||!b)return null;
+ const x=Date.parse(a+'T00:00:00Z'),y=Date.parse(b+'T00:00:00Z');
+ if(x>y||y>now+86400000||x<now-3650*86400000||y-x>6*86400000)return null;
+ return {start:a,end:b};
+}
+const positiveId=n=>Number.isSafeInteger(n)&&n>0&&n<1e15?n:null;
+const finished=new Set(['FT','FINISHED','FULL_TIME','AET','PEN']);
+const text=(v,max=110)=>typeof v==='string'?v.trim().slice(0,max):'';
+const img=x=>{
+ if(typeof x!=='string')return null;
+ try{const u=new URL(x);return u.protocol==='https:'&&u.hostname==='cdn.sportmonks.com'&&
+ /^\/images\/[\w/%.-]{1,190}\.(?:png|jpe?g|webp|svg)$/i.test(u.pathname)&&!u.search?u.href:null}
+ catch{return null}
+};
+function historyMatch(row,classify){
+ if(!row||row.sport_id!==1||!positiveId(row.id))return null;
+ const state=text(row.state?.short_name??row.state?.state??row.state?.name??'',25).toUpperCase();
+ if(!finished.has(state))return null;
+ const league=text(row.league?.name,95),country=text(row.league?.country?.name,65);
+ const leagueKey=classify(league,country);
+ if(!leagueKey)return null;
+ const participants=Array.isArray(row.participants)?row.participants:[];
+ const home=participants.find(p=>String(p?.meta?.location??p?.meta?.position??'').toLowerCase()==='home');
+ const away=participants.find(p=>String(p?.meta?.location??p?.meta?.position??'').toLowerCase()==='away');
+ if(!positiveId(home?.id)||!positiveId(away?.id)||home.id===away.id)return null;
+ if(!text(home.name)||!text(away.name))return null;
+ const time=Date.parse(text(row.starting_at,35).replace(' ','T')+'Z');
+ if(!Number.isFinite(time))return null;
+ const scores=Array.isArray(row.scores)?row.scores:[];
+ let goals=null;
+ for(const type of ['FT','FULL_TIME','CURRENT']){
+  const stage=scores.filter(x=>String(x?.description??'').toUpperCase()===type);
+  const h=stage.find(x=>x?.score?.participant==='home')?.score?.goals;
+  const a=stage.find(x=>x?.score?.participant==='away')?.score?.goals;
+  if(Number.isInteger(h)&&Number.isInteger(a)&&h>=0&&a>=0&&h<100&&a<100){goals={home:h,away:a};break;}
+ }
+ if(!goals)return null;
+ return {id:'sportmonks-'+row.id,source:'sportmonks',date:new Date(time).toISOString(),
+  league,league_key:leagueKey,country,home:text(home.name),away:text(away.name),
+  home_id:home.id,away_id:away.id,home_score:goals.home,away_score:goals.away,
+  home_logo:img(home.image_path),away_logo:img(away.image_path),final:true};
+}
+function historyOddsRow(row){
+ if(!row||!positiveId(row.id)||!positiveId(row.odd_id))return null;
+ const price=Number(row.value);
+ if(!Number.isFinite(price)||price<=1||price>10000)return null;
+ const rawTime=text(row.bookmaker_update,35);
+ const updated=rawTime&&/^\d{4}-\d{2}-\d{2}[ T]\d\d:\d\d:\d\d/.test(rawTime)?rawTime:null;
+ const odd=row.odd??null;
+ return{id:row.id,odd_id:row.odd_id,fixture_id:positiveId(odd?.fixture_id),
+  market_id:positiveId(odd?.market_id),bookmaker_id:positiveId(odd?.bookmaker_id),
+  price,updated_at:updated};
+}
+function summarizeHistoryOdds(rows){
+ const valid=(Array.isArray(rows)?rows:[]).map(historyOddsRow).filter(Boolean);
+ const prices=valid.map(r=>r.price).sort((a,b)=>a-b);
+ const updates=valid.map(r=>r.updated_at).filter(Boolean).sort();
+ return {records:valid.length,distinct_odds:new Set(valid.map(x=>x.odd_id)).size,
+  identifiable_fixtures:new Set(valid.map(x=>x.fixture_id).filter(Boolean)).size,
+  from:updates[0]??null,to:updates.at(-1)??null,
+  price_min:prices[0]??null,price_max:prices.at(-1)??null,
+  attribution:'premium_pre_match_odds_history',model_prediction:false};
+}
+
+
+/* Sportmonks history: same encrypted token, no arbitrary proxy or raw odds redistribution. */
+function smHistoryError(error){
+ const e=String(error?.message||'');
+ if(e==='sportmonks_subscription_restricted')return smResponse({error:'subscription_required',source:'sportmonks'},403);
+ if(e==='sportmonks_unauthorized')return smResponse({error:'sportmonks_authorization_failed'},502);
+ if(e==='sportmonks_quota_reached')return smResponse({error:'sportmonks_rate_limited'},503);
+ return smResponse({error:'historical_source_unavailable'},502);
+}
+const smHistoryLeague=(name,country)=>fhLeague(name,country)||
+ (String(country).toLowerCase()==='cyprus'&&/^1\.?\s*division$/i.test(String(name))?'cyprus':null);
+async function smHistoryCache(req,callback,ctx){
+ const cacheKey=new Request(req.url);
+ try{const hit=await caches.default.match(cacheKey);if(hit)return hit;}catch{}
+ const result=await callback();
+ if(result.ok)try{ctx?.waitUntil(caches.default.put(cacheKey,result.clone()));}catch{}
+ return result;
+}
+async function smHistoryFixturesRoute(req,env,ctx){
+ if(!env?.SPORTMONKS_API_TOKEN)return smResponse({error:'sportmonks_not_configured'},503);
+ const q=new URL(req.url).searchParams;
+ const start=q.get('start'),end=q.get('end'),range=historyWindow(start,end);
+ const page=Number(q.get('page')||1);
+ if(!range||!Number.isSafeInteger(page)||page<1||page>10)
+  return smResponse({error:'invalid_history_window',hint:'Use valid YYYY-MM-DD start/end within seven consecutive UTC dates; page 1-10.'},400);
+ return smHistoryCache(req,async()=>{
+  try{
+   const query=new URLSearchParams({page:String(page),per_page:'50',
+    include:'participants;scores;state;league.country'});
+   const d=await smHttp('fixtures/between/'+range.start+'/'+range.end+'?'+query,env.SPORTMONKS_API_TOKEN);
+   const matches=d.data.map(r=>historyMatch(r,smHistoryLeague)).filter(Boolean);
+   return smResponse({source:'sportmonks',start:range.start,end:range.end,page,
+    has_more:!!d.pagination?.has_more,matches,
+    note:'Finished fixtures only; predictions remain independently trained on licensed history.'},200,300);
+  }catch(e){return smHistoryError(e)}
+ },ctx);
+}
+async function smHistoryOddsRoute(req,env,ctx){
+ if(!env?.SPORTMONKS_API_TOKEN)return smResponse({error:'sportmonks_not_configured'},503);
+ const q=new URL(req.url).searchParams,page=Number(q.get('page')||1);
+ if(!Number.isSafeInteger(page)||page<1||page>10)
+  return smResponse({error:'invalid_page',hint:'Pages 1-10 only.'},400);
+ return smHistoryCache(req,async()=>{
+  try{
+   const query=new URLSearchParams({page:String(page),per_page:'50',include:'odd'});
+   const d=await smHttp('odds/premium/history?'+query,env.SPORTMONKS_API_TOKEN);
+   return smResponse({source:'sportmonks',feed:'premium_historical_pre_match',
+    page,has_more:!!d.pagination?.has_more,
+    summary:summarizeHistoryOdds(d.data),
+    disclaimer:'Aggregate diagnostic only, not live odds, betting advice or Tiki-Data model predictions.',
+    retention:'Sportmonks premium odds history is normally accessible for 7 days after fixture kickoff.'},200,300);
+  }catch(e){return smHistoryError(e)}
+ },ctx);
+}
+
 const CSP="default-src 'none';base-uri 'none';form-action 'none';object-src 'none';frame-ancestors 'none';script-src 'self';style-src 'self' https://fonts.googleapis.com;style-src-attr 'unsafe-inline';font-src 'self' https://fonts.gstatic.com;img-src 'self' data: https://raw.githubusercontent.com https://cdn.sportmonks.com;connect-src 'self'";
 function asset(body,mime){return new Response(body,{status:200,headers:{'Content-Type':mime,'Cache-Control':(/text\/html|javascript/.test(mime)?'no-cache, must-revalidate':'public,max-age=180'),'X-Content-Type-Options':'nosniff','Referrer-Policy':'strict-origin-when-cross-origin','Content-Security-Policy':CSP}})}
-export default {async fetch(req,env,ctx){const u=new URL(req.url),path=u.pathname;if(!['GET','HEAD'].includes(req.method))return new Response('Method Not Allowed',{status:405});if(path==='/'||path==='/index.html')return asset(HTML_HOME,'text/html; charset=utf-8');if(path==='/predictions'||path==='/predictions/')return asset(HTML_PREDICTIONS,'text/html; charset=utf-8');if(path==='/data'||path==='/data/')return new Response(null,{status:302,headers:{Location:'/predictions','Cache-Control':'no-store'}});if(path==='/data.css')return asset(CSS_DATA,'text/css; charset=utf-8');if(path==='/data.js')return asset(JS_DATA,'application/javascript; charset=utf-8');if(path==='/home-v23.css')return asset(HOME_V23_CSS,'text/css; charset=utf-8');if(path==='/home-v23.js')return asset(HOME_V23_JS,'application/javascript; charset=utf-8');if(path==='/styles.css')return asset(CSS,'text/css; charset=utf-8');if(path==='/logos.js')return asset(LOGOS,'application/javascript; charset=utf-8');if(path==='/home.js')return asset(HOME,'application/javascript; charset=utf-8');if(path==='/app.js')return asset(JS,'application/javascript; charset=utf-8');if(path==='/stadium.svg')return asset(STADIUM,'image/svg+xml');if(path==='/brand.svg')return asset(BRAND,'image/svg+xml');if(path==='/favicon.svg')return asset(FAVICON,'image/svg+xml');if(path.startsWith('/api/allsports/')||path.startsWith('/api/sport/')||path==='/api/home-v23'||path==='/api/fixtures'||path.startsWith('/api/logo/team/'))return new Response(JSON.stringify({error:'retired_api'}),{status:410,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});if(path==='/api/sportmonks/health')return smCheckAccess(req,env);if(path==='/api/sportmonks/stage')return smStage(req,env);if(path==='/api/home-focus')return smFocusResponse(req,env,ctx);if(path==='/api/live')return smLiveResponse(req,env,ctx);return new Response('Not Found',{status:404})}};
+export default {async fetch(req,env,ctx){const u=new URL(req.url),path=u.pathname;if(!['GET','HEAD'].includes(req.method))return new Response('Method Not Allowed',{status:405});if(path==='/'||path==='/index.html')return asset(HTML_HOME,'text/html; charset=utf-8');if(path==='/predictions'||path==='/predictions/')return asset(HTML_PREDICTIONS,'text/html; charset=utf-8');if(path==='/data'||path==='/data/')return new Response(null,{status:302,headers:{Location:'/predictions','Cache-Control':'no-store'}});if(path==='/data.css')return asset(CSS_DATA,'text/css; charset=utf-8');if(path==='/data.js')return asset(JS_DATA,'application/javascript; charset=utf-8');if(path==='/home-v23.css')return asset(HOME_V23_CSS,'text/css; charset=utf-8');if(path==='/home-v23.js')return asset(HOME_V23_JS,'application/javascript; charset=utf-8');if(path==='/styles.css')return asset(CSS,'text/css; charset=utf-8');if(path==='/logos.js')return asset(LOGOS,'application/javascript; charset=utf-8');if(path==='/home.js')return asset(HOME,'application/javascript; charset=utf-8');if(path==='/app.js')return asset(JS,'application/javascript; charset=utf-8');if(path==='/stadium.svg')return asset(STADIUM,'image/svg+xml');if(path==='/brand.svg')return asset(BRAND,'image/svg+xml');if(path==='/favicon.svg')return asset(FAVICON,'image/svg+xml');if(path.startsWith('/api/allsports/')||path.startsWith('/api/sport/')||path==='/api/home-v23'||path==='/api/fixtures'||path.startsWith('/api/logo/team/'))return new Response(JSON.stringify({error:'retired_api'}),{status:410,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});if(path==='/api/sportmonks/health')return smCheckAccess(req,env);if(path==='/api/sportmonks/stage')return smStage(req,env);if(path==='/api/home-focus')return smFocusResponse(req,env,ctx);if(path==='/api/live')return smLiveResponse(req,env,ctx);if(path==='/api/history/fixtures')return smHistoryFixturesRoute(req,env,ctx);if(path==='/api/history/odds/summary')return smHistoryOddsRoute(req,env,ctx);return new Response('Not Found',{status:404})}};
