@@ -90,7 +90,9 @@ async function tdHomeBundle(secret){
  const candidates=[...new Set(choices.filter(m=>m.league_id).map(m=>m.league_id))].slice(0,3);
  const standings=await Promise.all(candidates.map(async id=>({id,data:await tdFetch('standings/'+id,secret)})));
  const table=new Map(standings.map(x=>[x.id,x.data]));
- const enriched=choices.map(m=>({...m,model:Date.parse(m.date)>now&&!TD_FINISHED.has(m.status)?tdModelFromStandings(table.get(m.league_id),m):null}));
+ const enriched=await Promise.all(choices.map(async m=>({...m,
+   logos:{home:await tdSignedLogo(secret,m.home_id),away:await tdSignedLogo(secret,m.away_id)},
+   model:Date.parse(m.date)>now&&!TD_FINISHED.has(m.status)?tdModelFromStandings(table.get(m.league_id),m):null})));
  const top=all.filter(x=>x.priority>=50).length;
  return {source:'SportAPI.ai',updated_at:new Date().toISOString(),range:days,
   coverage:{matches:all.length,competitions:new Set(all.map(x=>x.league_id||x.league)).size,priority_matches:top,days_available:data.filter(x=>x.ok).length},
