@@ -33,12 +33,20 @@ function crest(m,side){const name=m[side]||'Ομάδα';const url=safeLogo(m.log
 function when(m){const d=new Date(m.date);return Number.isNaN(d.getTime())?'Ώρα μη διαθέσιμη':fmtDate.format(d)+' · '+fmtTime.format(d);}
 function score(m){return num(m.home_score)!==null&&num(m.away_score)!==null&&(isLive(m)||isDone(m))?m.home_score+' – '+m.away_score:'VS';}
 function market(label,n){return '<div class="odd-row"><div class="odd-values"><span>'+esc(label)+'</span><b>'+pct(n)+'</b></div><div class="prob-bar"><span style="width:'+Math.max(0,Math.min(100,Number(n)||0))+'%"></span></div></div>';}
+function forecastStrength(p){
+ return p?.tier==='team'?'Ομαδικό ιστορικό · πειραματικό':
+ p?.tier==='partial_team'?'Μία ομάδα με ιστορικά · χαμηλή βεβαιότητα':
+ p?.tier==='league'?'Μέσοι όροι πρωταθλήματος · χαμηλή βεβαιότητα':
+ p?.tier==='cross_league'?'Μέσοι όροι άλλων πρωταθλημάτων · πολύ χαμηλή βεβαιότητα':
+ 'Στατιστική εκτίμηση μη διαθέσιμη';
+}
 function markets(m){
  const p=m.model;
  if(!p)return '<div class="unavailable">Η στατιστική εκτίμηση δεν είναι διαθέσιμη.</div>';
  const vals=[p.p1,p.px,p.p2],best=vals.indexOf(Math.max(...vals));
  return '<div class="side-label">ΥΠΟΛΟΓΙΣΜΕΝΕΣ ΠΙΘΑΝΟΤΗΤΕΣ</div><div class="triple">'+['1','Χ','2'].map((n,i)=>'<div'+(i===best?' class="best"':'')+'><small>'+n+'</small><b>'+pct(vals[i])+'</b></div>').join('')+'</div><div class="other-markets"><div><small>OVER 2.5</small><b>'+pct(p.over25)+'</b></div><div><small>GG / BTTS</small><b>'+pct(p.btts)+'</b></div></div>'+
- '<div class="forecast-result"><span>Πιθανότερο σκορ (εκτίμηση)</span><strong>'+esc(p.most_likely_score?.score||'—')+'</strong><small>'+pct(p.most_likely_score?.probability)+'</small></div>'+ '<p class="model-note">'+(['openfootball_cc0_fitted_venue_poisson','licensed_historical_venue_poisson'].includes(p.method)?'Πειραματικό μοντέλο από αδειοδοτημένα ιστορικά αποτελέσματα · '+esc(p.data_points)+' αγώνες · στοιχεία έως '+esc(p.history_latest):'Πολύ χαμηλή αξιοπιστία: δεν υπάρχουν επιβεβαιωμένα ιστορικά στοιχεία των δύο ομάδων. Χρησιμοποιείται γενικό υπόδειγμα, όχι εξατομικευμένη πρόβλεψη.')+' Καμία εκτίμηση δεν έχει πιστοποιημένη ακρίβεια.</p>';
+  '<div class="forecast-result"><span>Πιθανότερο σκορ (εκτίμηση)</span><strong>'+esc(p.most_likely_score?.score||'—')+'</strong><small>'+pct(p.most_likely_score?.probability)+'</small></div>'+
+  '<p class="model-note">Βάση: '+esc(forecastStrength(p))+' · '+esc(p.data_points)+' ιστορικοί αγώνες · έως '+esc(p.history_latest)+'. Όχι πιστοποιημένη ακρίβεια.</p>';
 }
 function featured(m){
  if(!m){$('featuredContent').innerHTML='<div class="loading">Δεν υπάρχουν καταχωρισμένοι αγώνες αυτή τη στιγμή.</div>';return;}
@@ -49,7 +57,7 @@ function featured(m){
 function upcoming(matches){
  const wrap=$('upcomingGrid'),items=Array.isArray(matches)?matches.slice(0,6):[];document.querySelector('.upcoming-heading').hidden=!items.length;wrap.hidden=!items.length;
  if(!items.length){wrap.replaceChildren();}
- else wrap.innerHTML=items.map(m=>'<article class="upcoming-card"><div class="up-meta"><span>'+leagueEmblem(m.league,m.league_logo,m.league_key)+esc(m.league)+'</span><span>'+esc(when(m))+'</span></div><div class="up-match"><div class="up-team">'+crest(m,'home')+'<b>'+esc(m.home)+'</b></div><span class="up-versus">'+esc(score(m))+'</span><div class="up-team">'+crest(m,'away')+'<b>'+esc(m.away)+'</b></div></div><div class="up-footer"><span>'+(m.model?'1 '+pct(m.model.p1)+' · Χ '+pct(m.model.px)+' · 2 '+pct(m.model.p2)+'<br><small>'+esc(['openfootball_cc0_fitted_venue_poisson','licensed_historical_venue_poisson'].includes(m.model.method)?'Ιστορικό Poisson · πειραματικό':'Γενικό Poisson · πολύ χαμηλή αξιοπιστία')+'</small>':'Χωρίς εκτίμηση')+'</span><a href="/predictions">Στοιχεία ↗</a></div></article>').join('');
+ else wrap.innerHTML=items.map(m=>'<article class="upcoming-card"><div class="up-meta"><span>'+leagueEmblem(m.league,m.league_logo,m.league_key)+esc(m.league)+'</span><span>'+esc(when(m))+'</span></div><div class="up-match"><div class="up-team">'+crest(m,'home')+'<b>'+esc(m.home)+'</b></div><span class="up-versus">'+esc(score(m))+'</span><div class="up-team">'+crest(m,'away')+'<b>'+esc(m.away)+'</b></div></div><div class="up-footer"><span>'+(m.model?'1 '+pct(m.model.p1)+' · Χ '+pct(m.model.px)+' · 2 '+pct(m.model.p2)+'<br><small>'+escforecastStrength(m.model)+'</small>':'Χωρίς εκτίμηση')+'</span><a href="/predictions">Στοιχεία ↗</a></div></article>').join('');
  wrap.setAttribute('aria-busy','false');
 }
 let controller=null,fetching=false;

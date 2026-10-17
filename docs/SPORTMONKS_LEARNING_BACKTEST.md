@@ -41,3 +41,19 @@ CREATE TABLE IF NOT EXISTS sportmonks_training_results (
 CREATE INDEX IF NOT EXISTS idx_sportmonks_train_date ON sportmonks_training_results(match_date);
 ```
 Source sync status uses two keys in the existing D1 cache table, avoiding a more invasive migration. No old tables are deleted.
+
+## Hierarchical prediction coverage v5
+
+**Why historical data did not appear for many fixtures:** Different names in Sportmonks and OpenFootball (e.g. `Lazio` / `SS Lazio`, `Rennes` / `Stade Rennais 1901`) prevented reliable home/away sample lookup. A verified dictionary now maps official observed variants to one canonical identity. Do not equate clubs with similar names without verification.
+
+Public pre-match forecast evidence tiers:
+1. `team`: at least three verified, matching home and away samples for both clubs; model remains experimental.
+2. `partial_team`: only one club has at least three matching venue samples; the other uses a league-wide venue baseline.
+3. `league`: no full team matchup data; probabilities are computed solely from fitted home/away scoring averages in that league, labeled low-confidence.
+4. `cross_league`: no qualifying scores in the fixture league; averages are computed from **actual** licensed finished scores in other leagues. Very low confidence; **NOT** a league-specific or team-specific strength claim. This currently applies to Cyprus until enough finished domestic games accumulate in the database.
+
+No arbitrary 43/26/31 values or hardcoded goal rates are published. If the database or source is missing, percentages must remain unavailable rather than made up. The public API exposes `prediction_tier`, `confidence`, `evidence_source`, `model_note`, historical sample sizes, and tier counts in coverage. Live match scenarios remain conditional on verified team evidence, minute and score; the lower-confidence pre-match baseline is **not** reused as a live forecast.
+
+The separate `/api/model/backtest` endpoint has been versioned to `walk_forward_hierarchical_v5_1` to avoid applying the former v3 performance claim to v5. Its time-split retrospective results must be considered separately from verified prospective performance. The prospective forecast audit remains restricted to the `team` evidence tier, ensuring historical continuity of high-evidence records.
+
+The model snapshot key is `tiki-hierarchical-poisson-coverage-v5`; existing snapshots and CC0 data are retained. The rolling 6-hour training and 3-day embargo remain in place.
