@@ -5,7 +5,7 @@ const read=path=>readFileSync(new URL('../'+path,import.meta.url),'utf8');
 test('public pages contain no provider branding or switching controls',()=>{
  for(const file of ['frontend-v13/home-v23.html','frontend-v13/predictions.html']){
   const html=read(file);
-  assert(!/SportAPI\\.ai|AllSportsAPI|providerSelect|predictionSource|Πηγή δεδομένων/.test(html),file);
+  assert(!['SportAPI.ai','AllSportsAPI','providerSelect','predictionSource','Πηγή δεδομένων'].some(word=>html.includes(word)),file);
  }
  const home=read('frontend-v13/home-v23.js');
  assert(!home.includes("SportAPI.ai + AllSportsAPI · Ενημερώθηκε"));
