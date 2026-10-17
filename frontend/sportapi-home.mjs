@@ -74,6 +74,38 @@ function tdModelFromStandings(standings,fixture){
  const h=tdClamp(avg*attack(home)*defend(away)*1.08,.3,3.8),a=tdClamp(avg*attack(away)*defend(home)*.92,.3,3.8);
  return tdProbabilities(h,a);
 }
+function tdRecentRates(raw,name,kickoff){
+ const matches=Array.isArray(raw?.matches)?raw.matches:[];
+ const cutoff=String(kickoff||'').slice(0,10);
+ const clean=matches.filter(m=>{
+   const date=String(m.date||'').slice(0,10);
+   return date&&date<cutoff&&Number.isInteger(m.home_score)&&Number.isInteger(m.away_score)
+     &&m.home_score>=0&&m.away_score>=0&&m.home_score<=15&&m.away_score<=15
+     &&(String(m.home_team||'').toLowerCase()===name.toLowerCase()||String(m.away_team||'').toLowerCase()===name.toLowerCase());
+ }).sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,12);
+ if(clean.length<6)return null;
+ let g=0,a=0,weights=0;
+ for(const x of clean){
+   const isHome=String(x.home_team).toLowerCase()===name.toLowerCase();
+   const gf=isHome?x.home_score:x.away_score,ga=isHome?x.away_score:x.home_score;
+   const dt=Math.max(0,(Date.parse(cutoff+'T00:00:00Z')-Date.parse(String(x.date).slice(0,10)+'T00:00:00Z'))/86400000);
+   const weight=Math.exp(-dt/150);
+   g+=gf*weight;a+=ga*weight;weights+=weight;
+ }
+ const prior=8,base=1.35;
+ return {attack:(g+prior*base)/(weights+prior),defense:(a+prior*base)/(weights+prior),n:clean.length};
+}
+function tdModelFromRecent(homeRaw,awayRaw,fixture){
+ const h=tdRecentRates(homeRaw,fixture.home,fixture.date);
+ const a=tdRecentRates(awayRaw,fixture.away,fixture.date);
+ if(!h||!a)return null;
+ const home=tdClamp((h.attack+a.defense)/2*1.09,.30,3.8);
+ const away=tdClamp((a.attack+h.defense)/2*.91,.30,3.8);
+ const market=tdProbabilities(home,away);
+ if(!market)return null;
+ return {...market,method:'provisional_poisson_recent_results',sample:'SportAPI.ai finished games before kickoff, all competitions',
+    matches_sampled:{home:h.n,away:a.n},validated:false};
+}
 async function tdHomeBundle(secret){
  const today=new Date().toISOString().slice(0,10);
  const days=[today,tdAddDays(today,1),tdAddDays(today,2)];
@@ -93,6 +125,12 @@ async function tdHomeBundle(secret){
  const enriched=await Promise.all(choices.map(async m=>({...m,
    logos:{home:await tdSignedLogo(secret,m.home_id),away:await tdSignedLogo(secret,m.away_id)},
    model:Date.parse(m.date)>now&&!TD_FINISHED.has(m.status)?tdModelFromStandings(table.get(m.league_id),m):null})));
+ // A league without usable standings can still have genuine prior completed team games.
+// Only the featured pre-match pick is enriched, bounding extra provider requests to two.
+ if(enriched[0]&&!enriched[0].model&&enriched[0].home_id&&enriched[0].away_id&&Date.parse(enriched[0].date)>now){
+  const [h,a]=await Promise.all([tdFetch('teams/'+enriched[0].home_id,secret),tdFetch('teams/'+enriched[0].away_id,secret)]);
+  enriched[0].model=tdModelFromRecent(h,a,enriched[0]);
+ }
  const top=all.filter(x=>x.priority>=50).length;
  return {source:'SportAPI.ai',updated_at:new Date().toISOString(),range:days,
   coverage:{matches:all.length,competitions:new Set(all.map(x=>x.league_id||x.league)).size,priority_matches:top,days_available:data.filter(x=>x.ok).length},
@@ -176,4 +214,4 @@ async function tdPredictionsHandler(req,env,ctx){
  try{ctx?.waitUntil?.(caches.default.put(cacheKey,response.clone()))}catch{}
  return response;
 }
-export {tdFixture,tdPriority,tdModelFromStandings,tdProbabilities,tdHomeBundle,tdHomeHandler,tdPredictionsHandler,tdStoreAssets};
+export {tdFixture,tdPriority,tdModelFromStandings,tdModelFromRecent,tdRecentRates,tdProbabilities,tdHomeBundle,tdHomeHandler,tdPredictionsHandler,tdStoreAssets};
