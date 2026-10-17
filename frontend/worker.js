@@ -667,6 +667,8 @@ async function asPredictionResponse(req,env,ctx,url){
  * No raw commercial-provider payload persistence. Only CC0 OpenFootball final scores are used
  * for fitted parameters; predictions are explicitly unvalidated experimental estimates.
  */
+// Time-order validation (2025-26, n=1723) selected these rates without seeing the 2026-27 holdout.
+const FH_TRAINING={version:'tiki-home-venue-poisson-research-v2',decay_days:360,venue_prior:3,validated:false};
 const FH_LEAGUES={
  epl:{name:'Premier League',rank:7,country:/^(england|eng|en|gb|united kingdom)$/},
  laliga:{name:'La Liga',rank:6,country:/^(spain|esp|es)$/},
@@ -714,7 +716,7 @@ function fhTrain(rows,asOfDate=new Date()){
  const result={};
  for(const [league,list] of groups){
   if(list.length<80)continue;
-  const tau=210,weights=list.map(x=>Math.exp(-(cutoff-x.day)/86400000/tau));
+  const tau=FH_TRAINING.decay_days,weights=list.map(x=>Math.exp(-(cutoff-x.day)/86400000/tau));
   const sum=weights.reduce((a,b)=>a+b,0);
   if(sum<=0)continue;
   const lh=fhClamp(list.reduce((v,x,i)=>v+weights[i]*x.gh,0)/sum,.55,2.7);
@@ -730,7 +732,7 @@ function fhTrain(rows,asOfDate=new Date()){
   for(const [name,venues] of teams){
    const rec={};
    for(const venue of ['home','away']){
-    const rows=venues[venue],mass=rows.reduce((a,x)=>a+x.w,0),prior=6;
+    const rows=venues[venue],mass=rows.reduce((a,x)=>a+x.w,0),prior=FH_TRAINING.venue_prior;
     const baseFor=venue==='home'?lh:la,baseAgainst=venue==='home'?la:lh;
     rec[venue]={for:(rows.reduce((a,x)=>a+x.w*x.gf,0)+prior*baseFor)/(mass+prior),
                  against:(rows.reduce((a,x)=>a+x.w*x.ga,0)+prior*baseAgainst)/(mass+prior),matches:rows.length};
@@ -739,7 +741,7 @@ function fhTrain(rows,asOfDate=new Date()){
   }
   result[league]={league,trained_from:'OpenFootball CC0-1.0 historical finished scores',matches:list.length,last_result:new Date(Math.max(...list.map(x=>x.day))).toISOString().slice(0,10),hmean:lh,amean:la,teams:profiles};
  }
- return {model_version:'tiki-home-venue-poisson-research-v1',trained_at:new Date(asOfDate).toISOString(),cutoff:new Date(cutoff).toISOString().slice(0,10),status:'experimental_unvalidated',leagues:result};
+ return {model_version:FH_TRAINING.version,trained_at:new Date(asOfDate).toISOString(),cutoff:new Date(cutoff).toISOString().slice(0,10),decay_days:FH_TRAINING.decay_days,venue_prior:FH_TRAINING.venue_prior,status:'experimental_unvalidated',leagues:result};
 }
 function fhLikelyScore(lh,la){let top={score:'—',prob:0};let mass=0;const poisson=(lambda,n)=>Math.exp(-lambda)*Math.pow(lambda,n)/[1,1,2,6,24,120,720,5040][n];for(let i=0;i<=7;i++)for(let j=0;j<=7;j++){const p=poisson(lh,i)*poisson(la,j);mass+=p;if(p>top.prob)top={score:i+'-'+j,prob:p};}return{score:top.score,probability:top.prob/mass*100};}
 function fhPoisson(h,a){
@@ -760,7 +762,7 @@ function fhEstimate(fixture,model){
 }
 async function fhLoadModel(db,ctx){
  if(!db)return null;
- const key='tiki-home-venue-poisson-research-v1';
+ const key=FH_TRAINING.version;
  try{
   const row=await db.prepare('SELECT payload_json,expires_at FROM focus_model_snapshots WHERE model_key=?1').bind(key).first();
   if(row&&Number(row.expires_at)>Date.now()/1000)return JSON.parse(row.payload_json);
@@ -814,9 +816,9 @@ const fhJSON=(data,status=200)=>new Response(JSON.stringify(data),{status,header
 async function fhHomeResponse(req,env,ctx){
  if(req.method!=='GET')return fhJSON({error:'method_not_allowed'},405);
  const cache=typeof caches!=='undefined'?caches.default:null;
- const cacheKey=new Request('https://tiki-cache.local/focus-home-v2');
+ const cacheKey=new Request('https://tiki-cache.local/focus-home-v3');
  try{const hit=await cache?.match(cacheKey);if(hit)return hit;}catch{}
- try{if(env?.TIKI_DB){const row=await env.TIKI_DB.prepare("SELECT payload_json FROM sportapi_home_cache WHERE cache_key='focus_v2' AND expires_at>?1").bind(Math.floor(Date.now()/1000)).first();if(row?.payload_json)return fhJSON(JSON.parse(row.payload_json));}}catch{}
+ try{if(env?.TIKI_DB){const row=await env.TIKI_DB.prepare("SELECT payload_json FROM sportapi_home_cache WHERE cache_key='focus_v3' AND expires_at>?1").bind(Math.floor(Date.now()/1000)).first();if(row?.payload_json)return fhJSON(JSON.parse(row.payload_json));}}catch{}
  const today=new Date().toISOString().slice(0,10);
  const days=[today,tdAddDays(today,1),tdAddDays(today,2)];
  const allTask=env?.ALLSPORTS_API_KEY?Promise.allSettled(days.map(async date=>{
@@ -844,7 +846,7 @@ async function fhHomeResponse(req,env,ctx){
    historical_sample:m.model.team_samples,history_latest:m.model.history_latest
   })),
   leagues_with_matches:selected.leagues_available,
-  model:{name:'CC0 historical venue Poisson (experimental)',historical_matches:Object.values(model?.leagues||{}).reduce((n,l)=>n+(l.matches||0),0),trained_at:model?.trained_at||null,historical_cutoff:model?.cutoff||null,history_leagues:Object.keys(model?.leagues||{}),validated:false,
+  model:{name:'CC0 historical venue Poisson v2 (experimental)',training_parameters:{decay_days:model?.decay_days||null,venue_prior:model?.venue_prior||null},retrospective_validation:{season:'2025-26',matches:1723,selected_brier:0.62197},retrospective_holdout:{season:'2026-27',matches:197,brier:0.61210,previous_brier:0.63480,baseline_brier:0.69416,top1:0.49746,validated_live:false},historical_matches:Object.values(model?.leagues||{}).reduce((n,l)=>n+(l.matches||0),0),trained_at:model?.trained_at||null,historical_cutoff:model?.cutoff||null,history_leagues:Object.keys(model?.leagues||{}),validated:false,
    note:'Not an LLM. Pure statistical fitting to licensed OpenFootball finished scores; no verified prospective track record.'},
   fallback_reason:fixtures.length?'': 'No upstream fixtures available',data_sources:{sportapi:fhSportFixtures(sport).length,allsports:raw.length}};
  // Prospective evaluation log: only genuinely team-fitted predictions well before kickoff.
@@ -861,7 +863,7 @@ async function fhHomeResponse(req,env,ctx){
  }
  const response=fhJSON(result,200);
  try{ctx?.waitUntil?.(cache?.put(cacheKey,response.clone()))}catch{}
- if(env?.TIKI_DB&&ctx?.waitUntil){const payload=JSON.stringify(result);ctx.waitUntil(env.TIKI_DB.prepare("INSERT INTO sportapi_home_cache(cache_key,payload_json,expires_at,saved_at) VALUES('focus_v2',?1,?2,?3) ON CONFLICT(cache_key) DO UPDATE SET payload_json=excluded.payload_json,expires_at=excluded.expires_at,saved_at=excluded.saved_at").bind(payload,Math.floor(Date.now()/1000)+600,new Date().toISOString()).run().catch(()=>{}));}
+ if(env?.TIKI_DB&&ctx?.waitUntil){const payload=JSON.stringify(result);ctx.waitUntil(env.TIKI_DB.prepare("INSERT INTO sportapi_home_cache(cache_key,payload_json,expires_at,saved_at) VALUES('focus_v3',?1,?2,?3) ON CONFLICT(cache_key) DO UPDATE SET payload_json=excluded.payload_json,expires_at=excluded.expires_at,saved_at=excluded.saved_at").bind(payload,Math.floor(Date.now()/1000)+600,new Date().toISOString()).run().catch(()=>{}));}
  return response;
 }
 
