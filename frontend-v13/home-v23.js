@@ -1,6 +1,8 @@
 /* Tiki-Data v23 — SportAPI.ai only. No legacy API and no client-side secrets. */
 (()=>{'use strict';
 const $=id=>document.getElementById(id);
+function verifiedLeagueLogo(name){const t=String(name||'').toLowerCase();const l=window.TIKI_LOGO_CATALOG?.leagues||{};const key=/(?:premier league|english premier)/i.test(t)?'epl':/bundesliga/i.test(t)?'bundesliga':/(?:la liga|laliga|primera divisi)/i.test(t)?'laliga':/serie a/i.test(t)?'seriea':/(?:ligue 1|ligue1)/i.test(t)?'ligue1':/(?:super league.*gree|greek super|greece.*super)/i.test(t)?'greece':null;return key?l[key]||null:null;}
+const leagueEmblem=name=>{const u=verifiedLeagueLogo(name);return u?'<img class="home-league-logo" src="'+esc(u)+'" alt="" loading="lazy" onerror="this.remove()">':'';};
 if(!$('featuredContent'))return;
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
 const initial=x=>String(x||'FC').trim().split(/\s+/).filter(w=>!/(?:FC|CF|AC|SC|AFC)$/i.test(w)).slice(0,2).map(x=>x[0]||'').join('').slice(0,3).toUpperCase()||'FC';
@@ -25,14 +27,14 @@ function markets(m){
 }
 function featured(m){
  if(!m){$('featuredContent').innerHTML='<div class="loading">Δεν υπάρχουν διαθέσιμοι αγώνες αυτή τη στιγμή. <a href="/data" class="feat-details">Δες το πρόγραμμα →</a></div>';return;}
- $('featuredContent').innerHTML='<div class="feature-top"><b>'+esc(m.league)+'</b><span>'+(isLive(m)?'● LIVE':isDone(m)?'ΤΕΛΙΚΟ':'ΕΠΟΜΕΝΟΣ ΑΓΩΝΑΣ')+' · '+esc(when(m))+'</span></div>'+
+ $('featuredContent').innerHTML='<div class="feature-top"><b>'+leagueEmblem(m.league)+esc(m.league)+'</b><span>'+(isLive(m)?'● LIVE':isDone(m)?'ΤΕΛΙΚΟ':'ΕΠΟΜΕΝΟΣ ΑΓΩΝΑΣ')+' · '+esc(when(m))+'</span></div>'+
  '<div class="feature-grid"><div class="feature-main"><div class="featured-teams"><div class="ft-team">'+crest(m,'home')+'<b>'+esc(m.home)+'</b></div><div class="vs"><strong>'+esc(score(m))+'</strong>'+(isLive(m)?'LIVE':'FOOTBALL')+'</div><div class="ft-team">'+crest(m,'away')+'<b>'+esc(m.away)+'</b></div></div><div class="feat-bottom"><span class="f-league"><span class="league-icon">TD</span>'+esc(m.league)+'</span><a href="/data" class="feat-details">Πλήρη στοιχεία αγώνα →</a></div></div><aside class="feature-side">'+markets(m)+'</aside></div>';
  $('featuredContent').setAttribute('aria-busy','false');
 }
 function upcoming(matches){
  const wrap=$('upcomingGrid'),items=Array.isArray(matches)?matches.slice(0,3):[];
  if(!items.length){wrap.innerHTML='<div class="loading">Δεν υπάρχουν άλλοι επιλεγμένοι αγώνες. <a href="/data">Δες το πλήρες πρόγραμμα →</a></div>';}
- else wrap.innerHTML=items.map(m=>'<article class="upcoming-card"><div class="up-meta"><span>'+esc(m.league)+'</span><span>'+esc(when(m))+'</span></div><div class="up-match"><div class="up-team">'+crest(m,'home')+'<b>'+esc(m.home)+'</b></div><span class="up-versus">'+esc(score(m))+'</span><div class="up-team">'+crest(m,'away')+'<b>'+esc(m.away)+'</b></div></div><div class="up-footer"><span>'+(m.model?'1 '+pct(m.model.p1)+' · Χ '+pct(m.model.px)+' · 2 '+pct(m.model.p2):'Πρόβλεψη μη διαθέσιμη')+'</span><a href="/data">Στοιχεία ↗</a></div></article>').join('');
+ else wrap.innerHTML=items.map(m=>'<article class="upcoming-card"><div class="up-meta"><span>'+leagueEmblem(m.league)+esc(m.league)+'</span><span>'+esc(when(m))+'</span></div><div class="up-match"><div class="up-team">'+crest(m,'home')+'<b>'+esc(m.home)+'</b></div><span class="up-versus">'+esc(score(m))+'</span><div class="up-team">'+crest(m,'away')+'<b>'+esc(m.away)+'</b></div></div><div class="up-footer"><span>'+(m.model?'1 '+pct(m.model.p1)+' · Χ '+pct(m.model.px)+' · 2 '+pct(m.model.p2):'Πρόβλεψη μη διαθέσιμη')+'</span><a href="/data">Στοιχεία ↗</a></div></article>').join('');
  wrap.setAttribute('aria-busy','false');
 }
 let controller=null,fetching=false;

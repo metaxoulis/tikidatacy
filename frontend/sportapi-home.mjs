@@ -197,17 +197,20 @@ async function tdHomeHandler(req,env,ctx){
 }
 async function tdPredictionsHandler(req,env,ctx){
  if(!env?.SPORTAPI_AI_KEY)return tdPublicJSON({error:'provider_not_configured',matches:[]},503);
- const cacheKey=new Request('https://tiki-cache.local/td/predictions-v24');
+ const cacheKey=new Request('https://tiki-cache.local/td/predictions-v25');
  try{const cached=await caches.default.match(cacheKey);if(cached)return cached;}catch{}
  const b=await tdBundle(env,ctx);if(!b.coverage.matches)return tdPublicJSON({error:'provider_unavailable',matches:[]},503);
  const modeled=new Map([b.featured,...b.upcoming].filter(Boolean).map(m=>[m.id,m.model]));
+ const ids=[...new Set(b._fixtures.flatMap(m=>[m.home_id,m.away_id]).filter(Boolean))];
+ const signed=new Map(await Promise.all(ids.map(async id=>[String(id),await tdSignedLogo(env.SPORTAPI_AI_KEY,id)])));
  const matches=b._fixtures.map(m=>({
    id:'sportapi-'+m.id,league:m.league,date:m.date,home:m.home,away:m.away,
    p1:modeled.get(m.id)?.p1??null,px:modeled.get(m.id)?.px??null,p2:modeled.get(m.id)?.p2??null,
    over25:modeled.get(m.id)?.over25??null,under25:modeled.get(m.id)?.under25??null,
    btts:modeled.get(m.id)?.btts??null,no_btts:modeled.get(m.id)?.no_btts??null,
    home_score:m.home_score,away_score:m.away_score,status:m.status,
-   provider:'sportapi.ai',home_id:m.home_id,away_id:m.away_id,league_id:m.league_id
+   provider:'sportapi.ai',home_id:m.home_id,away_id:m.away_id,league_id:m.league_id,
+   logos:{home:signed.get(String(m.home_id))||null,away:signed.get(String(m.away_id))||null}
  }));
  const response=tdPublicJSON({demo:false,source:'SportAPI.ai',matches,model:{name:'provisional_poisson_standings',available_on_selected_games_only:true,validated:false},
   generated_at:b.updated_at,coverage:b.coverage},200,600);
