@@ -828,6 +828,18 @@ async function fhHomeResponse(req,env,ctx){
   model:{name:'CC0 historical venue Poisson (experimental)',trained_at:model?.trained_at||null,historical_cutoff:model?.cutoff||null,history_leagues:Object.keys(model?.leagues||{}),validated:false,
    note:'Not an LLM. Pure statistical fitting to licensed OpenFootball finished scores; no verified prospective track record.'},
   fallback_reason:fixtures.length?'': 'No upstream fixtures available',data_sources:{sportapi:fhSportFixtures(sport).length,allsports:raw.length}};
+ // Prospective evaluation log: only genuinely team-fitted predictions well before kickoff.
+ // Never backdate forecasts and never count generic no-data priors as learned predictions.
+ if(env?.TIKI_DB&&ctx?.waitUntil&&model){
+  const now=Date.now(),eligible=[selected.featured,...selected.upcoming].filter(m=>
+    m&&m.model?.method==='openfootball_cc0_fitted_venue_poisson'&&Date.parse(m.date)>now+2*3600000);
+  if(eligible.length){
+   const writes=eligible.map(m=>env.TIKI_DB.prepare(
+     "INSERT OR IGNORE INTO prospective_forecast_log (fixture_key,created_at,model_version,data_cutoff,source_sync_at,ph,pd,pa) VALUES (?1,datetime('now'),?2,?3,?4,?5,?6,?7)")
+     .bind(m.provider+':'+m.id+':'+m.date,model.model_version,model.cutoff,result.updated_at,m.model.p1/100,m.model.px/100,m.model.p2/100).run());
+   ctx.waitUntil(Promise.allSettled(writes));
+  }
+ }
  const response=fhJSON(result,200);
  try{ctx?.waitUntil?.(cache?.put(cacheKey,response.clone()))}catch{}
  if(env?.TIKI_DB&&ctx?.waitUntil){const payload=JSON.stringify(result);ctx.waitUntil(env.TIKI_DB.prepare("INSERT INTO sportapi_home_cache(cache_key,payload_json,expires_at,saved_at) VALUES('focus_v1',?1,?2,?3) ON CONFLICT(cache_key) DO UPDATE SET payload_json=excluded.payload_json,expires_at=excluded.expires_at,saved_at=excluded.saved_at").bind(payload,Math.floor(Date.now()/1000)+600,new Date().toISOString()).run().catch(()=>{}));}
