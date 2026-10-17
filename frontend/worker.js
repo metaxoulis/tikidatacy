@@ -38,13 +38,13 @@ function safeGoals(v) {
   return typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 25 ? v : null;
 }
 function safeTime(row) {
-  const candidate = row.datetime || row.kickoff || row.start_time || row.start_at;
+  const candidate = row.datetime || row.kickoff_utc || row.kickoff || row.start_time || row.start_at;
   if (typeof candidate !== 'string' || !/\d{4}-\d{2}-\d{2}T/.test(candidate)) return null;
   const millis = Date.parse(candidate);
   return Number.isFinite(millis) ? new Date(millis).toISOString() : null;
 }
 function normalizeSportApiFixtures(payload) {
-  const rows = Array.isArray(payload?.fixtures) ? payload.fixtures : Array.isArray(payload?.data?.fixtures) ? payload.data.fixtures : null;
+  const rows = Array.isArray(payload?.data) ? payload.data : Array.isArray(payload?.fixtures) ? payload.fixtures : Array.isArray(payload?.data?.fixtures) ? payload.data.fixtures : null;
   if (!rows || payload.success === false || rows.length > MAX_FIXTURES) return null;
   const matches = [];
   const seen = new Set();
@@ -83,7 +83,7 @@ async function fetchSportApiFixtures(key, date, fetchImpl = fetch) {
   try {
     const response = await fetchImpl(SPORTAPI_ENDPOINT + date, {
       method:'GET', headers:{'X-Api-Key':key,Accept:'application/json'},
-      signal:controller.signal,redirect:'error'
+      signal:controller.signal,redirect:'manual'
     });
     if (!response.ok) return null; // 401 / 403 / 429 / 5xx: no retry storms
     const len=Number(response.headers.get('content-length')||0);

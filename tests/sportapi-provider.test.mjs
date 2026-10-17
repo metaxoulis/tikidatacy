@@ -36,6 +36,7 @@ test('uses X-Api-Key exclusively in HTTP headers; never in URL or returned JSON'
     called=true;assert.equal(url,'https://sportapi.ai/api/fixtures/date/2026-10-16');
     assert.equal(options.headers['X-Api-Key'],sampleKey);
     assert.equal(options.method,'GET');
+    assert.equal(options.redirect,'manual');
     return {ok:true,headers:{get:()=>null},text:async()=>JSON.stringify({success:true,fixtures:[match]})};
   });
   assert(called);assert.equal(result.source,'sportapi.ai');
@@ -51,4 +52,35 @@ test('429 and authentication failures abort without retry or exposing credential
     });
     assert.equal(result,null);assert.equal(n,1);
   }
+});
+
+
+test('live SportAPI response uses data array and kickoff_utc',()=>{
+  const {datetime,...onlyKickoff}=match;
+  const actual={...onlyKickoff,kickoff_utc:'2026-10-16T18:45:00Z',
+    home_id:101,away_id:102,league_id:44,league_geo:'FR',updated_at:'2026-10-16T23:00:00Z'};
+  const payload={success:true,date:'2026-10-16',data:[actual]};
+  const normalized=normalizeSportApiFixtures(payload);
+  assert.equal(normalized.length,1);
+  assert.equal(normalized[0].date,'2026-10-16T18:45:00.000Z');
+  assert.equal(normalized[0].home,'Le Mans FC');
+  assert.equal(normalized[0].away,'Toulouse FC');
+  assert.equal(normalized[0].status,'FINISHED');
+  assert.equal(normalized[0].home_score,0);
+  assert.equal(normalized[0].away_score,3);
+});
+test('provider may legitimately return [] or date without time, never invent kickoff',()=>{
+  assert.deepEqual(normalizeSportApiFixtures({success:true,date:'2026-10-17',data:[]}),[]);
+  const row={...match,datetime:null,kickoff_utc:null,date:'2026-10-17'};
+  assert.deepEqual(normalizeSportApiFixtures({success:true,date:'2026-10-17',data:[row]}),[]);
+});
+test('real data[] fetch with 255 fixtures is accepted and protected from oversized responses',async()=>{
+  const many=Array.from({length:255},(_,i)=>({...match,id:i+1}));
+  const result=await fetchSportApiFixtures('synthetic-secret','2026-10-17',async()=>({
+    ok:true,headers:{get:()=>null},text:async()=>JSON.stringify({success:true,date:'2026-10-17',data:many})
+  }));
+  assert.equal(result?.matches?.length,255);
+  assert.equal(result?.source,'sportapi.ai');
+  assert(result.matches.every(x=>x.p1===null&&x.p2===null));
+  assert.equal(normalizeSportApiFixtures({success:true,data:Array.from({length:601},(_,i)=>({...match,id:i+1}))}),null);
 });
