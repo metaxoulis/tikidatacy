@@ -1181,9 +1181,10 @@ async function smFocusResponse(req,env,ctx){
   const payload={source:'sportmonks',updated_at:new Date().toISOString(),range:Array.from({length:7},(_,i)=>smAddDay(start,i)),
    coverage:selected.coverage,featured,upcoming,matches:selected.matches.map(publicMatch),
    leagues_with_matches:selected.leagues_with_matches,data_sources:{sportmonks:selected.matches.length},
-   model:{name:'CC0 historical venue Poisson v2 (experimental)',historical_matches:Object.values(model?.leagues||{})
+   model:{name:'Licensed historical venue Poisson v3 (experimental)',historical_matches:Object.values(model?.leagues||{})
      .reduce((sum,l)=>sum+(l.matches||0),0),trained_at:model?.trained_at||null,
-    historical_cutoff:model?.cutoff||null,validated:false,source:'openfootball_cc0_and_sportmonks_finished_scores',
+    historical_cutoff:model?.cutoff||null,validated:false,source:'licensed_historical_results',
+    training_sources:Object.values(model?.leagues||{}).reduce((o,l)=>({openfootball_cc0:o.openfootball_cc0+(l.source_counts?.openfootball_cc0||0),sportmonks:o.sportmonks+(l.source_counts?.sportmonks||0)}),{openfootball_cc0:0,sportmonks:0}),
     note:'Experimental statistical predictions only where both teams have matched verified licensed historical results.'},
    model_predictions_available:selected.coverage.with_prediction};
   if(db&&ctx?.waitUntil){
