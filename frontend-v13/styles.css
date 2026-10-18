@@ -506,3 +506,16 @@ body.modern-predictions{background:radial-gradient(ellipse at 75% 0,rgba(34,211,
 .intel-caveat{margin-top:24px;border-top:1px solid #335567;padding-top:13px;color:#8fb2c3;font-size:10px;line-height:1.8}
 @media(max-width:1050px){.intelligence-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.insight-origin{align-items:flex-start}}
 @media(max-width:640px){.intelligence-summary{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.insight-stat,.insight-origin{padding:10px 9px;gap:8px}.insight-stat strong{font-size:19px}.insight-icon{width:28px;height:28px}.insight-stat small,.insight-origin span{font-size:9px}.insight-pulse{margin:0 6px 0 5px}.intel-modal{max-height:94dvh;border-radius:13px}.modal-backdrop{padding:9px}.intel-modal-head{padding:14px 16px}.intel-body{padding:12px 14px 20px}.intel-teams{grid-template-columns:minmax(0,1fr) 65px minmax(0,1fr);gap:6px;margin:12px 0;padding:15px 5px}.intel-team .featured-crest{width:51px;height:51px;min-width:51px}.intel-team strong{font-size:11px}.intel-center b{font-size:24px}.intel-outcome{padding:10px 7px}.intel-outcome b{font-size:18px}.intel-outcome span{font-size:9px}.intel-markets{grid-template-columns:repeat(2,minmax(0,1fr))}.analysis-facts{grid-template-columns:1fr}.analysis-facts section:last-child:nth-child(odd){grid-column:auto}.intel-section-head>span{font-size:8px}.intelligence-note{padding:10px}}
+
+/* Readable Match Intelligence statistics on desktop and large tablets. */
+@media(min-width:781px){
+ .intel-modal{width:min(920px,calc(100vw - 48px))}
+ .intel-modal .intel-outcome b{font-size:clamp(27px,2.5vw,37px);line-height:1.2;font-variant-numeric:tabular-nums}
+ .intel-modal .intel-metric b{font-size:clamp(23px,2vw,30px);line-height:1.25;font-variant-numeric:tabular-nums}
+ .intel-modal .intel-outcome span,.intel-modal .intel-metric small{font-size:12px}
+ .intel-modal .intel-section-head h3{font-size:17px}
+ .intel-modal .analysis-stat{font-size:13px;grid-template-columns:56px 1fr 56px;padding:9px 0}
+ .intel-modal .analysis-stat b{font-size:16px;font-variant-numeric:tabular-nums}
+ .intel-modal .intel-team strong{font-size:16px}
+ .intel-modal .intel-center b{font-size:44px}
+}
