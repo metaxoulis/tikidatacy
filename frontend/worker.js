@@ -1628,16 +1628,16 @@ async function tdAttachUefaForm(db,matches){
  const ids=[...new Set(selected.flatMap(m=>[m.home_id,m.away_id]))].slice(0,160);
  if(!ids.length)return;
  try{
-  const tags=ids.map(()=>'?' ).join(',');
+  // Cloudflare D1 enforces a tight SQL parameter bound: pass team IDs once as a JSON array.
   const sql=`WITH team_games AS (
-    SELECT home_team_id AS team_id,fixture_id,league_key,match_date,home_score AS gf,away_score AS ga,home_shots AS shots,home_shots_on_target AS shots_on_target,home_possession AS possession FROM uefa_match_evidence WHERE home_team_id IN (${tags})
+    SELECT home_team_id AS team_id,fixture_id,league_key,match_date,home_score AS gf,away_score AS ga,home_shots AS shots,home_shots_on_target AS shots_on_target,home_possession AS possession FROM uefa_match_evidence WHERE home_team_id IN (SELECT CAST(value AS INTEGER) FROM json_each(?1))
     UNION ALL
-    SELECT away_team_id AS team_id,fixture_id,league_key,match_date,away_score AS gf,home_score AS ga,away_shots AS shots,away_shots_on_target AS shots_on_target,away_possession AS possession FROM uefa_match_evidence WHERE away_team_id IN (${tags})
+    SELECT away_team_id AS team_id,fixture_id,league_key,match_date,away_score AS gf,home_score AS ga,away_shots AS shots,away_shots_on_target AS shots_on_target,away_possession AS possession FROM uefa_match_evidence WHERE away_team_id IN (SELECT CAST(value AS INTEGER) FROM json_each(?1))
   ), ranked AS (
     SELECT *,ROW_NUMBER() OVER(PARTITION BY team_id ORDER BY match_date DESC,fixture_id DESC) AS n FROM team_games
   )
   SELECT team_id,fixture_id,league_key,match_date,gf,ga,shots,shots_on_target,possession FROM ranked WHERE n<=16`;
-  const data=await db.prepare(sql).bind(...ids,...ids).all();
+  const data=await db.prepare(sql).bind(JSON.stringify(ids)).all();
   const rows=new Map();
   for(const r of data.results||[]){
    const k=Number(r.team_id);
