@@ -1756,9 +1756,9 @@ const METRICS=[
  ['shots','Σουτ',['SHOTS_TOTAL','TOTAL_SHOTS']],
  ['on_target','Στην εστία',['SHOTS_ON_TARGET','SHOTS_ON_GOAL']],
  ['possession','Κατοχή',['BALL_POSSESSION','POSSESSION']],
- ['corners','Κόρνερ',['CORNERS']],
- ['fouls','Φάουλ',['FOULS']],
- ['yellow','Κίτρινες',['YELLOWCARDS','YELLOW_CARDS']],
+ ['corners','Κόρνερ',['CORNERS','CORNER_KICKS','CORNERS_WON']],
+ ['fouls','Φάουλ',['FOULS','FOULS_COMMITTED']],
+ ['yellow','Κίτρινες',['YELLOWCARDS','YELLOW_CARDS','YELLOW_CARDS_TOTAL']],
  ['red','Κόκκινες',['REDCARDS','RED_CARDS']]
 ];
 const finite=v=>typeof v==='number'&&Number.isFinite(v);
