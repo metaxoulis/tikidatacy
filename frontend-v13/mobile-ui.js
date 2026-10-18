@@ -1,6 +1,6 @@
 (()=>{'use strict';
 const deepCache=new Map(),deepLoading=new Set();
-const favKey='tiki.followedTeams.v2',state={view:location.pathname.includes('/predictions')?'matches':'home',previous:'matches',mode:new URLSearchParams(location.search).get('filter')==='live'?'live':'all',league:'all',day:'all',query:'',tab:'info',id:'',matches:[],loading:true,error:'',fromCache:false,visible:42};
+const favKey='tiki.followedTeams.v2',state={view:location.pathname.includes('/predictions')?'matches':'home',previous:'matches',mode:new URLSearchParams(location.search).get('filter')==='live'?'live':'all',league:'all',day:'all',query:'',tab:'info',id:'',matches:[],loading:true,error:'',fromCache:false,visible:42,liveUpdatedAt:'',livePending:false};
 let followed=[];try{const f=JSON.parse(localStorage.getItem(favKey)||'[]');if(Array.isArray(f))followed=f.filter(v=>typeof v==='string')}catch{}
 const root=document.createElement('div');root.id='td-mobile-root';
 const E=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -22,6 +22,7 @@ const row=(a,b)=>'<div class="tdm-row"><span>'+E(a)+'</span><b>'+E(b??'—')+'</
 const title=(a,link,v)=>'<div class="tdm-section"><h2>'+E(a)+'</h2>'+(link?'<button class="tdm-link" data-view="'+v+'">'+E(link)+' →</button>':'')+'</div>';
 const lead=(h,p)=>'<span class="tdm-kicker">TIKI-DATA · FOOTBALL INTELLIGENCE</span><h1>'+E(h)+'</h1><p class="tdm-lead">'+E(p)+'</p>';
 const kpis=()=>'<div class="tdm-kpis">'+[['Αγώνες',state.matches.length],['Live',state.matches.filter(live).length],['Με εκτίμηση',state.matches.filter(m=>!!pr(m)).length]].map(([x,y],i)=>'<div class="tdm-kpi '+(i===1?'live':'')+'"><b>'+y+'</b><span>'+x+'</span></div>').join('')+'</div>';
+const liveUpdateLabel=()=>state.liveUpdatedAt||state.livePending?'<div class="tdm-live-status">'+(state.liveUpdatedAt?'● Live ενημέρωση '+E(when(state.liveUpdatedAt)):'Επεξεργασία live στοιχείων στο Cloudflare…')+(state.livePending?' · αναμονή νεότερων δεδομένων':'')+'</div>':'';
 const dayKey=d=>{const x=new Date(d);if(!Number.isFinite(+x))return '';return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0')};
 const miniProb=m=>{const p=pr(m);return '<span class="tdm-central-probs" aria-label="Πιθανότητες 1 Χ 2">'+['1','Χ','2'].map((t,i)=>'<span><small>'+t+'</small><b>'+pct(p?[p.p1,p.px,p.p2][i]:null)+'</b></span>').join('')+'</span>'};
 const dateChips=()=>{const days=[...new Set(state.matches.map(m=>dayKey(m.date)))].filter(Boolean).sort(),today=dayKey(new Date()),tomorrow=dayKey(Date.now()+86400000);return '<div class="tdm-chips tdm-day-chips" aria-label="Φίλτρο ανά ημέρα"><button data-day="all" class="tdm-chip '+(state.day==='all'?'active':'')+'">Όλες</button>'+days.map(k=>'<button data-day="'+k+'" class="tdm-chip '+(state.day===k?'active':'')+'">'+(k===today?'Σήμερα':k===tomorrow?'Αύριο':E(new Date(k+'T12:00:00').toLocaleDateString('el-GR',{weekday:'short',day:'numeric',month:'short'})))+'</button>').join('')+'</div><label class="tdm-date-control">Ημερομηνία <input type="date" data-pick-day value="'+(state.day==='all'?'':E(state.day))+'" aria-label="Επιλογή συγκεκριμένης ημέρας"></label>'};
@@ -34,14 +35,14 @@ const card=m=>{const p=pr(m),vals=p?[p.p1,p.px,p.p2]:[null,null,null];
 const empty=x=>'<div class="tdm-empty">'+E(x)+'</div>';
 function home(){const future=state.matches.filter(m=>!live(m));return lead('Τα γήπεδα, στην οθόνη σου.','Όλοι οι αγώνες, live ενημερώσεις και ανάλυση Tiki-Data σε μία εμπειρία.')+
 '<section class="tdm-hero"><span class="tdm-kicker">MATCH INTELLIGENCE</span><h2>Δεδομένα που<br>αφηγούνται τον αγώνα.</h2><p>Προγνωστικά 1Χ2, γκολ και live σενάρια με επιβεβαιωμένη προέλευση.</p><button class="tdm-accent-btn" data-view="matches">Εξερεύνησε αγώνες ↗</button></section>'+
-kpis()+title('Στο επίκεντρο','Όλοι','matches')+(state.matches[0]?card(state.matches[0]):empty('Αναμονή πραγματικών αγώνων'))+
+kpis()+liveUpdateLabel()+title('Στο επίκεντρο','Όλοι','matches')+(state.matches[0]?card(state.matches[0]):empty('Αναμονή πραγματικών αγώνων'))+
 title('Επόμενοι αγώνες','Περισσότερα','matches')+'<div class="tdm-list">'+future.slice(1,5).map(card).join('')+'</div>'+
 '<section class="tdm-panel"><h3>Οι δικές σου ομάδες</h3><p class="tdm-lead">Επίλεξε τα αγαπημένα σωματεία σου για γρήγορη πρόσβαση.</p><button class="tdm-accent-btn" data-view="teams">Follow Teams ★</button></section>'}
 function teams(){const map=new Map();for(const m of state.matches)for(const [n,url] of [[m.home,logoH(m)],[m.away,logoA(m)]])if(!map.has(norm(n)))map.set(norm(n),{n,url});const arr=[...map.values()].filter(x=>norm(x.n).includes(norm(state.query))).sort((a,b)=>Number(isFav(b.n))-Number(isFav(a.n))||a.n.localeCompare(b.n,'el'));return lead('Follow Teams','Διάλεξε τις ομάδες που σε ενδιαφέρουν. Θα αποθηκευτούν μόνο στη συσκευή σου.')+
 searchInput()+title('Επίλεξε τις ομάδες σου')+'<div class="tdm-grid">'+arr.map(x=>'<button class="tdm-tile '+(isFav(x.n)?'active':'')+'" data-team="'+E(x.n)+'" aria-pressed="'+isFav(x.n)+'"><span class="tdm-star">'+(isFav(x.n)?'★':'☆')+'</span>'+badge(x.n,x.url)+'<strong>'+E(x.n)+'</strong></button>').join('')+'</div>'+(arr.length?'':empty('Δεν βρέθηκαν ομάδες στο διαθέσιμο επταήμερο.'))}
 function searchInput(){return '<label class="tdm-search">'+ico('search')+'<input data-search type="search" value="'+E(state.query)+'" placeholder="Αναζήτηση ομάδας ή αγώνα…" aria-label="Αναζήτηση"></label>'}
 function fixtures(){const f=state.matches.filter(m=>(state.view==='live'?live(m):state.mode==='live'?live(m):state.mode==='favorites'?isFav(m.home)||isFav(m.away):true)&&(state.league==='all'||state.league===m.league_key)&&(state.day==='all'||dayKey(m.date)===state.day)&&(!state.query||norm(m.home+' '+m.away+' '+m.league).includes(norm(state.query))));const leagues=[...new Map(state.matches.map(m=>[m.league_key,m.league||m.league_key])).entries()];return lead(state.view==='live'?'Live Scores':'Αγώνες & Προβλέψεις','Πραγματικά παιχνίδια, οργανωμένα στοιχεία και αναλυτικό Match Center.')+
-kpis()+title(state.view==='live'?'Αγώνες σε εξέλιξη':'Πρόγραμμα')+(state.view!=='live'?'<div class="tdm-chips">'+[['all','Όλοι'],['favorites','★ Αγαπημένα'],['live','● Live']].map(([x,y])=>'<button data-mode="'+x+'" class="tdm-chip '+(x===state.mode?'active':'')+'">'+y+'</button>').join('')+'</div>':'')+
+kpis()+liveUpdateLabel()+title(state.view==='live'?'Αγώνες σε εξέλιξη':'Πρόγραμμα')+(state.view!=='live'?'<div class="tdm-chips">'+[['all','Όλοι'],['favorites','★ Αγαπημένα'],['live','● Live']].map(([x,y])=>'<button data-mode="'+x+'" class="tdm-chip '+(x===state.mode?'active':'')+'">'+y+'</button>').join('')+'</div>':'')+
 '<div class="tdm-chips"><button data-league="all" class="tdm-chip '+(state.league==='all'?'active':'')+'">Όλες οι λίγκες</button>'+leagues.map(([x,y])=>'<button data-league="'+E(x)+'" class="tdm-chip '+(x===state.league?'active':'')+'">'+E(y)+'</button>').join('')+'</div>'+
 dateChips()+searchInput()+'<div class="tdm-list">'+f.slice(0,state.visible).map(card).join('')+(f.length>state.visible?'<button class="tdm-more" data-more>Εμφάνιση περισσότερων ('+(f.length-state.visible)+') ↓</button>':'')+'</div>'+(f.length?'':empty(state.loading?'Φόρτωση πραγματικών αγώνων…':'Δεν υπάρχουν αγώνες με τα συγκεκριμένα φίλτρα.'))+'<p class="tdm-note">Οι αριθμητικές εκτιμήσεις είναι πειραματικές και δεν αποτελούν εγγυημένα αποτελέσματα.</p>'}
 const metric=(name,p)=>'<div class="tdm-prob"><small>'+E(name)+'</small><b>'+pct(p)+'</b><div class="tdm-bar"><i style="width:'+((typeof p==='number'&&p>=0&&p<=100)?p:0)+'%"></i></div></div>';
@@ -162,29 +163,57 @@ function restoreFixtures(){
   if(state.matches.length)state.loading=false;
  }catch{}
 }
-let updating=false;
+
+/* Two independent streams: slow 7-day fixture updates and fast lightweight
+ * completed live snapshots from the backend. The browser NEVER runs forecasts. */
+let updating=false,liveUpdating=false,baseMatches=[],liveMatches=[];
+function paintMatches(){
+ const all=new Map(baseMatches.map(x=>[String(x.id),x]));
+ for(const game of liveMatches){
+  if(!game?.id||!game.home||!game.away||!Number.isFinite(Date.parse(game.date)))continue;
+  const old=all.get(String(game.id));
+  all.set(String(game.id),old?{...old,...game,logos:{...(old.logos||{}),...(game.logos||{})}}:game);
+ }
+ state.matches=[...all.values()].filter(x=>x?.id&&x.home&&x.away&&Number.isFinite(Date.parse(x.date)))
+  .sort((a,b)=>Date.parse(a.date)-Date.parse(b.date));
+ rememberFixtures();render();
+}
 async function refresh(){
  if(updating)return;updating=true;
  try{
   const controller=new AbortController(),abort=setTimeout(()=>controller.abort(),16000);
   let payload;
-  try{const result=await fetch('/api/home-focus',{signal:controller.signal,headers:{Accept:'application/json'},cache:'no-store'});if(!result.ok)throw Error('fixture_api');payload=await result.json()}
+  try{const response=await fetch('/api/home-focus',{signal:controller.signal,headers:{Accept:'application/json'},cache:'no-store'});
+   if(!response.ok)throw Error('fixture_api');payload=await response.json()}
   finally{clearTimeout(abort)}
   if(!Array.isArray(payload?.matches))throw Error('fixture_shape');
-  const items=payload.matches.filter(x=>x?.id&&x.home&&x.away&&Number.isFinite(Date.parse(x.date)));
-  state.matches=items.sort((a,b)=>Date.parse(a.date)-Date.parse(b.date));state.loading=false;state.error='';state.fromCache=false;rememberFixtures();render();
-  /* Live events are optional: do not delay fixture cards waiting for them. */
-  if(!document.hidden)void fetch('/api/live',{headers:{Accept:'application/json'},cache:'no-store'}).then(r=>r.ok?r.json():null).then(j=>{
-   if(!Array.isArray(j?.matches))return;
-   const map=new Map(state.matches.map(x=>[String(x.id),x]));
-   for(const l of j.matches){if(!l?.id||!l.home||!l.away)continue;const old=map.get(String(l.id));map.set(String(l.id),old?{...old,...l,logos:{...(old.logos||{}),...(l.logos||{})}}:l)}
-   state.matches=[...map.values()].filter(x=>x?.id&&x.home&&x.away&&Number.isFinite(Date.parse(x.date))).sort((a,b)=>Date.parse(a.date)-Date.parse(b.date));
-   rememberFixtures();render();
-  }).catch(()=>{});
+  baseMatches=payload.matches.filter(x=>x?.id&&x.home&&x.away&&Number.isFinite(Date.parse(x.date)));
+  state.loading=false;state.error='';state.fromCache=false;paintMatches();
  }catch{state.loading=false;if(!state.matches.length)state.error='Προσωρινό πρόβλημα σύνδεσης δεδομένων.';render()}
  finally{updating=false}
 }
-function init(){document.body.appendChild(root);document.documentElement.classList.add('td-mobile-ready');restoreFixtures();render();refresh();setInterval(()=>{if(!document.hidden)refresh()},30000)}
+async function refreshLive(){
+ if(liveUpdating||document.hidden)return;liveUpdating=true;
+ try{
+  const controller=new AbortController(),abort=setTimeout(()=>controller.abort(),18000);
+  let snapshot;
+  try{const response=await fetch('/api/live',{signal:controller.signal,headers:{Accept:'application/json'},cache:'no-store'});
+   if(!response.ok)throw Error('live_backend_unavailable');snapshot=await response.json()}
+  finally{clearTimeout(abort)}
+  if(snapshot?.pending||!Array.isArray(snapshot?.matches)){
+   state.livePending=true;render();return;
+  }
+  const timestamp=Date.parse(snapshot.updated_at);
+  if(!Number.isFinite(timestamp)||timestamp>Date.now()+60000||Date.now()-timestamp>90000){
+   state.livePending=true;render();return;
+  }
+  liveMatches=snapshot.matches;
+  state.liveUpdatedAt=snapshot.updated_at;state.livePending=!!snapshot.refreshing;
+  paintMatches();
+ }catch{state.livePending=true;render()}
+ finally{liveUpdating=false}
+}
+function init(){document.body.appendChild(root);document.documentElement.classList.add('td-mobile-ready');restoreFixtures();baseMatches=state.matches.slice();render();void refresh();void refreshLive();setInterval(()=>{if(!document.hidden)void refresh()},300000);setInterval(()=>{if(!document.hidden)void refreshLive()},20000)}
 window.matchMedia('(min-width:781px)').addEventListener('change',()=>{if(root.isConnected)render()});
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();
