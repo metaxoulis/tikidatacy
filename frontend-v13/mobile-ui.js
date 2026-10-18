@@ -25,7 +25,12 @@ const kpis=()=>'<div class="tdm-kpis">'+[['Αγώνες',state.matches.length],[
 const dayKey=d=>{const x=new Date(d);if(!Number.isFinite(+x))return '';return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0')};
 const miniProb=m=>{const p=pr(m);return '<span class="tdm-central-probs" aria-label="Πιθανότητες 1 Χ 2">'+['1','Χ','2'].map((t,i)=>'<span><small>'+t+'</small><b>'+pct(p?[p.p1,p.px,p.p2][i]:null)+'</b></span>').join('')+'</span>'};
 const dateChips=()=>{const days=[...new Set(state.matches.map(m=>dayKey(m.date)))].filter(Boolean).sort(),today=dayKey(new Date()),tomorrow=dayKey(Date.now()+86400000);return '<div class="tdm-chips tdm-day-chips" aria-label="Φίλτρο ανά ημέρα"><button data-day="all" class="tdm-chip '+(state.day==='all'?'active':'')+'">Όλες</button>'+days.map(k=>'<button data-day="'+k+'" class="tdm-chip '+(state.day===k?'active':'')+'">'+(k===today?'Σήμερα':k===tomorrow?'Αύριο':E(new Date(k+'T12:00:00').toLocaleDateString('el-GR',{weekday:'short',day:'numeric',month:'short'})))+'</button>').join('')+'</div><label class="tdm-date-control">Ημερομηνία <input type="date" data-pick-day value="'+(state.day==='all'?'':E(state.day))+'" aria-label="Επιλογή συγκεκριμένης ημέρας"></label>'};
-const card=m=>{const p=pr(m);return '<article class="tdm-card" role="button" tabindex="0" data-open="'+E(m.id)+'"><div class="tdm-card-top"><b>'+E(m.league||m.league_key)+'</b><span>'+stamp(m)+'</span></div><div class="tdm-teams">'+club(m.home,logoH(m))+miniProb(m)+club(m.away,logoA(m))+'</div>'+(live(m)?'<div class="tdm-card-bottom"><b>● LIVE · '+E(score(m))+'</b><span>Άνοιγμα ανάλυσης ↗</span></div>':'<div class="tdm-card-bottom"><span>1Χ2 · Πειραματικές εκτιμήσεις</span><span>Ανάλυση ↗</span></div>')+'</article>'};
+const card=m=>{const p=pr(m),vals=p?[p.p1,p.px,p.p2]:[null,null,null];
+ const highest=p?Math.max(...vals):null;
+ const inner='<div class="tdm-core-prob" aria-label="Πιθανότητες 1 Χ 2">'+['1','Χ','2'].map((k,i)=>'<span class="tdm-core-cell'+(vals[i]!==null&&vals[i]===highest?' winner':'')+'"><small>'+k+'</small><b>'+pct(vals[i])+'</b></span>').join('')+'</div>';
+ return '<article class="tdm-card tdm-match-compact" role="button" tabindex="0" data-open="'+E(m.id)+'"><div class="tdm-card-top"><b>'+E(m.league||m.league_key)+'</b><span>'+stamp(m)+'</span></div>'+
+ '<div class="tdm-teams">'+club(m.home,logoH(m))+'<div class="tdm-centre">'+inner+(live(m)?'<span class="tdm-live-score">'+E(score(m))+'</span>':'')+'</div>'+club(m.away,logoA(m))+'</div>'+
+ '<div class="tdm-card-bottom"><b>Πιθανότητες 1Χ2</b><small>Ανάλυση αγώνα ↗</small></div></article>'};
 const empty=x=>'<div class="tdm-empty">'+E(x)+'</div>';
 function home(){const future=state.matches.filter(m=>!live(m));return lead('Τα γήπεδα, στην οθόνη σου.','Όλοι οι αγώνες, live ενημερώσεις και ανάλυση Tiki-Data σε μία εμπειρία.')+
 '<section class="tdm-hero"><span class="tdm-kicker">MATCH INTELLIGENCE</span><h2>Δεδομένα που<br>αφηγούνται τον αγώνα.</h2><p>Προγνωστικά 1Χ2, γκολ και live σενάρια με επιβεβαιωμένη προέλευση.</p><button class="tdm-accent-btn" data-view="matches">Εξερεύνησε αγώνες ↗</button></section>'+
@@ -113,10 +118,46 @@ if(b.hasAttribute('data-open')){state.previous=state.view;state.id=a('open');sta
 if(b.hasAttribute('data-mode')){state.mode=a('mode');render();return}if(b.hasAttribute('data-league')){state.league=a('league');render();return}if(b.hasAttribute('data-day')){state.day=a('day');render();return}if(b.hasAttribute('data-tab')){state.tab=a('tab');render();if(!deepCache.has(state.id))void fetchDeep(state.id);return}if(b.hasAttribute('data-retry'))refresh()});
 root.addEventListener('change',e=>{if(e.target.matches('[data-pick-day]')){state.day=/^\d{4}-\d{2}-\d{2}$/.test(e.target.value)?e.target.value:'all';render()}});
 root.addEventListener('input',e=>{if(e.target.matches('[data-search]')){state.query=e.target.value;render(true)}});root.addEventListener('keydown',e=>{if(e.target.matches('[data-open]')&&(e.key==='Enter'||e.key===' ')){e.preventDefault();e.target.click()}});
-async function refresh(){try{const timer=new AbortController();const id=setTimeout(()=>timer.abort(),16000);let fx,lv;try{[fx,lv]=await Promise.allSettled([fetch('/api/home-focus',{signal:timer.signal,cache:'no-store'}).then(r=>r.ok?r.json():Promise.reject()),fetch('/api/live',{signal:timer.signal,cache:'no-store'}).then(r=>r.ok?r.json():null)])}finally{clearTimeout(id)}
-if(fx.status!=='fulfilled'||!Array.isArray(fx.value.matches))throw Error('Data unavailable');const m=new Map(fx.value.matches.map(x=>[String(x.id),x]));if(lv.status==='fulfilled'&&Array.isArray(lv.value?.matches))for(const l of lv.value.matches){const old=m.get(String(l.id));m.set(String(l.id),old?{...old,...l,logos:{...(old.logos||{}),...(l.logos||{})}}:l)}
-state.matches=[...m.values()].filter(x=>x.id&&x.home&&x.away&&Number.isFinite(Date.parse(x.date))).sort((a,b)=>Date.parse(a.date)-Date.parse(b.date));state.loading=false;state.error='';render()}
-catch{state.loading=false;if(!state.matches.length)state.error='Προσωρινό πρόβλημα σύνδεσης δεδομένων.';render()}}
-function init(){document.body.appendChild(root);document.documentElement.classList.add('td-mobile-ready');render();refresh();setInterval(()=>{if(!document.hidden)refresh()},30000)}
+/* Show the most recent verified public fixture snapshot immediately on return visits.
+ * Cache lifetime is 5 minutes; network refresh runs independently of live events. */
+const warmKey='tiki.mobile.fixture.snapshot.v1';
+function rememberFixtures(){
+ try{
+  const fields=['id','home','away','date','league','league_key','status','minute','home_score','away_score','p1','px','p2','logos','home_logo','away_logo','prediction_tier','live_outlook','live_prediction','over25','under25','btts','mu_home','mu_away','most_likely_score'];
+  const recent=state.matches.slice(0,150).map(m=>Object.fromEntries(fields.filter(k=>Object.prototype.hasOwnProperty.call(m,k)).map(k=>[k,m[k]])));
+  localStorage.setItem(warmKey,JSON.stringify({saved:Date.now(),matches:recent}));
+ }catch{}
+}
+function restoreFixtures(){
+ try{
+  const c=JSON.parse(localStorage.getItem(warmKey)||'null');
+  if(!c||!Number.isFinite(c.saved)||Date.now()-c.saved>300000||c.saved>Date.now()+60000||!Array.isArray(c.matches))return;
+  state.matches=c.matches.filter(x=>x&&x.id&&x.home&&x.away&&Number.isFinite(Date.parse(x.date))).slice(0,150);
+  if(state.matches.length)state.loading=false;
+ }catch{}
+}
+let updating=false;
+async function refresh(){
+ if(updating)return;updating=true;
+ try{
+  const controller=new AbortController(),abort=setTimeout(()=>controller.abort(),16000);
+  let payload;
+  try{const result=await fetch('/api/home-focus',{signal:controller.signal,headers:{Accept:'application/json'},cache:'no-store'});if(!result.ok)throw Error('fixture_api');payload=await result.json()}
+  finally{clearTimeout(abort)}
+  if(!Array.isArray(payload?.matches))throw Error('fixture_shape');
+  const items=payload.matches.filter(x=>x?.id&&x.home&&x.away&&Number.isFinite(Date.parse(x.date)));
+  state.matches=items.sort((a,b)=>Date.parse(a.date)-Date.parse(b.date));state.loading=false;state.error='';rememberFixtures();render();
+  /* Live events are optional: do not delay fixture cards waiting for them. */
+  if(!document.hidden)void fetch('/api/live',{headers:{Accept:'application/json'},cache:'no-store'}).then(r=>r.ok?r.json():null).then(j=>{
+   if(!Array.isArray(j?.matches))return;
+   const map=new Map(state.matches.map(x=>[String(x.id),x]));
+   for(const l of j.matches){if(!l?.id||!l.home||!l.away)continue;const old=map.get(String(l.id));map.set(String(l.id),old?{...old,...l,logos:{...(old.logos||{}),...(l.logos||{})}}:l)}
+   state.matches=[...map.values()].filter(x=>x?.id&&x.home&&x.away&&Number.isFinite(Date.parse(x.date))).sort((a,b)=>Date.parse(a.date)-Date.parse(b.date));
+   rememberFixtures();render();
+  }).catch(()=>{});
+ }catch{state.loading=false;if(!state.matches.length)state.error='Προσωρινό πρόβλημα σύνδεσης δεδομένων.';render()}
+ finally{updating=false}
+}
+function init(){document.body.appendChild(root);document.documentElement.classList.add('td-mobile-ready');restoreFixtures();render();refresh();setInterval(()=>{if(!document.hidden)refresh()},30000)}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();
