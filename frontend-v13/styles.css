@@ -519,3 +519,88 @@ body.modern-predictions{background:radial-gradient(ellipse at 75% 0,rgba(34,211,
  .intel-modal .intel-team strong{font-size:16px}
  .intel-modal .intel-center b{font-size:44px}
 }
+
+/* Tiki-Data premium desktop gallery: match probabilities are the headline, no fake odds. */
+@media(min-width:781px){
+body.modern-predictions{background:#f4f7fa;color:#122b39}
+body.modern-predictions .app{background:#f4f7fa}
+body.modern-predictions .layout{grid-template-columns:minmax(0,1fr)}
+body.modern-predictions .sidebar{display:none}
+body.modern-predictions .topbar{padding:0 clamp(24px,5vw,78px);background:#05172a;box-shadow:0 5px 24px #01132315}
+body.modern-predictions .brand{width:245px}
+body.modern-predictions .brand img{width:238px;max-height:63px}
+body.modern-predictions .main.predictions-main{padding:22px clamp(25px,4.5vw,72px) 60px;max-width:1700px;margin:0 auto}
+body.modern-predictions .predictions-intro{margin:0 0 20px;background:transparent;border:0;box-shadow:none;padding:15px 1px 12px;display:block}
+body.modern-predictions .predictions-intro .section-kicker{color:#1a9c92}
+body.modern-predictions .predictions-intro h1{color:#0b2340;font-size:clamp(31px,3.6vw,50px);letter-spacing:-1.8px}
+body.modern-predictions .predictions-intro h1 span{color:#15998f}
+body.modern-predictions .predictions-intro p{max-width:780px;color:#718397;font-size:13px;line-height:1.65}
+body.modern-predictions .predictions-intro-mark{display:none}
+body.modern-predictions .intelligence-summary{display:none}
+body.modern-predictions .toolbar,body.modern-predictions .datebar{color:#152a42}
+body.modern-predictions .datebar{background:#fff;border:1px solid #dbe6ef;box-shadow:0 3px 18px #1a465b0b;padding:8px;margin:0 0 24px;border-radius:16px}
+body.modern-predictions .date-switcher{gap:6px;scrollbar-width:thin}
+body.modern-predictions .day-btn{background:#f7fafc;border:1px solid #e3ebef;color:#6e8295;border-radius:11px;padding:11px 15px;font-size:11px;min-width:96px}
+body.modern-predictions .day-btn strong{color:#19354d;font-size:12px}
+body.modern-predictions .day-btn.selected{background:linear-gradient(135deg,#17d2e8,#41eec0);border-color:transparent;box-shadow:0 6px 15px #22d5bf25;color:#063b47;font-weight:800}
+body.modern-predictions .day-btn.selected strong{color:#05273a}
+body.modern-predictions .calendar-icon{background:#f9fbfd;border-color:#e1e8ed;color:#12364a}
+body.modern-predictions .gallery-date-picker{display:flex;gap:6px;align-items:center;padding:8px 10px;border:1px solid #e0e9ed;background:#f8fafb;border-radius:10px;white-space:nowrap}
+body.modern-predictions .gallery-date-picker input{max-width:140px;min-width:0;background:transparent;color:#1a3444;border:0;font-size:12px;cursor:pointer}
+body.modern-predictions .results{background:transparent;border:none;overflow:visible;box-shadow:none!important;margin:8px 0 26px}
+body.modern-predictions .results-top{background:transparent;border:0;padding:6px 0 17px}
+body.modern-predictions .results-top h2{font-size:24px;color:#0b2236;letter-spacing:-.8px}
+body.modern-predictions .results-top h2 span{color:#299d93;font-size:12px}
+body.modern-predictions .results-top .section-kicker{color:#2a998c}
+body.modern-predictions .segmented{background:#fff;border-color:#dae5e9;border-radius:11px;padding:4px}
+body.modern-predictions .segmented button{color:#667a87;border-radius:9px;padding:10px 13px}
+body.modern-predictions .segmented button.active{background:#e5f8f3;color:#127b68}
+body.modern-predictions .refresh-btn{background:#fff;color:#176e66;border-color:#dbe5ed;height:39px}
+body.modern-predictions #filterNotice{background:#e9f7f5;border-color:#c2e3db;color:#22596b}
+body.modern-predictions .table-scroll{position:absolute!important;left:-20000px!important;width:1px!important;height:1px!important;overflow:hidden!important}
+body.modern-predictions .list-footer{color:#79909b;border-color:#e0e9ef}
+body.modern-predictions .list-footer span{font-size:11px}
+body.modern-predictions .footer{color:#80929f;border-color:#dce7ef}
+.gallery-featured[hidden]{display:none!important}
+.gallery-featured{display:block;max-width:100%;margin:0 0 30px;padding:22px clamp(18px,2.5vw,36px);border:1px solid #145870;border-radius:22px;background:radial-gradient(ellipse at 90% 20%,#173f536a,transparent 50%),linear-gradient(135deg,#061524,#092e3c);box-shadow:0 16px 40px #0c365c22;color:#f2fffb;overflow:hidden;position:relative}
+.gallery-featured:after{content:"";position:absolute;inset:0;background:url('/stadium.svg') center/cover;opacity:.15;pointer-events:none}
+.gallery-featured>*{position:relative;z-index:1}
+.gallery-hero-meta{display:flex;gap:18px;align-items:center;flex-wrap:wrap;font-size:12px}
+.gallery-hero-meta>span{color:#49f3c6;letter-spacing:1.8px;font-size:11px;font-weight:900}
+.gallery-hero-meta strong{font-size:13px;color:#a8bdca;font-weight:650}
+.gallery-hero-main{display:grid;grid-template-columns:minmax(105px,1fr) minmax(235px,1.6fr) minmax(105px,1fr);gap:clamp(15px,3vw,48px);align-items:center;max-width:880px;margin:18px auto 9px}
+.gallery-hero-team{display:flex;flex-direction:column;gap:10px;align-items:center;text-align:center;font-size:18px}
+.gallery-hero-team .table-crest{width:78px;height:78px}
+.gallery-hero-team .table-crest img{max-width:100%;max-height:100%}
+.gallery-hero-team strong{color:#f0fcff;overflow-wrap:anywhere}
+.gallery-hero-odds{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1px solid #16d6e4;background:#0b2638dd;border-radius:18px;align-items:center;padding:18px 10px;box-shadow:inset 0 0 25px #17dcdf09}
+.gallery-hero-odds .g-prob{display:flex;flex-direction:column;align-items:center;gap:6px;border-right:1px solid #3b6075}
+.gallery-hero-odds .g-prob:last-child{border:0}
+.gallery-hero-odds .g-prob small{color:#a3c3cd;font-size:12px;font-weight:800}
+.gallery-hero-odds .g-prob strong{color:#fff;font-size:clamp(22px,2.7vw,39px);letter-spacing:-1.3px;font-weight:900;font-variant-numeric:tabular-nums}
+.gallery-hero-footer{border-top:1px solid #ffffff20;padding-top:12px;display:flex;justify-content:space-between;gap:12px;align-items:center;color:#9db9c3;font-size:12px}
+.gallery-hero-footer button{border:1px solid #48d4b6;color:#62e8c9;background:#0c3439;border-radius:10px;font-size:12px;font-weight:780;padding:10px 16px}
+.match-gallery{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px;padding:0 0 10px}
+.gallery-match{display:flex;flex-direction:column;gap:15px;min-width:0;padding:17px;background:#fff;color:#152d40;border:1px solid #e0e8ef;border-radius:18px;text-align:left;box-shadow:0 4px 16px #1343630a;transition:transform .15s,border-color .15s,box-shadow .15s;cursor:pointer}
+.gallery-match:hover{transform:translateY(-3px);border-color:#69d9c0;box-shadow:0 11px 22px #0e63751a}
+.gallery-match:focus-visible{outline:3px solid #2ccbbb;outline-offset:3px}
+.gallery-meta{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:11px;color:#688098}
+.gallery-meta>span{display:flex;align-items:center;gap:7px;min-width:0}
+.gallery-meta b{color:#183f59;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gallery-meta time{white-space:nowrap;font-variant-numeric:tabular-nums}
+.gallery-match-main{display:grid;grid-template-columns:minmax(68px,1fr) minmax(150px,1.45fr) minmax(68px,1fr);align-items:center;gap:9px;min-height:92px}
+.gallery-team{display:flex;flex-direction:column;align-items:center;gap:7px;text-align:center;min-width:0}
+.gallery-team .table-crest{width:51px;height:51px}
+.gallery-team b{font-size:12px;color:#1d354c;font-weight:820;line-height:1.35;overflow-wrap:anywhere}
+.gallery-1x2{border:1px solid #dfe9ee;border-radius:13px;background:linear-gradient(180deg,#f5f8fb,#eef4f6);display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:12px 3px;box-shadow:inset 0 1px 5px #16344b06}
+.gallery-1x2 .g-prob{display:flex;align-items:center;flex-direction:column;gap:5px;min-width:0;border-right:1px solid #dce4e9}
+.gallery-1x2 .g-prob:last-child{border:0}
+.gallery-1x2 small{font-size:11px;color:#64798f;font-weight:850}
+.gallery-1x2 strong{font-size:clamp(16px,1.35vw,23px);color:#123044;letter-spacing:-.65px;font-weight:900;font-variant-numeric:tabular-nums}
+.gallery-1x2 .is-leading strong{color:#0a987b}
+.gallery-scoreline{font-size:12px;color:#e0445b;text-align:center;font-weight:800;margin-top:-6px}
+.gallery-open{font-size:10px;color:#269887;text-align:right;font-weight:760;border-top:1px solid #ecf0f3;padding-top:8px}
+.gallery-empty{grid-column:1/-1;padding:30px;border:1px dashed #c6d7db;border-radius:15px;background:#fff;text-align:center;color:#76909c}
+@media(max-width:1240px){.match-gallery{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:990px){.match-gallery{grid-template-columns:minmax(0,1fr)}}
+}
