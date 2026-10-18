@@ -24,3 +24,14 @@ test('xG ignores unrelated fixtures and non-xG types',()=>{
  {fixture_id:123,type_id:55,data:{value:6}},
  {fixture_id:123,type_id:5304,participant_id:10,data:{value:1.52}}],123).map(x=>x.xg),[1.52]);
 });
+
+test('fixture-scoped xG include accepts missing redundant fixture_id but external feed does not',()=>{
+ const fixture={...raw,expected:[],xgfixture:[
+ {type:{code:'expected-goals'},location:'home',data:{value:1.9498}},
+ {type:{code:'expected-goals'},location:'away',data:{value:0.8279}}],
+ lineups:[{fixture_id:123,team_id:10,type_id:11,player_id:3,player_name:'Player One',expected:[{type_id:5304,data:{value:0.25}}]}]};
+ const v=normalizeMatchIntelligence(fixture,{team:[{fixture_id:999,type_id:5304,participant_id:10,data:{value:9.5}}]},{home_id:10,away_id:20});
+ assert.deepEqual([v.xg.home,v.xg.away],[1.95,0.828]);
+ assert.equal(v.lineups.home.starters[0].xg,0.25);
+ assert.equal(expectedXg([{type_id:5304,data:{value:2}}],123).length,0);
+});
