@@ -79,7 +79,7 @@ function details(){
  row('Αναμενόμενα γκολ γηπεδούχου',m.mu_home??m.live_outlook?.remaining_expected_goals?.home)+
  row('Αναμενόμενα γκολ φιλοξενούμενης',m.mu_away??m.live_outlook?.remaining_expected_goals?.away)+'</section>'+
  (n?'<section class="tdm-panel"><h3>Επόμενο γκολ</h3><div class="tdm-probs">'+metric(m.home,n.home)+metric(m.away,n.away)+metric('Κανένα',n.none)+'</div></section>':'')+
- (valid&&d.player_xg?.length?'<section class="tdm-panel"><h3>xG παικτών · Sportmonks</h3>'+d.player_xg.slice(0,15).map(x=>row('Παίκτης #'+(x.player_id||'—'),x.xg.toFixed(2))).join('')+'</section>':'')+
+ (valid&&d.player_xg?.length?'<section class="tdm-panel"><h3>xG παικτών · Sportmonks</h3>'+d.player_xg.slice(0,15).map(x=>row(x.player_name||'Παίκτης #'+(x.player_id||'—'),x.xg.toFixed(2))).join('')+'</section>':'')+
  '<p class="tdm-note">Τα xG και οι ενδεκάδες είναι ξεχωριστά στοιχεία του παρόχου· δεν τροποποιούν αυτόματα τις πιθανότητες Poisson. Οι εκτιμήσεις δεν είναι βέβαια αποτελέσματα.</p>';
  }
  return '<button class="tdm-back" data-back>← Πίσω στους αγώνες</button><div class="tdm-scoreboard"><div class="tdm-card-top"><b>'+E(m.league||m.league_key)+'</b><span>'+stamp(m)+'</span></div><div class="tdm-teams">'+club(m.home,logoH(m))+'<div class="tdm-versus">'+E(score(m))+'</div>'+club(m.away,logoA(m))+'</div><div class="tdm-scoreboard-caption">'+(is?'● LIVE':'MATCH INTELLIGENCE')+'</div></div>'+
