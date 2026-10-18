@@ -35,3 +35,17 @@ test('fixture-scoped xG include accepts missing redundant fixture_id but externa
  assert.equal(v.lineups.home.starters[0].xg,0.25);
  assert.equal(expectedXg([{type_id:5304,data:{value:2}}],123).length,0);
 });
+
+test('lineup preserves each team when only one has official starters and identifies goalkeeper metadata',()=>{
+ const fixture={...raw,metadata:[{type_id:572,values:{confirmed:true}}],
+  lineups:[{fixture_id:123,team_id:10,type_id:11,player_id:44,player_name:'Home GK',jersey_number:18,formation_field:'1:1',formation_position:9}],
+  expectedlineups:[{fixture_id:123,team_id:20,type_id:77614,player_id:89,player_name:'Away GK',formation_field:'1:1',jersey_number:31}]};
+ const d=normalizeMatchIntelligence(fixture,{}, {home_id:10,away_id:20});
+ assert.equal(d.lineups.home.starters[0].name,'Home GK');
+ assert.equal(d.lineups.away.starters[0].name,'Away GK');
+ assert.equal(d.lineups.home.starters[0].is_goalkeeper,true);
+ assert.equal(d.lineups.away.starters[0].is_goalkeeper,true);
+ assert.equal(d.lineup_sources.home,'official');
+ assert.equal(d.lineup_sources.away,'predicted_by_provider');
+ assert.equal(d.lineup_status,'predicted_by_provider','mixed team coverage must not be shown as entirely confirmed');
+});

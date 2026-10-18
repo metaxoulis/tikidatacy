@@ -67,9 +67,13 @@ function lineupPitch(m,team,side,formation){
  let field='';
  if(players.length===11&&validFormation){
   const sorted=[...players].sort((a,b)=>(a.order??50)-(b.order??50));
-  let offset=1;const parts=[sorted.slice(0,1)];
-  for(const n of lines){parts.push(sorted.slice(offset,offset+n));offset+=n}
-  field='<div class="tdm-pitch" role="group" aria-label="Σχηματισμός '+E(name)+' '+E(formation)+'"><div class="tdm-pitch-mid"></div><div class="tdm-pitch-circle"></div><div class="tdm-pitch-area top"></div><div class="tdm-pitch-area bottom"></div><div class="tdm-pitch-players">'+parts.reverse().map(row=>'<div class="tdm-pitch-row">'+row.map(player).join('')+'</div>').join('')+'</div></div>';
+  // Sportmonks can place the keeper anywhere in the list; use a supplied role or 1:1 field first.
+  const keeper=sorted.find(p=>p.is_goalkeeper||p.position==='1:1'||/^(gk|goalkeeper|keeper)$/i.test(String(p.role||'')))||sorted.find(p=>p.order===1)||sorted[0];
+  const outfield=sorted.filter(p=>p!==keeper);
+  let offset=0;const parts=[];
+  for(const n of lines){parts.push(outfield.slice(offset,offset+n));offset+=n}
+  parts.reverse().push([keeper]);
+  field='<div class="tdm-pitch" role="group" aria-label="Σχηματισμός '+E(name)+' '+E(formation)+'"><div class="tdm-pitch-mid"></div><div class="tdm-pitch-circle"></div><div class="tdm-pitch-area top"></div><div class="tdm-pitch-area bottom"></div><div class="tdm-pitch-players">'+parts.map((row,i)=>'<div class="tdm-pitch-row'+(i===parts.length-1?' gk-row':'')+'">'+row.map(player).join('')+'</div>').join('')+'</div></div>';
  }else field='<div class="tdm-pitch-pending">Δεν διατίθενται και οι 11 παίκτες με έγκυρο σχηματισμό, ώστε να εμφανιστούν αξιόπιστα στο γήπεδο.</div>';
  const rows=p=>'<div class="tdm-player"><span class="tdm-shirt">'+E(p.number??'·')+'</span><b>'+E(p.name)+'</b></div>';
  return '<section class="tdm-panel tdm-pitch-card"><div class="tdm-pitch-title">'+badge(name,side==='home'?logoH(m):logoA(m))+'<div><h3>'+E(name)+'</h3><span>'+E(formation||'Σχηματισμός μη διαθέσιμος')+'</span></div></div>'+field+

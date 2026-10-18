@@ -269,3 +269,9 @@ html.td-mobile-ready body>.app,html.td-mobile-ready body>.shell,html.td-mobile-r
 #td-mobile-root .tdm-tab:not(.active){color:#24434d;background:#fff}
 #td-mobile-root .tdm-tab:focus-visible{outline:2px solid #159d82;outline-offset:2px}
 #td-mobile-root .tdm-tab:disabled{color:#6e858e}
+
+/* Keeper row remains fully visible inside the portrait pitch on small phones. */
+#td-mobile-root .tdm-pitch-players{bottom:35px}
+#td-mobile-root .tdm-pitch-row.gk-row{flex-shrink:0;min-height:55px}
+#td-mobile-root .tdm-pitch-row.gk-row .tdm-pitch-player{min-width:74px}
+#td-mobile-root .tdm-pitch-row.gk-row .tdm-pitch-player strong{font-size:12px;overflow:visible;max-width:85%}

@@ -31,8 +31,11 @@ function normalizedPlayers(rows,id,homeId,awayId,type){
   const expected=smArray(x.expected??x.xglineup??x.xGLineup);
   const inlineXg=expectedXg(expected.map(z=>({...z,fixture_id:z.fixture_id??id,player_id:z.player_id??playerId})),id,'',true);
   const px=inlineXg.find(v=>v.player_id===playerId);
+  const field=smLabel(x.formation_field,15)||null;
+  const role=smLabel(x.player?.position?.developer_name??x.player?.position?.code??x.player?.position?.name??x.position?.code??x.position?.name,32)||null;
+  const isGoalkeeper=field==='1:1'||/^(gk|goalkeeper|keeper|goalie)$/i.test(String(role||''));
   const person={id:playerId,name,number:Number.isInteger(n)&&n>=0&&n<=99?n:null,
-   position:smLabel(x.formation_field,15)||null,order:Number.isInteger(order)&&order>=0&&order<=50?order:null,
+   position:field,role,is_goalkeeper:isGoalkeeper,order:Number.isInteger(order)&&order>=0&&order<=50?order:null,
    xg:px?.xg??null};
   const a=start?out[team].starters:out[team].bench;
   if(a.length<20)a.push(person);
@@ -59,8 +62,17 @@ function normalizeMatchIntelligence(raw,additional={},verified={}){
  const prediction=normalizedPlayers(predictedRaw.length?predictedRaw:raw.lineups,id,h,a,'predicted');
  const hasActual=actual.home.starters.length+actual.away.starters.length>0;
  const hasPrediction=prediction.home.starters.length+prediction.away.starters.length>0;
- const displayed=hasActual?actual:prediction;
- const kind=hasActual?(confirmed===true?'confirmed':confirmed===false?'predicted_by_provider':'unconfirmed'):
+ const displayed={},lineup_sources={};
+ for(const side of ['home','away']){
+  const actualReady=actual[side].starters.length>0;
+  const predictedReady=prediction[side].starters.length>0;
+  displayed[side]=actualReady?actual[side]:prediction[side];
+  lineup_sources[side]=actualReady?'official':predictedReady?'predicted_by_provider':'unavailable';
+ }
+ const mixedPredicted=Object.values(lineup_sources).includes('predicted_by_provider');
+ const bothActual=Object.values(lineup_sources).every(v=>v==='official');
+ const kind=mixedPredicted?'predicted_by_provider':bothActual&&confirmed===true?'confirmed':
+   hasActual?(confirmed===false?'predicted_by_provider':'unconfirmed'):
    hasPrediction?'predicted_by_provider':'unavailable';
  const fxg=[...expectedXg([...smArray(raw.expected),...smArray(raw.xgfixture),...smArray(raw.xGFixture)],id,'',false,true),
   ...expectedXg(additional.team,id)];
@@ -82,7 +94,7 @@ function normalizeMatchIntelligence(raw,additional={},verified={}){
   if(side){const v=smLabel(f.formation??f.name,20);if(v)forms[side]=v;}}
  const venue=smLabel(raw.venue?.name,90)||null;
  return {source:'sportmonks',fixture_id:id,verified:true,confirmed_lineup:confirmed,
-  lineup_status:kind,lineups:displayed,actual_lineups_available:hasActual,predicted_lineups_available:hasPrediction,
+  lineup_status:kind,lineups:displayed,lineup_sources,actual_lineups_available:hasActual,predicted_lineups_available:hasPrediction,
   formations:forms,xg:{home:teamXg.home,away:teamXg.away,source:'sportmonks_expected',available:teamXg.home!==null||teamXg.away!==null},
   player_xg:identifiedPlayers,statistics:stats,venue,updated_at:new Date().toISOString(),
   disclosures:{lineups:kind==='predicted_by_provider'?'Provider projected XI; not confirmed official lineups.':
