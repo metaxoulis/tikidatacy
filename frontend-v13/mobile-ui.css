@@ -280,3 +280,7 @@ html.td-mobile-ready body>.app,html.td-mobile-ready body>.shell,html.td-mobile-r
 
 /* Live percentages remain visible during backend refresh; older forecasts are explicitly marked. */
 #td-mobile-root .tdm-older-estimate{display:block;width:max-content;max-width:100%;margin:8px 0;color:#945b0c;background:#fff6e4;border:1px solid #eed9ad;border-radius:8px;padding:5px 9px;font-size:11px;font-weight:730;line-height:1.45;white-space:normal}
+
+#td-mobile-root .tdm-hero{isolation:isolate;background-color:#071e30}
+#td-mobile-root .tdm-hero>*{position:relative;z-index:2}
+#td-mobile-root .tdm-hero:before{content:'';position:absolute;inset:0;z-index:0;pointer-events:none;background:linear-gradient(90deg,#0b2135f4 0%,#0c2742b9 52%,#0b2f4d55 100%)}

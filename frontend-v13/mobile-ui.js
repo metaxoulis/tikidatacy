@@ -94,7 +94,8 @@ function lineupPitch(m,team,side,formation){
 }
 function details(){
  const m=state.matches.find(x=>String(x.id)===String(state.id));if(!m)return empty('Ο αγώνας δεν βρέθηκε');
- const p=pr(m),is=live(m),g=is?m.live_outlook:m,d=deepCache.get(state.id),valid=d&&!d.error;
+ const is=live(m),d=deepCache.get(state.id),valid=d&&!d.error;
+ const p=!is&&valid&&d.context_prediction?d.context_prediction:pr(m),g=is?m.live_outlook:p||m;
  let content='';
  if(state.tab==='info')content='<section class="tdm-panel"><h3>Πληροφορίες αγώνα</h3>'+row('Διοργάνωση',m.league||m.league_key)+row('Ημερομηνία',when(m.date))+row('Κατάσταση',is?'LIVE':m.status)+row('Πηγή','Sportmonks')+row('Ποιότητα μοντέλου',source(m))+(valid&&d.venue?row('Γήπεδο',d.venue):'')+'</section>'+
  '<section class="tdm-panel"><h3>Ιστορικό τεκμηρίωσης</h3>'+row('Γηπεδούχος εντός',m.analysis?.home_venue_matches??m.historical_sample?.home)+row('Φιλοξενούμενη εκτός',m.analysis?.away_venue_matches??m.historical_sample?.away)+'</section>';
@@ -124,7 +125,7 @@ function details(){
  row('Αναμενόμενα γκολ φιλοξενούμενης',m.mu_away??m.live_outlook?.remaining_expected_goals?.away)+'</section>'+
  (n?'<section class="tdm-panel"><h3>Επόμενο γκολ</h3><div class="tdm-probs">'+metric(m.home,n.home)+metric(m.away,n.away)+metric('Κανένα',n.none)+'</div></section>':'')+
  (valid&&d.player_xg?.length?'<section class="tdm-panel"><h3>xG παικτών · Sportmonks</h3>'+d.player_xg.slice(0,15).map(x=>row(x.player_name||'Παίκτης #'+(x.player_id||'—'),x.xg.toFixed(2))).join('')+'</section>':'')+
- '<p class="tdm-note">Τα xG και οι ενδεκάδες είναι ξεχωριστά στοιχεία του παρόχου· δεν τροποποιούν αυτόματα τις πιθανότητες Poisson. Οι εκτιμήσεις δεν είναι βέβαια αποτελέσματα.</p>';
+ '<p class="tdm-note">Οι προηγούμενοι ευρωπαϊκοί αγώνες με επαληθευμένα xG συμπεριλαμβάνονται στην πειραματική προσαρμογή όπου υπάρχει επαρκές δείγμα. Η συνέχεια της ενδεκάδας χρησιμοποιείται μόνο για επιβεβαιωμένες XI. Δεν πρόκειται για επικυρωμένη πρόβλεψη.</p>'+((!is&&d?.context_prediction)?'<section class="tdm-panel"><h3>Πραγματικά δεδομένα που επηρέασαν την εκτίμηση</h3>'+row('xG ιστορικών αγώνων – γηπεδούχος',d.context_prediction.context?.observed_xg?.home)+row('xG ιστορικών αγώνων – φιλοξενούμενη',d.context_prediction.context?.observed_xg?.away)+row('Ευρωπαϊκοί αγώνες στο δείγμα – γηπεδούχος',d.context_prediction.context?.european_matches?.home)+row('Ευρωπαϊκοί αγώνες στο δείγμα – φιλοξενούμενη',d.context_prediction.context?.european_matches?.away)+'</section>':'');
  }
  return '<button class="tdm-back" data-back>← Πίσω στους αγώνες</button><div class="tdm-scoreboard"><div class="tdm-card-top"><b>'+E(m.league||m.league_key)+'</b><span>'+stamp(m)+'</span></div><div class="tdm-teams">'+club(m.home,logoH(m))+'<div class="tdm-versus">'+E(score(m))+'</div>'+club(m.away,logoA(m))+'</div><div class="tdm-scoreboard-caption">'+(is?'● LIVE':'MATCH INTELLIGENCE')+'</div></div>'+
  olderEstimateTag(m)+'<div class="tdm-tabs">'+[['info','Info'],['summary','Ανάλυση'],['lineups','Ενδεκάδες'],['history','Ιστορικό'],['stats','Stats'],['analysis','AI Analysis']].map(([x,y])=>'<button data-tab="'+x+'" class="tdm-tab '+(state.tab===x?'active':'')+'">'+y+'</button>').join('')+'</div>'+content;
