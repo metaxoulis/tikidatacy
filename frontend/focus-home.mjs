@@ -1,3 +1,4 @@
+import {classifyUefaLeague} from './uefa-competitions.mjs';
 /* Tiki-Data focused homepage: real upcoming fixtures + licensed historical score-based research.
  * No raw commercial-provider payload persistence. Only CC0 OpenFootball final scores are used
  * for fitted parameters; predictions are explicitly unvalidated experimental estimates.
@@ -11,10 +12,14 @@ const FH_LEAGUES={
  seriea:{name:'Serie A',rank:4,country:/^(italy|it|ita)$/},
  ligue1:{name:'Ligue 1',rank:3,country:/^(france|fr|fra)$/},
  greece:{name:'Ελληνική Super League',rank:8,country:/^(greece|gr|gre)$/},
- cyprus:{name:'Κυπριακή Α΄ Κατηγορία',rank:9,country:/^(cyprus|cy|cyp)$/}
+ cyprus:{name:'Κυπριακή Α΄ Κατηγορία',rank:9,country:/^(cyprus|cy|cyp)$/},
+ ucl:{name:'UEFA Champions League',rank:10,country:/^(europe|uefa|international)$/},
+ uel:{name:'UEFA Europa League',rank:11,country:/^(europe|uefa|international)$/},
+ uecl:{name:'UEFA Conference League',rank:12,country:/^(europe|uefa|international)$/}
 };
 const fhText=s=>String(s||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase();
-function fhLeague(name,country=''){
+function fhLeague(name,country='',leagueId=null){
+ const uefa=classifyUefaLeague(name,country,leagueId);if(uefa)return uefa;
  const n=fhText(name).replace(/\s+/g,' '),c=fhText(country);
  let key=null;
  if(/^(premier league|english premier league|england premier league|premier league england|epl)$/.test(n))key='epl';

@@ -668,7 +668,19 @@ async function asPredictionResponse(req,env,ctx,url){
  * for fitted parameters; predictions are explicitly unvalidated experimental estimates.
  */
 // Time-order validation (2025-26, n=1723) selected these rates without seeing the 2026-27 holdout.
-const FH_TRAINING={version:'tiki-historical-ingestion-poisson-v6',decay_days:360,venue_prior:3,validated:false};
+const FH_TRAINING={version:'tiki-historical-ingestion-poisson-v7',decay_days:360,venue_prior:3,validated:false};
+/* Verified European men's club competitions; prevents similarly-named non-UEFA leagues. */
+const UEFA_COMPETITIONS={ucl:{name:'UEFA Champions League'},uel:{name:'UEFA Europa League'},uecl:{name:'UEFA Conference League'}};
+function classifyUefaLeague(name,country='',leagueId=null){
+ const n=String(name||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase().replace(/\s+/g,' ');
+ const c=String(country||'').trim().toLowerCase();
+ if(!n||/\b(women|woman|womens|female|youth|junior|u17|u19|u20|u21|afc|caf|concacaf|conmebol|asia|africa)\b/.test(n))return null;
+ const key=/^(?:uefa )?champions league$/.test(n)?'ucl':/^(?:uefa )?europa league$/.test(n)?'uel':/^(?:uefa )?(?:europa )?conference league$/.test(n)?'uecl':null;
+ if(!key||c&&!/^(europe|uefa|international)$/.test(c))return null;
+ if(!c&&!n.startsWith('uefa ')&&!(key==='ucl'&&Number(leagueId)===2))return null;
+ return key;
+}
+
 const FH_LEAGUES={
  epl:{name:'Premier League',rank:7,country:/^(england|eng|en|gb|united kingdom)$/},
  laliga:{name:'La Liga',rank:6,country:/^(spain|esp|es)$/},
@@ -676,10 +688,14 @@ const FH_LEAGUES={
  seriea:{name:'Serie A',rank:4,country:/^(italy|it|ita)$/},
  ligue1:{name:'Ligue 1',rank:3,country:/^(france|fr|fra)$/},
  greece:{name:'Ελληνική Super League',rank:8,country:/^(greece|gr|gre)$/},
- cyprus:{name:'Κυπριακή Α΄ Κατηγορία',rank:9,country:/^(cyprus|cy|cyp)$/}
+ cyprus:{name:'Κυπριακή Α΄ Κατηγορία',rank:9,country:/^(cyprus|cy|cyp)$/},
+ ucl:{name:'UEFA Champions League',rank:10,country:/^(europe|uefa|international)$/},
+ uel:{name:'UEFA Europa League',rank:11,country:/^(europe|uefa|international)$/},
+ uecl:{name:'UEFA Conference League',rank:12,country:/^(europe|uefa|international)$/}
 };
 const fhText=s=>String(s||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase();
-function fhLeague(name,country=''){
+function fhLeague(name,country='',leagueId=null){
+ const uefa=classifyUefaLeague(name,country,leagueId);if(uefa)return uefa;
  const n=fhText(name).replace(/\s+/g,' '),c=fhText(country);
  let key=null;
  if(/^(premier league|english premier league|england premier league|premier league england|epl)$/.test(n))key='epl';
@@ -725,7 +741,7 @@ const fhName=x=>{
 const fhClamp=(x,a,b)=>Math.min(b,Math.max(a,x));
 function fhTrain(rows,asOfDate=new Date()){
  const cutoff=Date.parse(new Date(asOfDate).toISOString().slice(0,10)+'T00:00:00Z')-3*86400000;
- const groups=new Map(),allow=new Set(['epl','laliga','bundesliga','seriea','ligue1','greece','cyprus']),seen=new Set();
+ const groups=new Map(),allow=new Set(['epl','laliga','bundesliga','seriea','ligue1','greece','cyprus','ucl','uel','uecl']),seen=new Set();
  for(const r of rows){
   const league=String(r.dataset_slug||'').split('-').slice(0,-2).join('-');
   const date=Date.parse(String(r.match_date||'')+'T00:00:00Z');
@@ -1061,9 +1077,9 @@ async function smLeagues(date,token,classify,fetcher=fetch){
  const verified=new Map();
  for(const l of rows){
   const id=smId(l.id),country=smText(l.country?.name,60),league=smText(l.name);
-  if(!id||!country||!league)continue;
-  const key=classify(league,country);
-  if(key)verified.set(id,{key,name:league,country,image_path:l.image_path});
+  if(!id||!league)continue;
+  const key=classify(league,country,id);
+  if(key&&(country||UEFA_COMPETITIONS[key]))verified.set(id,{key,name:UEFA_COMPETITIONS[key]?.name||league,country,image_path:l.image_path});
  }
  return verified;
 }
@@ -1170,7 +1186,7 @@ async function smStage(req,env){
  try{
   const q=new URL(req.url).searchParams;
   const date=smIsoDay(q.get('date'))||new Date().toISOString().slice(0,10);
-  const cls=(name,country)=>fhLeague(name,country)||(country==='Cyprus'&&/^1\\.?\\s*division$/i.test(name)?'cyprus':null);
+  const cls=(name,country,id)=>fhLeague(name,country,id)||(country==='Cyprus'&&/^1\\.?\\s*division$/i.test(name)?'cyprus':null);
   const week=await smWeek(date,env.SPORTMONKS_API_TOKEN,cls,fetch,7);
   const live=await smInplay(env.SPORTMONKS_API_TOKEN,cls,fetch,date).catch(()=>[]);
   return response({status:'stage_only',coverage:week.fixtures.length,dates_checked:week.dates_checked,
@@ -1378,7 +1394,7 @@ function tdContextForecast(base,home,away,poisson,homeXI=null,awayXI=null){
    note:'European games contribute only if verified historical fixture xG exists. XI continuity is a proxy, not calibrated causal player impact.'}};
 }
 
-const SM_FOCUS_CACHE_KEY='focus_historical_v6';
+const SM_FOCUS_CACHE_KEY='focus_historical_v7_uefa';
 const SM_FINISHED=new Set(['FT','FINISHED','FULL_TIME','AET','PEN','CANCELLED','POSTPONED','DELAYED','ABANDONED']);
 function smBuildFocus(fixtures,live,model,now,estimate=null,likely=null){
  const actual=new Map((Array.isArray(live)?live:[]).map(m=>[String(m.id),m]));
@@ -1609,7 +1625,7 @@ async function smFocusResponse(req,env,ctx){
    .bind(key,now).first();if(old?.payload_json)return smResponse(JSON.parse(old.payload_json),200,40);}catch{}
  }
  const start=new Date().toISOString().slice(0,10);
- const classify=(name,country)=>fhLeague(name,country)||
+ const classify=(name,country,id)=>fhLeague(name,country,id)||
   (String(country).toLowerCase()==='cyprus'&&/^1\.?\s*division$/i.test(String(name))?'cyprus':null);
  try{
   const [week,model,live]=await Promise.all([smWeek(start,env.SPORTMONKS_API_TOKEN,classify,fetch,7),
@@ -1691,7 +1707,7 @@ async function smGetLiveSnapshot(db){
  }catch{return null}
 }
 async function smComputeLiveSnapshot(env,ctx){
- const classify=(name,country)=>fhLeague(name,country)||
+ const classify=(name,country,id)=>fhLeague(name,country,id)||
   (String(country).toLowerCase()==='cyprus'&&/^1\\.?\\s*division$/i.test(String(name))?'cyprus':null);
  const games=await smInplay(env.SPORTMONKS_API_TOKEN,classify,fetch);
  // No live games: skip premium prediction queries and historic model loading.
@@ -1787,7 +1803,7 @@ function historyMatch(row,classify){
  const state=text(row.state?.short_name??row.state?.state??row.state?.name??'',25).toUpperCase();
  if(!finished.has(state))return null;
  const league=text(row.league?.name,95),country=text(row.league?.country?.name,65);
- const leagueKey=classify(league,country);
+ const leagueKey=classify(league,country,row.league?.id??row.league_id);
  if(!leagueKey)return null;
  const participants=Array.isArray(row.participants)?row.participants:[];
  const home=participants.find(p=>String(p?.meta?.location??p?.meta?.position??'').toLowerCase()==='home');
@@ -1841,7 +1857,7 @@ function smHistoryError(error){
  if(e==='sportmonks_quota_reached')return smResponse({error:'sportmonks_rate_limited'},503);
  return smResponse({error:'historical_source_unavailable'},502);
 }
-const smHistoryLeague=(name,country)=>fhLeague(name,country)||
+const smHistoryLeague=(name,country,id)=>fhLeague(name,country,id)||
  (String(country).toLowerCase()==='cyprus'&&/^1\.?\s*division$/i.test(String(name))?'cyprus':null);
 async function smHistoryCache(key,callback,ctx){
  const cacheKey=new Request('https://tiki-cache.local/history/'+key);
@@ -1894,7 +1910,7 @@ const tdBacktest=(()=>{'use strict';
  */
 const MS_DAY=86400000;
 const DAY=/^\d{4}-\d{2}-\d{2}$/;
-const LEAGUE=/^(epl|laliga|bundesliga|seriea|ligue1|greece|cyprus)-\d{4}-\d{2}$/;
+const LEAGUE=/^(epl|laliga|bundesliga|seriea|ligue1|greece|cyprus|ucl|uel|uecl)-\d{4}-\d{2}$/;
 const validDay=x=>typeof x==='string'&&DAY.test(x)&&Number.isFinite(Date.parse(x+'T00:00:00Z'))&&
  new Date(x+'T00:00:00Z').toISOString().slice(0,10)===x;
 const num=x=>typeof x==='number'&&Number.isFinite(x)?x:null;
@@ -2048,7 +2064,7 @@ async function tdBacktestResponse(req,env,ctx){
 
 /* Demand-driven daily Sportmonks history ingestion; never persist raw provider feeds. */
 const tdTrainer=(()=>{'use strict';/* Licensed Sportmonks finished league results only. No provider raw JSON retained. */
-const tdAllowedLeague=new Set(['epl','laliga','bundesliga','seriea','ligue1','greece','cyprus']);
+const tdAllowedLeague=new Set(['epl','laliga','bundesliga','seriea','ligue1','greece','cyprus','ucl','uel','uecl']);
 const tdDay=x=>typeof x==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(x)&&!Number.isNaN(Date.parse(x+'T00:00:00Z'));
 function normalizeFinishedSportmonks(fixtures){
  const seen=new Set(),rows=[];
@@ -2090,7 +2106,7 @@ async function tdMaybeSyncHistory(env){
   'INSERT INTO sportapi_home_cache(cache_key,payload_json,expires_at,saved_at) VALUES(?1,?2,?3,?4) ON CONFLICT(cache_key) DO UPDATE SET payload_json=excluded.payload_json,expires_at=excluded.expires_at,saved_at=excluded.saved_at WHERE sportapi_home_cache.expires_at<=?5'
  ).bind(TD_HISTORY_LOCK,'{"status":"syncing"}',now+3600,timestamp,now).run();
  if(!lock?.meta?.changes)return;
- const classify=(name,country)=>fhLeague(name,country)||
+ const classify=(name,country,id)=>fhLeague(name,country,id)||
   (String(country).toLowerCase()==='cyprus'&&/^1\.?\s*division$/i.test(String(name))?'cyprus':null);
  try{
   const previous=await db.prepare('SELECT payload_json FROM sportapi_home_cache WHERE cache_key=?1')
@@ -2163,7 +2179,7 @@ function historyBatchWindow(cursor,latest,days=28){
  const end=addBatchDays(cursor,days-1),bounded=end>latest?latest:end;
  return {start:cursor,end:bounded,next:addBatchDays(bounded,1),days:Math.round((Date.parse(bounded)-Date.parse(cursor))/86400000)+1};
 }
-const leagueKeys=new Set(['epl','laliga','bundesliga','seriea','ligue1','greece','cyprus']);
+const leagueKeys=new Set(['epl','laliga','bundesliga','seriea','ligue1','greece','cyprus','ucl','uel','uecl']);
 function normalizedHistoricRow(match){
  if(!match||match.source!=='sportmonks'||match.final!==true||!leagueKeys.has(match.league_key))return null;
  const id=Number(String(match.id||'').replace(/^sportmonks-/,''));
@@ -2216,10 +2232,10 @@ async function tdBackfillHistory(env){
    return;
   }
   // League IDs come only from previously verified Sportmonks fixtures.
-  const fresh=await db.prepare('SELECT payload_json FROM sportapi_home_cache WHERE cache_key=?1').bind('focus_hierarchical_v5').first();
+  const fresh=await db.prepare('SELECT payload_json FROM sportapi_home_cache WHERE cache_key=?1').bind(SM_FOCUS_CACHE_KEY).first();
   const cache=JSON.parse(fresh?.payload_json||'null');
   const ids=new Set((cache?.matches||[]).filter(m=>FH_LEAGUES[m.league_key]&&Number.isSafeInteger(m.league_id)&&m.league_id>0).map(m=>m.league_id));
-  if(ids.size<6){
+  if(ids.size<10){
    const sample=smAddDay(window.start,14);
    const verified=await smLeagues(sample,token,smHistoryLeague,fetch);
    for(const id of verified.keys())ids.add(id);
