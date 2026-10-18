@@ -53,14 +53,17 @@ function normalizeMatchIntelligence(raw,additional={},verified={}){
  if(!h||!a||h===a)return null;
  const meta=smArray(raw.metadata),confirmed=lineupConfirmed(meta);
  const actual=normalizedPlayers(raw.lineups,id,h,a,'official');
- const prediction=normalizedPlayers(raw.expectedlineups??raw.expectedLineups,id,h,a,'predicted');
+ const predictedRaw=smArray(raw.expectedlineups??raw.expectedLineups);
+ const prediction=normalizedPlayers(predictedRaw.length?predictedRaw:raw.lineups,id,h,a,'predicted');
  const hasActual=actual.home.starters.length+actual.away.starters.length>0;
  const hasPrediction=prediction.home.starters.length+prediction.away.starters.length>0;
  const displayed=hasActual?actual:prediction;
  const kind=hasActual?(confirmed===true?'confirmed':confirmed===false?'predicted_by_provider':'unconfirmed'):
    hasPrediction?'predicted_by_provider':'unavailable';
- const fxg=expectedXg(raw.expected??raw.xgfixture??raw.xGFixture??additional.team,id);
+ const fxg=expectedXg([...smArray(raw.expected),...smArray(raw.xgfixture),...smArray(raw.xGFixture),...smArray(additional.team)],id);
  const lineXg=expectedXg(additional.players,id,'',true);
+ const playerNames=new Map([...smArray(raw.lineups),...predictedRaw].filter(x=>smInt(x?.player_id)&&smLabel(x.player_name)).map(x=>[x.player_id,smLabel(x.player_name,80)]));
+ const identifiedPlayers=lineXg.map(x=>({...x,player_name:playerNames.get(x.player_id)||null}));
  const teamXg={home:null,away:null};
  for(const x of fxg){const team=x.location||(x.team_id===h?'home':x.team_id===a?'away':null);
   if(team&&(team==='home'||team==='away'))teamXg[team]=x.xg;}
@@ -78,7 +81,7 @@ function normalizeMatchIntelligence(raw,additional={},verified={}){
  return {source:'sportmonks',fixture_id:id,verified:true,confirmed_lineup:confirmed,
   lineup_status:kind,lineups:displayed,actual_lineups_available:hasActual,predicted_lineups_available:hasPrediction,
   formations:forms,xg:{home:teamXg.home,away:teamXg.away,source:'sportmonks_expected',available:teamXg.home!==null||teamXg.away!==null},
-  player_xg:lineXg,statistics:stats,venue,updated_at:new Date().toISOString(),
+  player_xg:identifiedPlayers,statistics:stats,venue,updated_at:new Date().toISOString(),
   disclosures:{lineups:kind==='predicted_by_provider'?'Provider projected XI; not confirmed official lineups.':
     confirmed===null?'Lineup confirmation unavailable from provider metadata.':null,
    xg:'Provider xG refers to chances already created. It is not a pre-match goal forecast.'}};
