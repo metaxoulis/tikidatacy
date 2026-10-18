@@ -290,3 +290,15 @@ html.td-mobile-ready body>.app,html.td-mobile-ready body>.shell,html.td-mobile-r
 @media(min-width:781px){#td-mobile-root .tdm-hero{background-position:center 45%;min-height:350px}}
 
 #td-mobile-root .tdm-site-footer{max-width:1200px;margin:30px auto 5px;padding:20px 18px;border-top:1px solid #dce6e6;color:#667e88;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:13px;font-size:11px}#td-mobile-root .tdm-site-footer nav{display:flex;gap:10px 17px;flex-wrap:wrap}#td-mobile-root .tdm-site-footer a{font-weight:800;color:#356871;text-decoration:none}#td-mobile-root .tdm-site-footer a:focus-visible,#td-mobile-root .tdm-site-footer a:hover{text-decoration:underline}
+
+/* Always-present competition navigation, without placeholder fixtures. */
+#td-mobile-root .tdm-uefa-section{margin:19px 0 27px}
+#td-mobile-root .tdm-uefa-section h3{font-size:15px;font-weight:850;margin:0 0 12px;color:#173c48}
+#td-mobile-root .tdm-uefa-links{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+#td-mobile-root .tdm-uefa-links a{display:flex;align-items:center;gap:8px;min-width:0;background:#fff;color:#2a4a56;text-decoration:none;border:1px solid #dae5e8;border-radius:13px;padding:13px 12px;font-size:12px;font-weight:800;box-shadow:0 2px 12px #17394c08}
+#td-mobile-root .tdm-uefa-links a>b{color:#0c826e;background:#e9f8f3;border-radius:7px;padding:7px;font-size:11px}
+#td-mobile-root .tdm-uefa-links a>span:nth-of-type(1){min-width:0;flex:1}
+#td-mobile-root .tdm-uefa-links a:hover,#td-mobile-root .tdm-uefa-links a:focus-visible{border-color:#149d86}
+#td-mobile-root .tdm-league-name{display:inline-flex;align-items:center;gap:7px;min-width:0}
+#td-mobile-root .tdm-league-emblem{width:19px;height:19px;object-fit:contain;flex-shrink:0}
+@media(max-width:720px){#td-mobile-root .tdm-uefa-links{grid-template-columns:1fr}}
