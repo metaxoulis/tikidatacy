@@ -302,3 +302,22 @@ html.td-mobile-ready body>.app,html.td-mobile-ready body>.shell,html.td-mobile-r
 #td-mobile-root .tdm-league-name{display:inline-flex;align-items:center;gap:7px;min-width:0}
 #td-mobile-root .tdm-league-emblem{width:19px;height:19px;object-fit:contain;flex-shrink:0}
 @media(max-width:720px){#td-mobile-root .tdm-uefa-links{grid-template-columns:1fr}}
+
+/* Source-separated verified match stats and experimental team-form intelligence */
+#td-mobile-root .tdm-live-stat-brief{border-top:1px solid #e7eeee;padding:10px 12px 12px;background:#f8fbfc}
+#td-mobile-root .tdm-live-proof{font-weight:900;font-size:9px;letter-spacing:.5px;color:#067e6c;display:block;margin-bottom:6px}
+#td-mobile-root .tdm-live-stats-grid{display:grid;grid-template-columns:1fr;gap:4px}
+#td-mobile-root .tdm-stat-dual-row{display:grid;grid-template-columns:minmax(36px,1fr) minmax(95px,1.3fr) minmax(36px,1fr);align-items:center;gap:6px;text-align:center;font-size:12px}
+#td-mobile-root .tdm-stat-dual-row>span{font-size:10px;color:#607680;font-weight:650}
+#td-mobile-root .tdm-stat-dual-row>b{font-size:12px;font-weight:900;color:#163e4b}
+#td-mobile-root .tdm-live-method-note{margin:0;padding:7px 13px;background:#fffdf4;color:#836a24;font-size:10px;line-height:1.45}
+#td-mobile-root .tdm-live-stat-hint{padding:9px 14px;margin:0;font-size:10px;color:#6d8189;background:#f8fbfc}
+#td-mobile-root .tdm-live-panel .tdm-stat-dual-row{padding:7px;border-bottom:1px solid #e7eeee}
+#td-mobile-root .tdm-form-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+#td-mobile-root .tdm-team-form{border:1px solid #dfebeb;background:#f8fbfb;padding:12px 13px;border-radius:11px}
+#td-mobile-root .tdm-team-form>strong{display:block;font-size:13px}
+#td-mobile-root .tdm-team-form>small{display:block;font-size:10px;color:#5d7580;margin-top:5px}
+#td-mobile-root .tdm-form-figures{display:grid;gap:6px;margin-top:10px}
+#td-mobile-root .tdm-form-figures>span{display:flex;justify-content:space-between;gap:7px;font-size:11px}
+#td-mobile-root .tdm-form-figures b{color:#147f6c}
+@media(max-width:450px){#td-mobile-root .tdm-form-pair{grid-template-columns:1fr}}
