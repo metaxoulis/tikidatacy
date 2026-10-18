@@ -1301,6 +1301,37 @@ async function tdSupplementalXg(id,token){
  }));
  return result;
 }
+/* Match-linked editorial briefings, stored as bounded normalized D1 snapshots.
+ * A headline mentioning injuries is an unverified warning, not a numerical input.
+ * Do not persist upstream raw JSON or unlicensed full article content.
+ */
+const TD_NEWS_CACHE_PREFIX='td_lab_match_news_v1:';
+async function tdFixtureNews(db,token,id){
+ if(!db||!token||!Number.isSafeInteger(id)||id<=0)return [];
+ const key=TD_NEWS_CACHE_PREFIX+id,now=Math.floor(Date.now()/1000);
+ try{
+  const found=await db.prepare('SELECT payload_json FROM sportapi_home_cache WHERE cache_key=?1 AND expires_at>?2').bind(key,now).first();
+  if(found?.payload_json){const val=JSON.parse(found.payload_json);if(Array.isArray(val?.items))return val.items;}
+ }catch{}
+ let articles=[],denied=false;
+ try{
+  const raw=(await smHttp('fixtures/'+id+'?include=prematchNews.lines',token,fetch,true)).data;
+  const collected=raw?.prematchnews??raw?.prematchNews??raw?.pre_match_news??[];
+  const lines=Array.isArray(collected)?collected:collected&&typeof collected==='object'?[collected]:[];
+  articles=lines.filter(n=>(!n.fixture_id||Number(n.fixture_id)===id)&&typeof n.title==='string')
+   .slice(0,4).map(n=>{
+    const title=n.title.replace(/[<>\\u0000-\\u001f]/g,' ').trim().slice(0,180);
+    const body=(Array.isArray(n.lines)?n.lines:[]).map(x=>x?.text).filter(x=>typeof x==='string').join(' ')
+      .replace(/[<>\\u0000-\\u001f]/g,' ').trim().slice(0,240);
+    const important=/\\b(injur(?:y|ed|ies)|suspend(?:ed|sion)|ruled out|out for|doubtful|fitness|rotation|lineup|starting xi|unavailable|absence)\\b|τραυματισ|απουσ|τιμωρ|ενδεκάδ/i.test(title+' '+body);
+    return {title,preview:body,important,confidence:'unverified_news_signal',probability_adjustment:false};
+   }).filter(n=>n.title);
+ }catch(e){denied=String(e?.message||'').includes('subscription_restricted');}
+ const payload=JSON.stringify({updated_at:new Date().toISOString(),items:articles,editorial_access:denied?'not_entitled':articles.length?'available':'not_published'});
+ try{await db.prepare('INSERT INTO sportapi_home_cache(cache_key,payload_json,expires_at,saved_at) VALUES(?1,?2,?3,?4) ON CONFLICT(cache_key) DO UPDATE SET payload_json=excluded.payload_json,expires_at=excluded.expires_at,saved_at=excluded.saved_at')
+  .bind(key,payload,now+(articles.length?21600:900),new Date().toISOString()).run();}catch{}
+ return articles;
+}
 async function tdMatchDetails(req,env,ctx,id){
  if(!env?.SPORTMONKS_API_TOKEN||!env?.TIKI_DB)return smResponse({error:'match_details_unavailable'},503);
  const db=env.TIKI_DB;
@@ -1321,7 +1352,11 @@ async function tdMatchDetails(req,env,ctx,id){
    await tdSupplementalXg(id,env.SPORTMONKS_API_TOKEN);
   const details=normalizeMatchIntelligence(raw,more,verified);
   if(!details)return smResponse({error:'match_detail_invalid'},502);
-  details.history=await tdMatchHistory(db,verified);
+  const enriched=await Promise.allSettled([tdMatchHistory(db,verified),tdFixtureNews(db,env.SPORTMONKS_API_TOKEN,id)]);
+  details.history=enriched[0].status==='fulfilled'?enriched[0].value:{home:[],away:[],head_to_head:[]};
+  details.news=enriched[1].status==='fulfilled'?enriched[1].value:[];
+  details.news_importance={items:details.news.filter(n=>n.important).length,method:'headline_review_only',probabilities_modified:false,
+   note:'Potential team availability changes require confirmation; no unvalidated numerical adjustment.'};
   const [hContext,aContext]=await tdContextPair(db,env.SPORTMONKS_API_TOKEN,verified,true);
   const confirmed=details.lineup_status==='confirmed';
   const estimate=tdContextForecast(verified,hContext,aContext,fhPoisson,
