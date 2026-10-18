@@ -692,3 +692,87 @@ body.modern-predictions .footer{color:#80929f;border-color:#dce7ef}
  .predictions-main .gallery-hero-team{display:none}
  .predictions-main .gallery-hero-odds{max-width:400px;margin:auto;width:100%}
 }
+
+
+/* Tiki-Data 3.0: original app-style desktop Match Center, probability-first.
+   Keep the existing desktop data table as an accessible fallback beneath the gallery
+   only at narrow breakpoints; do not recompute model percentages. */
+@media (min-width:781px){
+ body.modern-predictions{background:#ecf5f3;color:#143139}
+ .modern-predictions .app{background:#eaf4f2}
+ .modern-predictions .topbar{background:#091e2c;border-bottom:1px solid #1b4150}
+ .modern-predictions .predictions-main{background:linear-gradient(150deg,#f2f9f7,#eaf4f3);color:#17343e;min-height:calc(100vh - 76px);padding:25px clamp(18px,2.6vw,42px) 35px}
+ .modern-predictions .predictions-intro{background:#fff;border:1px solid #d7e9e6;box-shadow:0 10px 35px #103c3321;border-radius:22px;padding:25px 28px}
+ .modern-predictions .predictions-intro h1{color:#173c43}
+ .modern-predictions .predictions-intro h1 span{color:#169d82}
+ .modern-predictions .predictions-intro p{color:#667f82;max-width:790px}
+ .modern-predictions .predictions-intro-mark{color:#219e88}
+ .modern-predictions .intelligence-summary{gap:12px}
+ .modern-predictions .insight-stat{background:#fff!important;border:1px solid #dceae7!important;border-radius:18px!important;box-shadow:0 4px 18px #163e380b}
+ .modern-predictions .insight-stat strong{color:#163b43!important;font-size:28px}
+ .modern-predictions .insight-stat small{color:#68818a!important;font-size:11px}
+ .modern-predictions .insight-stat .insight-icon{color:#169f81}
+ .modern-predictions .datebar{background:#fff;border-color:#d5e7e2;border-radius:17px;padding:9px;margin-bottom:18px;box-shadow:0 4px 18px #153f3609}
+ .modern-predictions .date-switcher{gap:7px;scrollbar-width:none}
+ .modern-predictions .day-btn{border:1px solid #dae9e4;border-radius:13px;padding:12px 13px;color:#638178;background:#f5faf8;min-width:90px;font-size:11px}
+ .modern-predictions .day-btn strong{font-size:12px;color:#295850}
+ .modern-predictions .day-btn.selected{background:#163941;color:#a2f1d5;border:1px solid #163941;box-shadow:0 4px 12px #0e504327}
+ .modern-predictions .day-btn.selected strong{color:#fff}
+ .modern-predictions .day-btn:hover:not(.selected){background:#e8f7f1}
+ .modern-predictions .calendar-icon,.modern-predictions .gallery-date-picker{background:#fff;color:#244a47;border:1px solid #cfe3db;border-radius:10px}
+ .modern-predictions .gallery-date-picker{display:flex;align-items:center;gap:7px;padding:8px 9px;font-size:14px;white-space:nowrap}
+ .modern-predictions .gallery-date-picker input{max-width:134px;font-size:11px;color:#214f49;background:none;border:0;outline:0}
+ .modern-predictions .results{background:transparent;border:0;box-shadow:none!important;overflow:visible}
+ .modern-predictions .results-top{padding:10px 0 15px;border:0;flex-wrap:wrap}
+ .modern-predictions .results-top h2{font-size:22px;color:#1d3e43}
+ .modern-predictions .results-top h2 span{color:#158f75}
+ .modern-predictions .results-top .section-kicker{color:#168c75}
+ .modern-predictions .segmented{background:#fff;border:1px solid #d6e7e4;border-radius:14px;padding:5px}
+ .modern-predictions .segmented button{color:#597b7d;padding:9px 12px;font-size:11px;border-radius:9px}
+ .modern-predictions .segmented button.active{background:#def8ed;color:#0b755d}
+ .modern-predictions .refresh-btn{background:white;border-color:#d6e7e4;color:#1b7f6d}
+ .modern-predictions .table-scroll{display:none}
+ .modern-predictions .list-footer{margin-top:12px;background:#fff;border:1px solid #dbe9e7;border-radius:14px;color:#607e81;box-shadow:0 6px 20px #153c3309}
+ .modern-predictions .footer{color:#6b8588}
+ .modern-predictions .load-more{background:#163f41;color:white;border-radius:12px}
+ .modern-predictions .gallery-featured{display:block;overflow:hidden;border-radius:25px;background:radial-gradient(ellipse at 80% 15%,#2b696563,transparent 50%),linear-gradient(115deg,#0b2632,#163d43);border:1px solid #2e5459;box-shadow:0 19px 38px #0a393323;margin:16px 0 23px;color:#f2fffa;padding:22px 27px}
+ .modern-predictions .gallery-featured[hidden]{display:none}
+ .modern-predictions .gallery-hero-meta{display:flex;align-items:center;justify-content:space-between;gap:16px;font-size:11px;color:#a6cfcb}
+ .modern-predictions .gallery-hero-meta span{font-size:10px;letter-spacing:2px;color:#65e2be;font-weight:900}
+ .modern-predictions .gallery-hero-meta strong{font-weight:670}
+ .modern-predictions .gallery-hero-main{display:grid;grid-template-columns:minmax(0,1fr) minmax(240px,1.6fr) minmax(0,1fr);align-items:center;gap:24px;margin:24px auto 20px;max-width:850px}
+ .modern-predictions .gallery-hero-team{display:flex;align-items:center;flex-direction:column;gap:10px;text-align:center;min-width:0}
+ .modern-predictions .gallery-hero-team .table-crest{width:64px;height:64px}
+ .modern-predictions .gallery-hero-team strong{font-size:16px;line-height:1.3;overflow-wrap:anywhere}
+ .modern-predictions .gallery-hero-odds,.modern-predictions .gallery-1x2{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));min-width:0;gap:3px;background:#eafff5;border:1px solid #95dfc7;border-radius:17px;padding:6px;color:#113e40;overflow:hidden}
+ .modern-predictions .gallery-hero-odds{gap:5px;border-radius:20px;padding:8px;box-shadow:0 6px 18px #011c1522}
+ .modern-predictions .g-prob{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0;overflow:hidden;border-radius:11px;padding:10px 1px;gap:6px}
+ .modern-predictions .g-prob small{font-size:11px;font-weight:900;color:#477c78;line-height:1.15}
+ .modern-predictions .g-prob strong{display:block;font-weight:900;letter-spacing:-.045em;font-size:clamp(12px,1.30vw,18px);font-variant-numeric:tabular-nums;line-height:1.15;white-space:nowrap;max-width:100%}
+ .modern-predictions .g-prob.is-leading{background:#b5f2db;color:#114b42}
+ .modern-predictions .gallery-hero-odds .g-prob{padding:17px 2px}
+ .modern-predictions .gallery-hero-odds .g-prob small{font-size:13px}
+ .modern-predictions .gallery-hero-odds .g-prob strong{font-size:clamp(18px,2.12vw,28px)}
+ .modern-predictions .gallery-hero-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:12px;color:#92d5c8;border-top:1px solid #a3e7d61c;padding-top:14px}
+ .modern-predictions .gallery-hero-footer button{border:0;border-radius:11px;padding:11px 16px;background:#69ebc0;color:#092c2e;font-weight:850;font-size:12px}
+ .modern-predictions .match-gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,430px),1fr));gap:16px}
+ .modern-predictions .gallery-match{display:block;min-width:0;background:#fff;border:1px solid #d4e5e2;border-radius:21px;box-shadow:0 7px 25px #143d340c;padding:17px 17px 14px;text-align:left;color:#193c42;transition:transform .16s,box-shadow .16s,border-color .16s;overflow:hidden}
+ .modern-predictions .gallery-match:hover{border-color:#5cccaf;transform:translateY(-2px);box-shadow:0 14px 30px #123d341b}
+ .modern-predictions .gallery-meta{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;padding-bottom:13px;border-bottom:1px solid #edf2f2;color:#41746c}
+ .modern-predictions .gallery-meta>span{display:flex;align-items:center;min-width:0;gap:7px}
+ .modern-predictions .gallery-meta b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
+ .modern-predictions .gallery-meta time{font-weight:850;color:#20856e;white-space:nowrap}
+ .modern-predictions .gallery-match-main{display:grid;grid-template-columns:minmax(0,1fr) minmax(170px,1.85fr) minmax(0,1fr);gap:10px;align-items:center;margin:17px 0;min-width:0}
+ .modern-predictions .gallery-team{display:flex;flex-direction:column;justify-content:center;align-items:center;min-width:0;gap:9px;text-align:center;line-height:1.28}
+ .modern-predictions .gallery-team .table-crest{width:52px;height:52px}
+ .modern-predictions .gallery-team b{font-weight:850;font-size:12px;overflow-wrap:anywhere;max-width:100%}
+ .modern-predictions .gallery-scoreline{text-align:center;display:block;margin:-4px 0 10px;color:#138c72;font-size:13px;font-weight:900}
+ .modern-predictions .gallery-open{display:block;text-align:center;border-top:1px solid #eaf0ee;padding-top:12px;color:#119c7b;font-weight:850;font-size:11px}
+ .modern-predictions .gallery-empty{grid-column:1/-1;border:1px dashed #bdd6ce;border-radius:18px;padding:35px 15px;text-align:center;background:#fff;color:#64867c}
+}
+@media (min-width:781px) and (max-width:1100px){
+ .modern-predictions .gallery-match-main{grid-template-columns:minmax(0,1fr) minmax(166px,1.8fr) minmax(0,1fr);gap:7px}
+ .modern-predictions .gallery-hero-main{grid-template-columns:minmax(0,1fr) minmax(228px,1.6fr) minmax(0,1fr);gap:13px}
+ .modern-predictions .gallery-hero-odds .g-prob strong{font-size:clamp(17px,2.2vw,25px)}
+}
+@media(max-width:780px){.gallery-featured,.match-gallery,.gallery-date-picker{display:none!important}}
