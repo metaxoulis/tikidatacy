@@ -8,7 +8,15 @@ export const METRICS=[
  ['corners','Κόρνερ',['CORNERS','CORNER_KICKS','CORNERS_WON']],
  ['fouls','Φάουλ',['FOULS','FOULS_COMMITTED']],
  ['yellow','Κίτρινες',['YELLOWCARDS','YELLOW_CARDS','YELLOW_CARDS_TOTAL']],
- ['red','Κόκκινες',['REDCARDS','RED_CARDS']]
+ ['red','Κόκκινες',['REDCARDS','RED_CARDS']],
+ ['off_target','Εκτός εστίας',['SHOTS_OFF_TARGET','SHOTS_OFF_GOAL']],
+ ['blocked','Μπλοκαρισμένα σουτ',['SHOTS_BLOCKED','BLOCKED_SHOTS']],
+ ['attacks','Επιθέσεις',['ATTACKS']],
+ ['dangerous','Επικίνδυνες επιθέσεις',['DANGEROUS_ATTACKS']],
+ ['offsides','Οφσάιντ',['OFFSIDES']],
+ ['saves','Αποκρούσεις',['SAVES','GOALKEEPER_SAVES']],
+ ['throwins','Πλάγια άουτ',['THROW_INS']],
+ ['goal_kicks','Ελεύθερα',['GOAL_KICKS']]
 ];
 const finite=v=>typeof v==='number'&&Number.isFinite(v);
 export function liveStatSummary(rows,homeId,awayId){
