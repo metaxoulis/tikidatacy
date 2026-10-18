@@ -26,7 +26,7 @@ function normalizedPlayers(rows,id,homeId,awayId,type){
   const playerId=smInt(x.player_id),name=smLabel(x.player_name??x.player?.name,85);
   if(!name)continue;
   const key=team+'|'+(playerId||name);if(ids.has(key))continue;ids.add(key);
-  const n=Number(x.jersey_number),order=Number(x.formation_position);
+  const n=x.jersey_number==null?NaN:Number(x.jersey_number),order=x.formation_position==null?NaN:Number(x.formation_position);
   const expected=smArray(x.expected??x.xglineup??x.xGLineup);
   const px=expectedXg(expected,id,'',true).find(v=>v.player_id===playerId);
   const person={id:playerId,name,number:Number.isInteger(n)&&n>=0&&n<=99?n:null,
