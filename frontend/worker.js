@@ -2552,14 +2552,15 @@ async function tdUefaEvidenceStatus(env){
  */
 async function tdUefaStages(req,env,ctx){
  if(!env?.TIKI_DB||!env?.SPORTMONKS_API_TOKEN)return smResponse({error:'stages_unavailable'},503);
- const db=env.TIKI_DB,key='official_uefa_stages_v1',now=Math.floor(Date.now()/1000);
+ const db=env.TIKI_DB,key='official_uefa_stages_v2',now=Math.floor(Date.now()/1000);
  try{const row=await db.prepare('SELECT payload_json FROM sportapi_home_cache WHERE cache_key=?1 AND expires_at>?2').bind(key,now).first();
   if(row?.payload_json)return smResponse(JSON.parse(row.payload_json),200,3600);}catch{}
  const list=await Promise.allSettled(Object.entries(UEFA_LEAGUE_IDS).map(async ([league_key,id])=>{
   const r=await smHttp('leagues/'+id+'?include=currentSeason.stages',env.SPORTMONKS_API_TOKEN,fetch,true);
   const data=r.data;
   if(Number(data?.id)!==id)throw Error('uefa_invalid_league_id');
-  const season=data.currentSeason,rows=Array.isArray(season?.stages)?season.stages:[];
+  const season=data.currentSeason??data.currentseason??data.current_season??null;
+  const rows=Array.isArray(season?.stages)?season.stages:Array.isArray(data.stages)?data.stages:[];
   return {league_key,id,name:UEFA_COMPETITIONS[league_key].name,season_id:smId(season?.id),
    season:smText(season?.name,65),stages:rows.filter(x=>smId(x?.id)&&typeof x.name==='string')
     .slice(0,40).map(s=>({id:s.id,name:smText(s.name,90),type_id:smId(s.type_id),
