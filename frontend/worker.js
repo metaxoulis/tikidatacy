@@ -1699,14 +1699,21 @@ async function smComputeLiveSnapshot(env,ctx){
   smLiveProbabilities(env.SPORTMONKS_API_TOKEN,fetch).catch(()=>new Map()),
   fhLoadModel(env?.TIKI_DB,ctx).catch(()=>null)
  ]):[new Map(),null];
- const matches=games.filter(m=>!SM_FINISHED.has(String(m.status||'').toUpperCase())&&String(m.status||'').toUpperCase()!=='NS').map(m=>{
+ const matches=await Promise.all(games.filter(m=>!SM_FINISHED.has(String(m.status||'').toUpperCase())&&String(m.status||'').toUpperCase()!=='NS').map(async m=>{
   const provider=probabilities.get(Number(String(m.id).replace(/^sportmonks-/,'')))||null;
-  const fitted=model?fhEstimate(m,model):null;
+  const base=model?fhEstimate(m,model):null;
+  // Reuse precomputed D1 context from the upcoming fixture; never delay live updates
+  // for new Sportmonks history requests, and do not synthesize missing xG/lineup data.
+  const [h,a]=base?.tier==='team'&&m.home_id&&m.away_id?
+   await tdContextPair(env?.TIKI_DB,env.SPORTMONKS_API_TOKEN,m,false):[null,null];
+  const adapted=tdContextForecast(base?{...base,prediction_tier:base.tier}:null,h,a,fhPoisson);
+  const fitted=adapted?{...base,...adapted}:base;
   const outlook=liveOutlook(m,fitted);
   return {...m,live_prediction:provider,live_outlook:outlook,
+   context:adapted?.context||null,contextual_model_available:!!adapted,
    model_coverage:{home:fitted?.team_samples?.home??0,away:fitted?.team_samples?.away??0},
-   analysis_provenance:outlook?'tiki_conditional_poisson_v1':provider?'sportmonks_live_1x2':'factual_live_data_only'};
- });
+   analysis_provenance:outlook?(adapted?'tiki_conditional_poisson_xg_context_experimental':'tiki_conditional_poisson_v1'):provider?'sportmonks_live_1x2':'factual_live_data_only'};
+ }));
  return {source:'sportmonks',processing:'cloudflare_backend_d1',updated_at:new Date().toISOString(),
   probabilities_source:'sportmonks_live_1x2_if_subscribed',matches};
 }
