@@ -130,7 +130,8 @@ async function fetchDeep(id){
 function render(focus=false){const pos=focus?root.querySelector('[data-search]')?.selectionStart:null;root.innerHTML='<div class="tdm-wrap"><header class="tdm-top"><a href="/" class="tdm-brand"><img src="/brand.svg" alt="Tiki-Data"></a><button data-view="teams" class="tdm-icon-btn" aria-label="Αγαπημένες ομάδες">'+ico('teams')+'</button></header><main>'+
 (state.fromCache?'<div class="tdm-cache-note">Προσωρινά αποθηκευμένοι αγώνες · ανανέωση σε εξέλιξη</div>':'')+(state.error?'<div class="tdm-empty">'+E(state.error)+' <button data-retry class="tdm-link">Ξανά</button></div>':'')+
 (state.view==='home'?home():state.view==='teams'?teams():state.view==='detail'?details():fixtures())+'</main></div><nav class="tdm-bottom">'+[['home','Αρχική'],['matches','Αγώνες'],['live','Live'],['teams','Ομάδες']].map(([x,y])=>'<button data-view="'+x+'" '+(state.view===x?'class="active" aria-current="page"':'')+'>'+ico(x)+'<span>'+y+'</span></button>').join('')+'</nav>';
-if(focus){const i=root.querySelector('[data-search]');if(i){i.focus();try{i.setSelectionRange(pos,pos)}catch{}}}}
+if(window.matchMedia('(min-width:781px)').matches){const nav=root.querySelector('.tdm-bottom'),header=root.querySelector('.tdm-top');if(nav&&header)header.after(nav);}
+ if(focus){const i=root.querySelector('[data-search]');if(i){i.focus();try{i.setSelectionRange(pos,pos)}catch{}}}}
 function navigate(v){state.visible=42;state.previous=state.view==='detail'?state.previous:state.view;state.view=v;state.query='';state.league='all';if(v!=='detail')state.id='';render();window.scrollTo(0,0)}
 root.addEventListener('click',e=>{const b=e.target.closest('[data-team],[data-view],[data-back],[data-open],[data-mode],[data-league],[data-day],[data-tab],[data-retry],[data-more]');if(!b)return;const a=n=>b.getAttribute('data-'+n);
 if(b.hasAttribute('data-team')){const v=a('team');followed=isFav(v)?followed.filter(x=>norm(x)!==norm(v)):[...followed,v];try{localStorage.setItem(favKey,JSON.stringify(followed))}catch{}render();return}
@@ -180,5 +181,6 @@ async function refresh(){
  finally{updating=false}
 }
 function init(){document.body.appendChild(root);document.documentElement.classList.add('td-mobile-ready');restoreFixtures();render();refresh();setInterval(()=>{if(!document.hidden)refresh()},30000)}
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
+window.matchMedia('(min-width:781px)').addEventListener('change',()=>{if(root.isConnected)render()});
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();
