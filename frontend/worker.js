@@ -1203,7 +1203,7 @@ async function smStage(req,env){
  * Never publish league priors as team-specific forecasts.
  */
 /* Tiki-Data in-play what-if engine: conditional independent Poisson, not a certified forecast. */
-const FITTED=new Set(['openfootball_cc0_fitted_venue_poisson','licensed_historical_venue_poisson']);
+const FITTED=new Set(['openfootball_cc0_fitted_venue_poisson','licensed_historical_venue_poisson','form_based_live_poisson_v1']);
 const percent=x=>Math.round(x*10000)/100;
 const pmf=(lambda,max=11)=>{const p=[Math.exp(-lambda)];for(let k=1;k<=max;k++)p.push(p[k-1]*lambda/k);return p;};
 function liveOutlook(game,estimate){
@@ -1227,14 +1227,14 @@ function liveOutlook(game,estimate){
  if(total<.98||total>1.01)return null;
  const sum=muH+muA,noGoal=Math.exp(-sum),anyGoal=1-noGoal;
  return {source:'tiki_conditional_poisson_v1',experimental:true,validated:false,
-  based_on:'verified_team_fitted_prematch_rates_plus_actual_score_and_match_minute',
+  based_on:estimate.method==='form_based_live_poisson_v1'?'recent_verified_scores_and_actual_score_and_match_minute':'verified_team_fitted_prematch_rates_plus_actual_score_and_match_minute',
   fixture_id:game.id,minute,observed_score:[h,a],remaining_standard_minutes:90-minute,
   remaining_expected_goals:{home:Number(muH.toFixed(3)),away:Number(muA.toFixed(3))},
   p1:percent(one/total),px:percent(draw/total),p2:percent(two/total),
   over25:percent(over/total),under25:percent(1-over/total),btts:percent(gg/total),
   next_goal:{home:percent(anyGoal*muH/sum),away:percent(anyGoal*muA/sum),none:percent(noGoal)},
   most_likely_final:{score:top.h+'-'+top.a,probability:percent(top.p/total)},
-  warning:'Simplified independent Poisson; does not adjust for injuries, red cards, substitutions, xG or extra time.'};
+  warning:'Unvalidated simplified independent Poisson. Recent-form fallback uses verified final scores only, not observed live shots or xG; no injuries, substitutions, red-card adjustments or extra time.'};
 }
 
 
@@ -1749,8 +1749,81 @@ function smRetainLiveEstimates(next,previous){
  })};
 }
 
-const SM_LIVE_SNAPSHOT_KEY='sportmonks_live_snapshot_v1';
-const SM_LIVE_LOCK_KEY='sportmonks_live_snapshot_lock_v1';
+/* Only verified live Sportmonks statistics and finished D1 scores.
+ * Missing real-time values remain null; a form-based forecast is separately experimental.
+ */
+const METRICS=[
+ ['shots','Σουτ',['SHOTS_TOTAL','TOTAL_SHOTS']],
+ ['on_target','Στην εστία',['SHOTS_ON_TARGET','SHOTS_ON_GOAL']],
+ ['possession','Κατοχή',['BALL_POSSESSION','POSSESSION']],
+ ['corners','Κόρνερ',['CORNERS']],
+ ['fouls','Φάουλ',['FOULS']],
+ ['yellow','Κίτρινες',['YELLOWCARDS','YELLOW_CARDS']],
+ ['red','Κόκκινες',['REDCARDS','RED_CARDS']]
+];
+const finite=v=>typeof v==='number'&&Number.isFinite(v);
+function liveStatSummary(rows,homeId,awayId){
+ const h=Number(homeId),a=Number(awayId);
+ if(!Number.isSafeInteger(h)||!Number.isSafeInteger(a)||h<=0||a<=0||h===a)return [];
+ const m=new Map();
+ for(const v of Array.isArray(rows)?rows:[]){
+  const side=Number(v?.participant_id)===h?'home':Number(v?.participant_id)===a?'away':null;
+  const type=String(v?.type||'').toUpperCase().replace(/[^A-Z0-9]+/g,'_');
+  const num=v?.value;
+  if(!side||!finite(num)||num<0||num>50000)continue;
+  if(type==='GOALS')continue; // score endpoint, not GOALS statistic, is authoritative.
+  if(!m.has(type))m.set(type,{home:null,away:null});
+  m.get(type)[side]=num;
+ }
+ return METRICS.map(([key,label,types])=>{
+  const matched=types.map(k=>m.get(k)).find(x=>x&&x.home!==null&&x.away!==null);
+  if(!matched)return null;
+  if((key==='possession')&&(matched.home>100||matched.away>100))return null;
+  return {key,label,home:matched.home,away:matched.away,unit:key==='possession'?'%':''};
+ }).filter(Boolean);
+}
+const teamKey=x=>String(x||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase()
+ .replace(/[^a-z0-9\u0370-\u03ff]+/g,' ').replace(/\b(fc|cf|afc|sc|ac|football club)\b/g,'').replace(/\s+/g,' ').trim();
+function historicalFormIndex(rows,cutoff){
+ const map=new Map(),bound=Date.parse(String(cutoff).slice(0,10)+'T00:00:00Z');
+ for(const r of Array.isArray(rows)?rows:[]){
+  const d=Date.parse(String(r.match_date||'')+'T00:00:00Z');
+  if(!Number.isFinite(d)||!(d<bound)||!Number.isInteger(r.home_score)||!Number.isInteger(r.away_score)||r.home_score<0||r.away_score<0||r.home_score>15||r.away_score>15)continue;
+  const h=teamKey(r.home_team),a=teamKey(r.away_team);if(!h||!a||h===a)continue;
+  for(const [name,gf,ga,venue] of [[h,r.home_score,r.away_score,'home'],[a,r.away_score,r.home_score,'away']]){
+   if(!map.has(name))map.set(name,[]);
+   const list=map.get(name);
+   if(list.length<9)list.push({date:r.match_date,gf,ga,venue,league_key:r.league_key});
+  }
+ }
+ return map;
+}
+function recentTeamForm(index,name){
+ const all=(index?.get(teamKey(name))||[]).slice(0,8),n=all.length;
+ if(!n)return {matches:0,source:'sportmonks_d1_final_scores',verified:false};
+ const sum=key=>all.reduce((s,r)=>s+r[key],0);
+ const gf=sum('gf'),ga=sum('ga');
+ return {matches:n,source:'sportmonks_d1_final_scores',verified:true,last_match:all[0].date,
+  wins:all.filter(x=>x.gf>x.ga).length,draws:all.filter(x=>x.gf===x.ga).length,losses:all.filter(x=>x.gf<x.ga).length,
+  goals_for:gf,goals_against:ga,goals_per_match:Number((gf/n).toFixed(2)),
+  conceded_per_match:Number((ga/n).toFixed(2)),form:all.map(x=>x.gf>x.ga?'W':x.gf<x.ga?'L':'D').join(''),
+  competitions:[...new Set(all.map(x=>x.league_key))],window:'last_8_verified_finished_matches'};
+}
+function formBasedRates(home,away){
+ if(!home?.verified||!away?.verified||home.matches<4||away.matches<4)return null;
+ const hx=home.goals_per_match,ha=home.conceded_per_match,ax=away.goals_per_match,aa=away.conceded_per_match;
+ if(![hx,ha,ax,aa].every(finite))return null;
+ const clip=v=>Math.max(.35,Math.min(3.8,v));
+ // Shrink simple scored/conceded averages toward neutral goal rates; no xG assumed.
+ const mh=clip(.4*1.38+.6*(hx+aa)/2);
+ const ma=clip(.4*1.13+.6*(ax+ha)/2);
+ return {mu_home:mh,mu_away:ma,team_samples:{home:home.matches,away:away.matches},
+  method:'form_based_live_poisson_v1',confidence:'low',validated:false,source:'sportmonks_d1_finished_scores',
+  note:'Experimental scenario based on recent real goals for and against; not calibrated or validated.'};
+}
+
+const SM_LIVE_SNAPSHOT_KEY='sportmonks_live_snapshot_v2_form';
+const SM_LIVE_LOCK_KEY='sportmonks_live_snapshot_lock_v2';
 const SM_LIVE_REFRESH_MS=25000,SM_LIVE_PUBLIC_MAX_AGE_MS=85000;
 const smLiveSnapshotResponse=(data)=>new Response(JSON.stringify(data),{status:200,headers:{
  'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
@@ -1768,10 +1841,12 @@ async function smComputeLiveSnapshot(env,ctx){
   (String(country).toLowerCase()==='cyprus'&&/^1\\.?\\s*division$/i.test(String(name))?'cyprus':null);
  const games=await smInplay(env.SPORTMONKS_API_TOKEN,classify,fetch);
  // No live games: skip premium prediction queries and historic model loading.
- const [probabilities,model]=games.length?await Promise.all([
+ const [probabilities,model,historyRows]=games.length?await Promise.all([
   smLiveProbabilities(env.SPORTMONKS_API_TOKEN,fetch).catch(()=>new Map()),
-  fhLoadModel(env?.TIKI_DB,ctx).catch(()=>null)
- ]):[new Map(),null];
+  fhLoadModel(env?.TIKI_DB,ctx).catch(()=>null),
+  env?.TIKI_DB?env.TIKI_DB.prepare("SELECT match_date,home_team,away_team,home_score,away_score,league_key FROM sportmonks_training_results WHERE match_date >= date('now','-210 day') AND match_date < date('now') ORDER BY match_date DESC LIMIT 5000").all().then(x=>x.results||[]).catch(()=>[]):Promise.resolve([])
+ ]):[new Map(),null,[]];
+ const forms=historicalFormIndex(historyRows,new Date().toISOString().slice(0,10));
  const matches=await Promise.all(games.filter(m=>!SM_FINISHED.has(String(m.status||'').toUpperCase())&&String(m.status||'').toUpperCase()!=='NS').map(async m=>{
   const provider=probabilities.get(Number(String(m.id).replace(/^sportmonks-/,'')))||null;
   const base=model?fhEstimate(m,model):null;
@@ -1780,12 +1855,17 @@ async function smComputeLiveSnapshot(env,ctx){
   const [h,a]=base?.tier==='team'&&m.home_id&&m.away_id?
    await tdContextPair(env?.TIKI_DB,env.SPORTMONKS_API_TOKEN,m,false):[null,null];
   const adapted=tdContextForecast(base?{...base,prediction_tier:base.tier}:null,h,a,fhPoisson);
-  const fitted=adapted?{...base,...adapted}:base;
-  const outlook=liveOutlook(m,fitted);
-  return {...m,live_prediction:provider,live_outlook:outlook,
+  const form={home:recentTeamForm(forms,m.home),away:recentTeamForm(forms,m.away)};
+  const last= formBasedRates(form.home,form.away);
+  const fitted=adapted&&base?{...base,...adapted,method:base.method}:base;
+  const estimate=liveOutlook(m,fitted)||liveOutlook(m,last);
+  const outlook=estimate?{...estimate,source:estimate.based_on==='verified_team_fitted_prematch_rates_plus_actual_score_and_match_minute'?'historical_team_live_poisson':'recent_form_live_poisson',
+   based_on:estimate.based_on,confidence:'experimental',validated:false}:null;
+  const liveStats=liveStatSummary(m.statistics,m.home_id,m.away_id);
+  return {...m,live_stats:liveStats,recent_form:form,live_prediction:provider,live_outlook:outlook,
    context:adapted?.context||null,contextual_model_available:!!adapted,
-   model_coverage:{home:fitted?.team_samples?.home??0,away:fitted?.team_samples?.away??0},
-   analysis_provenance:outlook?(adapted?'tiki_conditional_poisson_xg_context_experimental':'tiki_conditional_poisson_v1'):provider?'sportmonks_live_1x2':'factual_live_data_only'};
+   model_coverage:{home:fitted?.team_samples?.home??form.home.matches??0,away:fitted?.team_samples?.away??form.away.matches??0},
+   analysis_provenance:outlook?(outlook.source==='recent_form_live_poisson'?'recent_d1_team_form_poisson_unvalidated':'tiki_historical_team_poisson_experimental'):provider?'sportmonks_live_1x2':'factual_live_data_only'};
  }));
  return {source:'sportmonks',processing:'cloudflare_backend_d1',updated_at:new Date().toISOString(),
   probabilities_source:'sportmonks_live_1x2_if_subscribed',matches};

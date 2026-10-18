@@ -1,5 +1,5 @@
 /* Tiki-Data in-play what-if engine: conditional independent Poisson, not a certified forecast. */
-const FITTED=new Set(['openfootball_cc0_fitted_venue_poisson','licensed_historical_venue_poisson']);
+const FITTED=new Set(['openfootball_cc0_fitted_venue_poisson','licensed_historical_venue_poisson','form_based_live_poisson_v1']);
 const percent=x=>Math.round(x*10000)/100;
 const pmf=(lambda,max=11)=>{const p=[Math.exp(-lambda)];for(let k=1;k<=max;k++)p.push(p[k-1]*lambda/k);return p;};
 export function liveOutlook(game,estimate){
@@ -23,12 +23,12 @@ export function liveOutlook(game,estimate){
  if(total<.98||total>1.01)return null;
  const sum=muH+muA,noGoal=Math.exp(-sum),anyGoal=1-noGoal;
  return {source:'tiki_conditional_poisson_v1',experimental:true,validated:false,
-  based_on:'verified_team_fitted_prematch_rates_plus_actual_score_and_match_minute',
+  based_on:estimate.method==='form_based_live_poisson_v1'?'recent_verified_scores_and_actual_score_and_match_minute':'verified_team_fitted_prematch_rates_plus_actual_score_and_match_minute',
   fixture_id:game.id,minute,observed_score:[h,a],remaining_standard_minutes:90-minute,
   remaining_expected_goals:{home:Number(muH.toFixed(3)),away:Number(muA.toFixed(3))},
   p1:percent(one/total),px:percent(draw/total),p2:percent(two/total),
   over25:percent(over/total),under25:percent(1-over/total),btts:percent(gg/total),
   next_goal:{home:percent(anyGoal*muH/sum),away:percent(anyGoal*muA/sum),none:percent(noGoal)},
   most_likely_final:{score:top.h+'-'+top.a,probability:percent(top.p/total)},
-  warning:'Simplified independent Poisson; does not adjust for injuries, red cards, substitutions, xG or extra time.'};
+  warning:'Unvalidated simplified independent Poisson. Recent-form fallback uses verified final scores only, not observed live shots or xG; no injuries, substitutions, red-card adjustments or extra time.'};
 }
