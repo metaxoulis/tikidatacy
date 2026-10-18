@@ -1342,7 +1342,7 @@ async function tdMatchDetails(req,env,ctx,id){
   verified=focus?.matches?.find(m=>m.id==='sportmonks-'+id)||null;
  }catch{}
  if(!verified?.home_id||!verified?.away_id)return smResponse({error:'match_not_in_verified_schedule'},404);
- const cacheKey=new Request('https://tiki-cache.local/match-deep-v1/'+id);
+ const cacheKey=new Request('https://tiki-cache.local/match-deep-v2-news/'+id);
  const cache=typeof caches!=='undefined'?caches.default:null;
  try{const hit=await cache?.match(cacheKey);if(hit)return hit}catch{}
  try{
