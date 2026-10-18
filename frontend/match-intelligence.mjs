@@ -5,8 +5,9 @@ const smInt=v=>Number.isSafeInteger(v)&&v>0?v:null;
 const smLabel=(v,n=95)=>typeof v==='string'?v.trim().slice(0,n):'';
 const smFinite=v=>{const x=typeof v==='number'?v:typeof v==='string'&&v.trim()?Number(v):NaN;return Number.isFinite(x)&&x>=0&&x<=1000?x:null};
 const smArray=v=>Array.isArray(v)?v:[];
-function expectedXg(rows,id,side,player=false){
- return smArray(rows).filter(x=>x&&x.fixture_id===id&&x.type_id===5304).flatMap(x=>{
+function expectedXg(rows,id,side,player=false,embedded=false){
+ return smArray(rows).filter(x=>x&&(x.fixture_id===id||(embedded&&x.fixture_id==null))&&
+  (x.type_id===5304||x.type?.code==='expected-goals'||x.type?.developer_name==='EXPECTED_GOALS')).flatMap(x=>{
   const val=smFinite(x.data?.value??x.value);
   if(val===null)return[];
   return [{fixture_id:id,team_id:smInt(x.participant_id??x.team_id),player_id:player?smInt(x.player_id):null,
@@ -28,7 +29,8 @@ function normalizedPlayers(rows,id,homeId,awayId,type){
   const key=team+'|'+(playerId||name);if(ids.has(key))continue;ids.add(key);
   const n=x.jersey_number==null?NaN:Number(x.jersey_number),order=x.formation_position==null?NaN:Number(x.formation_position);
   const expected=smArray(x.expected??x.xglineup??x.xGLineup);
-  const px=expectedXg(expected,id,'',true).find(v=>v.player_id===playerId);
+  const inlineXg=expectedXg(expected.map(z=>({...z,fixture_id:z.fixture_id??id,player_id:z.player_id??playerId})),id,'',true);
+  const px=inlineXg.find(v=>v.player_id===playerId);
   const person={id:playerId,name,number:Number.isInteger(n)&&n>=0&&n<=99?n:null,
    position:smLabel(x.formation_field,15)||null,order:Number.isInteger(order)&&order>=0&&order<=50?order:null,
    xg:px?.xg??null};
@@ -60,7 +62,8 @@ function normalizeMatchIntelligence(raw,additional={},verified={}){
  const displayed=hasActual?actual:prediction;
  const kind=hasActual?(confirmed===true?'confirmed':confirmed===false?'predicted_by_provider':'unconfirmed'):
    hasPrediction?'predicted_by_provider':'unavailable';
- const fxg=expectedXg([...smArray(raw.expected),...smArray(raw.xgfixture),...smArray(raw.xGFixture),...smArray(additional.team)],id);
+ const fxg=[...expectedXg([...smArray(raw.expected),...smArray(raw.xgfixture),...smArray(raw.xGFixture)],id,'',false,true),
+  ...expectedXg(additional.team,id)];
  const lineXg=expectedXg(additional.players,id,'',true);
  const playerNames=new Map([...smArray(raw.lineups),...predictedRaw].filter(x=>smInt(x?.player_id)&&smLabel(x.player_name)).map(x=>[x.player_id,smLabel(x.player_name,80)]));
  const identifiedPlayers=lineXg.map(x=>({...x,player_name:playerNames.get(x.player_id)||null}));
