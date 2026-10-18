@@ -48,16 +48,29 @@ function markets(m){
   '<div class="forecast-result"><span>Πιθανότερο σκορ (εκτίμηση)</span><strong>'+esc(p.most_likely_score?.score||'—')+'</strong><small>'+pct(p.most_likely_score?.probability)+'</small></div>'+
   '<p class="model-note">Βάση: '+esc(forecastStrength(p))+' · '+esc(p.data_points)+' ιστορικοί αγώνες · έως '+esc(p.history_latest)+'. Όχι πιστοποιημένη ακρίβεια.</p>';
 }
+function centredProbability(m,clazz){
+ const p=m?.model;
+ if(!p||![p.p1,p.px,p.p2].every(x=>typeof x==='number'&&Number.isFinite(x)))
+  return '<span class="'+clazz+' unavailable">VS</span>';
+ return '<span class="'+clazz+'" aria-label="Πιθανότητες 1 Χ 2">'+['1','Χ','2'].map((v,i)=>
+  '<span><small>'+v+'</small><b>'+pct([p.p1,p.px,p.p2][i])+'</b></span>').join('')+'</span>';
+}
 function featured(m){
  if(!m){$('featuredContent').innerHTML='<div class="loading">Δεν υπάρχουν καταχωρισμένοι αγώνες αυτή τη στιγμή.</div>';return;}
  $('featuredContent').innerHTML='<div class="feature-top"><b>'+leagueEmblem(m.league,m.league_logo,m.league_key)+esc(m.league)+'</b><span>'+(isLive(m)?'● LIVE':isDone(m)?'ΤΕΛΙΚΟ':'ΕΠΟΜΕΝΟΣ ΑΓΩΝΑΣ')+' · '+esc(when(m))+'</span></div>'+
- '<div class="feature-grid"><div class="feature-main"><div class="featured-teams"><div class="ft-team">'+crest(m,'home')+'<b>'+esc(m.home)+'</b></div><div class="vs"><strong>'+esc(score(m))+'</strong>'+(isLive(m)?'LIVE':'FOOTBALL')+'</div><div class="ft-team">'+crest(m,'away')+'<b>'+esc(m.away)+'</b></div></div><div class="feat-bottom"><span class="f-league">'+leagueEmblem(m.league,m.league_logo,m.league_key)+esc(m.league)+'</span><a href="/predictions" class="feat-details">Πλήρη στοιχεία αγώνα →</a></div></div><aside class="feature-side">'+markets(m)+'</aside></div>';
+ '<div class="feature-grid"><div class="feature-main"><div class="featured-teams"><div class="ft-team">'+crest(m,'home')+'<b>'+esc(m.home)+'</b></div>'+centredProbability(m,'home-hero-probs')+'<div class="ft-team">'+crest(m,'away')+'<b>'+esc(m.away)+'</b></div></div><div class="feat-bottom"><span class="f-league">'+leagueEmblem(m.league,m.league_logo,m.league_key)+esc(m.league)+'</span><a href="/predictions" class="feat-details">Πλήρη στοιχεία αγώνα →</a></div></div><aside class="feature-side">'+markets(m)+'</aside></div>';
  $('featuredContent').setAttribute('aria-busy','false');
 }
 function upcoming(matches){
- const wrap=$('upcomingGrid'),items=Array.isArray(matches)?matches.slice(0,6):[];document.querySelector('.upcoming-heading').hidden=!items.length;wrap.hidden=!items.length;
- if(!items.length){wrap.replaceChildren();}
- else wrap.innerHTML=items.map(m=>'<article class="upcoming-card"><div class="up-meta"><span>'+leagueEmblem(m.league,m.league_logo,m.league_key)+esc(m.league)+'</span><span>'+esc(when(m))+'</span></div><div class="up-match"><div class="up-team">'+crest(m,'home')+'<b>'+esc(m.home)+'</b></div><span class="up-versus">'+esc(score(m))+'</span><div class="up-team">'+crest(m,'away')+'<b>'+esc(m.away)+'</b></div></div><div class="up-footer"><span>'+(m.model?'1 '+pct(m.model.p1)+' · Χ '+pct(m.model.px)+' · 2 '+pct(m.model.p2)+'<br><small>'+escforecastStrength(m.model)+'</small>':'Χωρίς εκτίμηση')+'</span><a href="/predictions">Στοιχεία ↗</a></div></article>').join('');
+ const wrap=$('upcomingGrid'),items=Array.isArray(matches)?matches.slice(0,6):[];
+ document.querySelector('.upcoming-heading').hidden=!items.length;wrap.hidden=!items.length;
+ if(!items.length){wrap.replaceChildren();return;}
+ wrap.innerHTML=items.map(m=>
+ '<article class="upcoming-card"><div class="up-meta"><span>'+leagueEmblem(m.league,m.league_logo,m.league_key)+esc(m.league)+'</span><span>'+esc(when(m))+'</span></div>'+
+ '<div class="up-match"><div class="up-team">'+crest(m,'home')+'<b>'+esc(m.home)+'</b></div>'+centredProbability(m,'home-match-probs')+
+ '<div class="up-team">'+crest(m,'away')+'<b>'+esc(m.away)+'</b></div></div>'+
+ '<div class="up-footer"><span>1 Χ 2 · Υπολογισμένες πιθανότητες</span><a href="/predictions">Ανάλυση ↗</a></div></article>'
+ ).join('');
  wrap.setAttribute('aria-busy','false');
 }
 let controller=null,fetching=false;
