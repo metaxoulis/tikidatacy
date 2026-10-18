@@ -95,15 +95,31 @@ function lineupPitch(m,team,side,formation){
  (bench.length?'<details class="tdm-bench"><summary>Αναπληρωματικοί ('+bench.length+')</summary><div class="tdm-lineup-rows">'+bench.map(rows).join('')+'</div></details>':'')+
  (!officialColor?'<p class="tdm-kit-note">Ουδέτερη εμφάνιση — δεν υπάρχει επαληθευμένο χρώμα φανέλας.</p>':'')+'</section>';
 }
+function uefaFormBlock(m){
+ if(!['ucl','uel','uecl'].includes(m.league_key))return '';
+ const data=m.european_form;
+ if(!data)return '<section class="tdm-panel"><h3>Επαληθευμένο UEFA ιστορικό</h3><p class="tdm-lead">Το αναλυτικό ιστορικό δεδομένων δεν είναι διαθέσιμο αυτή τη στιγμή.</p></section>';
+ const pane=(s,name)=>{
+  if(!s?.verified)return '<div class="tdm-uefa-form-card"><strong>'+E(name)+'</strong><p>Δεν υπάρχουν επαρκή καταγεγραμμένα παιχνίδια UEFA πριν από την αναμέτρηση.</p></div>';
+  return '<div class="tdm-uefa-form-card"><strong>'+E(name)+'</strong><p>'+E(s.matches)+' πρόσφατοι αγώνες UEFA · '+E(s.wins)+' νίκες / '+E(s.draws)+' ισοπαλίες / '+E(s.losses)+' ήττες</p>'+
+    row('Γκολ υπέρ / κατά',s.goals_for+' / '+s.goals_against)+
+    row('Μ.Ο. σουτ',s.avg_shots===null?'—':s.avg_shots)+
+    row('Μ.Ο. σουτ στην εστία',s.avg_shots_on_target===null?'—':s.avg_shots_on_target)+
+    row('Μ.Ο. κατοχής',s.avg_possession===null?'—':s.avg_possession+'%')+'</div>';
+ };
+ return '<section class="tdm-panel"><h3>Επαληθευμένο UEFA ιστορικό · D1</h3><div class="tdm-uefa-form-grid">'+pane(data.home,m.home)+pane(data.away,m.away)+'</div>'+
+ '<p class="tdm-note">Αποκλειστικά πραγματικά αποτελέσματα και διαθέσιμα στατιστικά από το Sportmonks. Περιλαμβάνονται προκριματικοί. Δεν υπολογίζονται πλασματικά xG ή προγνωστική βελτίωση από σουτ/κατοχή.</p></section>';
+}
+
 function details(){
  const m=state.matches.find(x=>String(x.id)===String(state.id));if(!m)return empty('Ο αγώνας δεν βρέθηκε');
  const is=live(m),d=deepCache.get(state.id),valid=d&&!d.error;
  const p=!is&&valid&&d.context_prediction?d.context_prediction:pr(m),g=is?m.live_outlook:p||m;
  let content='';
  if(state.tab==='info')content='<section class="tdm-panel"><h3>Πληροφορίες αγώνα</h3>'+row('Διοργάνωση',m.league||m.league_key)+row('Ημερομηνία',when(m.date))+row('Κατάσταση',is?'LIVE':m.status)+row('Πηγή','Sportmonks')+row('Ποιότητα μοντέλου',source(m))+(valid&&d.venue?row('Γήπεδο',d.venue):'')+'</section>'+
- '<section class="tdm-panel"><h3>Ιστορικό τεκμηρίωσης</h3>'+row('Γηπεδούχος εντός',m.analysis?.home_venue_matches??m.historical_sample?.home)+row('Φιλοξενούμενη εκτός',m.analysis?.away_venue_matches??m.historical_sample?.away)+'</section>';
+ uefaFormBlock(m)+'<section class="tdm-panel"><h3>Ιστορικό τεκμηρίωσης</h3>'+row('Γηπεδούχος εντός',m.analysis?.home_venue_matches??m.historical_sample?.home)+row('Φιλοξενούμενη εκτός',m.analysis?.away_venue_matches??m.historical_sample?.away)+'</section>';
  if(state.tab==='summary')content='<section class="tdm-panel"><h3>Πιθανότητες τελικού αποτελέσματος</h3>'+(p?'<div class="tdm-probs tdm-probs-featured">'+metric('1 · '+m.home,p.p1)+metric('Χ · Ισοπαλία',p.px)+metric('2 · '+m.away,p.p2)+'</div>':empty('Δεν υπάρχουν διαθέσιμα αριθμητικά δεδομένα.'))+'</section>'+
- '<section class="tdm-panel"><h3>Σενάρια γκολ</h3><div class="tdm-large-stats">'+row('Over 2.5',pct(g?.over25))+row('Under 2.5',pct(g?.under25))+row('GG / BTTS',pct(g?.btts))+row('Πιθανότερο σκορ',is?g?.most_likely_final?.score:m.most_likely_score?.score)+'</div></section>'+
+ uefaFormBlock(m)+'<section class="tdm-panel"><h3>Σενάρια γκολ</h3><div class="tdm-large-stats">'+row('Over 2.5',pct(g?.over25))+row('Under 2.5',pct(g?.under25))+row('GG / BTTS',pct(g?.btts))+row('Πιθανότερο σκορ',is?g?.most_likely_final?.score:m.most_likely_score?.score)+'</div></section>'+
  '<section class="tdm-panel"><h3>Expected Goals (xG) · Sportmonks</h3>'+
  (valid&&d.xg?.available?'<div class="tdm-xg"><div><small>'+E(m.home)+'</small><b>'+E(d.xg.home===null?'—':d.xg.home.toFixed(2))+'</b></div><span>xG</span><div><small>'+E(m.away)+'</small><b>'+E(d.xg.away===null?'—':d.xg.away.toFixed(2))+'</b></div></div>':deepNote(d)||'<p class="tdm-lead">Δεν υπάρχουν xG για τον αγώνα ή δεν περιλαμβάνονται στη συνδρομή.</p>')+
  '<p class="tdm-note">Το xG αφορά ποιότητα ευκαιριών, όχι πρόβλεψη τελικών γκολ. Διαθεσιμότητα ανά διοργάνωση και πακέτο.</p></section>';
