@@ -89,7 +89,7 @@ async function fetchDeep(id){
  if(!/^sportmonks-[1-9]\d{0,13}$/.test(id)||deepCache.has(id)||deepLoading.has(id))return;
  deepLoading.add(id);render();
  try{
-  const ctrl=new AbortController(),timeout=setTimeout(()=>ctrl.abort(),16000);
+  const ctrl=new AbortController(),timeout=setTimeout(()=>ctrl.abort(),30000);
   let result;
   try{const r=await fetch('/api/match/'+encodeURIComponent(id),{signal:ctrl.signal});
    if(!r.ok)throw Error('details_unavailable');result=await r.json()}
