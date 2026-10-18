@@ -103,3 +103,47 @@ html,body{width:100%;max-width:100%;overflow-x:clip}
 .up-footer{font-size:11px}
 @media(max-width:1070px){.featured-teams{grid-template-columns:minmax(90px,1fr) minmax(185px,1.4fr) minmax(90px,1fr)!important}}
 }
+
+
+/* Desktop home: match the app-style light cards and make probability cells self-contained. */
+@media(min-width:781px){
+ body{background:#eaf4f2;color:#16373c}
+ .shell{max-width:1530px;padding:0 clamp(18px,3vw,56px)}
+ .nav{padding:0 24px;background:#102936;border-radius:0 0 18px 18px;color:#ecfff9;box-shadow:0 8px 20px #09362c18}
+ .nav nav a{color:#a6c8c6}
+ .hero{margin-top:21px;border:1px solid #284b50;border-radius:25px;padding:43px 32px 31px;background:radial-gradient(ellipse at 90% 25%,#205d606a,transparent 52%),linear-gradient(120deg,#0b2531,#122f3b);color:#f4fffa;box-shadow:0 18px 40px #0f3b3530;min-height:345px}
+ .hero-metrics>div{min-width:0}
+ .section-heading h2{color:#14353b}
+ .section-heading p{color:#68888a}
+ .section-heading .section-right{color:#1b8d7b}
+ .section-heading .overline{color:#158c78}
+ .upcoming-heading .see-all{color:#158c78}
+ .upcoming-card{background:#fff;border:1px solid #d7e8e2;border-radius:21px;box-shadow:0 8px 25px #1c4c3a12;padding:18px 17px;overflow:hidden}
+ .up-meta{color:#5c7d84;font-size:11px}
+ .up-meta span:first-child{color:#218a74;font-weight:800}
+ .up-team b{color:#24494a;font-size:12px}
+ .up-footer{border-top:1px solid #e5efed;color:#5a7d7c}
+ .up-footer a{color:#158e74}
+ .up-match{grid-template-columns:minmax(0,1fr) minmax(154px,1.55fr) minmax(0,1fr)!important;gap:7px!important}
+ .upcoming-grid{gap:16px}
+ .home-hero-probs,.home-match-probs{box-sizing:border-box;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));min-width:0;max-width:100%;gap:2px;overflow:hidden;border-radius:15px;border:1px solid #9ae2c9;background:#edfff7;padding:6px}
+ .home-match-probs{padding:4px;gap:1px;border-color:#c5e7dc;background:#f0fbf6}
+ .home-hero-probs>span,.home-match-probs>span{min-width:0;max-width:100%;overflow:hidden;padding:10px 1px;display:flex;flex-direction:column;align-items:center;justify-content:center;border-right:1px solid #b6d9cf}
+ .home-match-probs>span{padding:8px 1px}
+ .home-hero-probs small,.home-match-probs small{font-size:10px;font-weight:900;color:#448278}
+ .home-hero-probs b,.home-match-probs b{display:block;max-width:100%;white-space:nowrap;letter-spacing:-.055em;font-variant-numeric:tabular-nums;color:#164449;font-weight:900;line-height:1.14}
+ .home-hero-probs b{font-size:clamp(16px,1.72vw,24px)}
+ .home-match-probs b{font-size:clamp(12px,1.08vw,15px)}
+ .featured-teams{grid-template-columns:minmax(0,1fr) minmax(228px,1.65fr) minmax(0,1fr)!important}
+ .feature{background:#102c3a;border:1px solid #2a5154;border-radius:24px;box-shadow:0 16px 35px #17463a29;overflow:hidden;color:#eefefa}
+ .feature-side{background:#0b2636}
+ .source-strip{background:white;border:1px solid #dcebe7;box-shadow:0 5px 17px #103c3510;color:#244144;border-radius:19px}
+ .source-strip p{color:#637d84}
+ .source-strip a{color:#16896f}
+ footer{color:#5f8282}
+}
+@media(min-width:781px) and (max-width:1120px){
+ .home-hero-probs b{font-size:clamp(14px,1.5vw,19px)}
+ .home-match-probs b{font-size:12px}
+ .up-match{grid-template-columns:minmax(0,1fr) minmax(145px,1.65fr) minmax(0,1fr)!important}
+}
