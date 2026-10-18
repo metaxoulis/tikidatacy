@@ -57,3 +57,12 @@ test('live data are calculated and cached by the backend, never in the mobile cl
  assert.match(ui,/liveMatches=snapshot.matches/);
  assert.match(ui,/snapshot\?\.pending/);
 });
+
+test('last live 1X2 values survive refreshing and carry an explicit old-estimate label',()=>{
+ const worker=get('frontend/worker.js'),ui=get('frontend-v13/mobile-ui.js');
+ assert.match(worker,/smRetainLiveEstimates\(calculated,existing\)/);
+ assert.match(worker,/return smLiveSnapshotResponse\(\{\.\.\.saved,pending:/);
+ assert.match(ui,/olderEstimateTag\(m\)/);
+ assert.match(ui,/live_probability_stale:true/);
+ assert.match(ui,/live_probability_updated_at/);
+});

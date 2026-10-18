@@ -25,13 +25,22 @@ const kpis=()=>'<div class="tdm-kpis">'+[['Αγώνες',state.matches.length],[
 const liveUpdateLabel=()=>state.liveUpdatedAt||state.livePending?'<div class="tdm-live-status">'+(state.liveUpdatedAt?'● Live ενημέρωση '+E(when(state.liveUpdatedAt)):'Επεξεργασία live στοιχείων στο Cloudflare…')+(state.livePending?' · αναμονή νεότερων δεδομένων':'')+'</div>':'';
 const dayKey=d=>{const x=new Date(d);if(!Number.isFinite(+x))return '';return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0')};
 const miniProb=m=>{const p=pr(m);return '<span class="tdm-central-probs" aria-label="Πιθανότητες 1 Χ 2">'+['1','Χ','2'].map((t,i)=>'<span><small>'+t+'</small><b>'+pct(p?[p.p1,p.px,p.p2][i]:null)+'</b></span>').join('')+'</span>'};
+const olderEstimateTag=m=>{
+ if(!live(m)||!pr(m)||!(m.live_probability_stale||state.livePending))return '';
+ const saved=m.live_probability_updated_at||state.liveUpdatedAt;
+ const recorded=Array.isArray(m.live_probability_score)?m.live_probability_score:null;
+ const scoreChanged=recorded&&Number.isInteger(recorded[0])&&Number.isInteger(recorded[1])&&
+   (recorded[0]!==m.home_score||recorded[1]!==m.away_score);
+ return '<span class="tdm-older-estimate">◷ Προηγούμενη εκτίμηση'+(saved?' · '+E(when(saved)):'')+
+  (scoreChanged?' · πριν την αλλαγή σκορ':'')+'</span>';
+};
 const dateChips=()=>{const days=[...new Set(state.matches.map(m=>dayKey(m.date)))].filter(Boolean).sort(),today=dayKey(new Date()),tomorrow=dayKey(Date.now()+86400000);return '<div class="tdm-chips tdm-day-chips" aria-label="Φίλτρο ανά ημέρα"><button data-day="all" class="tdm-chip '+(state.day==='all'?'active':'')+'">Όλες</button>'+days.map(k=>'<button data-day="'+k+'" class="tdm-chip '+(state.day===k?'active':'')+'">'+(k===today?'Σήμερα':k===tomorrow?'Αύριο':E(new Date(k+'T12:00:00').toLocaleDateString('el-GR',{weekday:'short',day:'numeric',month:'short'})))+'</button>').join('')+'</div><label class="tdm-date-control">Ημερομηνία <input type="date" data-pick-day value="'+(state.day==='all'?'':E(state.day))+'" aria-label="Επιλογή συγκεκριμένης ημέρας"></label>'};
 const card=m=>{const p=pr(m),vals=p?[p.p1,p.px,p.p2]:[null,null,null];
  const highest=p?Math.max(...vals):null;
  const inner='<div class="tdm-core-prob" aria-label="Πιθανότητες 1 Χ 2">'+['1','Χ','2'].map((k,i)=>'<span class="tdm-core-cell'+(vals[i]!==null&&vals[i]===highest?' winner':'')+'"><small>'+k+'</small><b>'+pct(vals[i])+'</b></span>').join('')+'</div>';
  return '<article class="tdm-card tdm-match-compact" role="button" tabindex="0" data-open="'+E(m.id)+'"><div class="tdm-card-top"><b>'+E(m.league||m.league_key)+'</b><span>'+stamp(m)+'</span></div>'+
  '<div class="tdm-teams">'+club(m.home,logoH(m))+'<div class="tdm-centre">'+inner+(live(m)?'<span class="tdm-live-score">'+E(score(m))+'</span>':'')+'</div>'+club(m.away,logoA(m))+'</div>'+
- '<div class="tdm-card-bottom"><b>Πιθανότητες 1Χ2</b><small>Ανάλυση αγώνα ↗</small></div></article>'};
+ olderEstimateTag(m)+'<div class="tdm-card-bottom"><b>Πιθανότητες 1Χ2</b><small>Ανάλυση αγώνα ↗</small></div></article>'};
 const empty=x=>'<div class="tdm-empty">'+E(x)+'</div>';
 function home(){const future=state.matches.filter(m=>!live(m));return lead('Τα γήπεδα, στην οθόνη σου.','Όλοι οι αγώνες, live ενημερώσεις και ανάλυση Tiki-Data σε μία εμπειρία.')+
 '<section class="tdm-hero"><span class="tdm-kicker">MATCH INTELLIGENCE</span><h2>Δεδομένα που<br>αφηγούνται τον αγώνα.</h2><p>Προγνωστικά 1Χ2, γκολ και live σενάρια με επιβεβαιωμένη προέλευση.</p><button class="tdm-accent-btn" data-view="matches">Εξερεύνησε αγώνες ↗</button></section>'+
@@ -117,7 +126,7 @@ function details(){
  '<p class="tdm-note">Τα xG και οι ενδεκάδες είναι ξεχωριστά στοιχεία του παρόχου· δεν τροποποιούν αυτόματα τις πιθανότητες Poisson. Οι εκτιμήσεις δεν είναι βέβαια αποτελέσματα.</p>';
  }
  return '<button class="tdm-back" data-back>← Πίσω στους αγώνες</button><div class="tdm-scoreboard"><div class="tdm-card-top"><b>'+E(m.league||m.league_key)+'</b><span>'+stamp(m)+'</span></div><div class="tdm-teams">'+club(m.home,logoH(m))+'<div class="tdm-versus">'+E(score(m))+'</div>'+club(m.away,logoA(m))+'</div><div class="tdm-scoreboard-caption">'+(is?'● LIVE':'MATCH INTELLIGENCE')+'</div></div>'+
- '<div class="tdm-tabs">'+[['info','Info'],['summary','Ανάλυση'],['lineups','Ενδεκάδες'],['history','Ιστορικό'],['stats','Stats'],['analysis','AI Analysis']].map(([x,y])=>'<button data-tab="'+x+'" class="tdm-tab '+(state.tab===x?'active':'')+'">'+y+'</button>').join('')+'</div>'+content;
+ olderEstimateTag(m)+'<div class="tdm-tabs">'+[['info','Info'],['summary','Ανάλυση'],['lineups','Ενδεκάδες'],['history','Ιστορικό'],['stats','Stats'],['analysis','AI Analysis']].map(([x,y])=>'<button data-tab="'+x+'" class="tdm-tab '+(state.tab===x?'active':'')+'">'+y+'</button>').join('')+'</div>'+content;
 }
 async function fetchDeep(id){
  if(!/^sportmonks-[1-9]\d{0,13}$/.test(id)||deepCache.has(id)||deepLoading.has(id))return;
@@ -169,10 +178,24 @@ function restoreFixtures(){
 let updating=false,liveUpdating=false,baseMatches=[],liveMatches=[];
 function paintMatches(){
  const all=new Map(baseMatches.map(x=>[String(x.id),x]));
+ const oldShown=new Map(state.matches.map(x=>[String(x.id),x]));
+ const valid=p=>p&&[p.p1,p.px,p.p2].every(v=>typeof v==='number'&&Number.isFinite(v)&&v>=0&&v<=100);
  for(const game of liveMatches){
   if(!game?.id||!game.home||!game.away||!Number.isFinite(Date.parse(game.date)))continue;
   const old=all.get(String(game.id));
   all.set(String(game.id),old?{...old,...game,logos:{...(old.logos||{}),...(game.logos||{})}}:game);
+ }
+ // A partially available provider snapshot must not erase the previously shown live percentages.
+ for(const [id,m] of all){
+  if(!live(m)||valid(m.live_outlook)||valid(m.live_prediction))continue;
+  const prev=oldShown.get(id);
+  if(!prev||prev.home_id!==m.home_id||prev.away_id!==m.away_id||prev.date!==m.date)continue;
+  const estimate=valid(prev.live_outlook)?'live_outlook':valid(prev.live_prediction)?'live_prediction':null;
+  if(!estimate)continue;
+  all.set(id,{...m,[estimate]:prev[estimate],live_probability_stale:true,
+   live_probability_updated_at:prev.live_probability_updated_at||state.liveUpdatedAt||null,
+   live_probability_score:prev.live_probability_score||[prev.home_score,prev.away_score],
+   live_probability_minute:prev.live_probability_minute??prev.minute??null});
  }
  state.matches=[...all.values()].filter(x=>x?.id&&x.home&&x.away&&Number.isFinite(Date.parse(x.date)))
   .sort((a,b)=>Date.parse(a.date)-Date.parse(b.date));
@@ -200,15 +223,15 @@ async function refreshLive(){
   try{const response=await fetch('/api/live',{signal:controller.signal,headers:{Accept:'application/json'},cache:'no-store'});
    if(!response.ok)throw Error('live_backend_unavailable');snapshot=await response.json()}
   finally{clearTimeout(abort)}
-  if(snapshot?.pending||!Array.isArray(snapshot?.matches)){
+  if(!Array.isArray(snapshot?.matches)){
    state.livePending=true;render();return;
   }
   const timestamp=Date.parse(snapshot.updated_at);
-  if(!Number.isFinite(timestamp)||timestamp>Date.now()+60000||Date.now()-timestamp>90000){
+  if(!Number.isFinite(timestamp)||timestamp>Date.now()+60000||Date.now()-timestamp>900000){
    state.livePending=true;render();return;
   }
   liveMatches=snapshot.matches;
-  state.liveUpdatedAt=snapshot.updated_at;state.livePending=!!snapshot.refreshing;
+  state.liveUpdatedAt=snapshot.updated_at;state.livePending=!!(snapshot.refreshing||snapshot.stale||snapshot.pending);
   paintMatches();
  }catch{state.livePending=true;render()}
  finally{liveUpdating=false}
