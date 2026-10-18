@@ -2667,6 +2667,242 @@ const LEGAL_CSS=":root{color-scheme:light;background:#f5f8f8;color:#203741;font:
 const ADSENSE_ROBOTS="User-agent: *\nAllow: /\nDisallow: /api/\nSitemap: https://tiki-data.com/sitemap.xml\n";
 const ADSENSE_SITEMAP="<?xml version=\"1.0\" encoding=\"UTF-8\"?><urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\"><url><loc>https://tiki-data.com/</loc></url><url><loc>https://tiki-data.com/predictions</loc></url><url><loc>https://tiki-data.com/about</loc></url><url><loc>https://tiki-data.com/privacy</loc></url><url><loc>https://tiki-data.com/terms</loc></url><url><loc>https://tiki-data.com/cookies</loc></url><url><loc>https://tiki-data.com/contact</loc></url></urlset>";
 const CSP="default-src 'none';base-uri 'none';form-action 'none';object-src 'none';frame-ancestors 'none';script-src 'self';style-src 'self' https://fonts.googleapis.com;style-src-attr 'unsafe-inline';font-src 'self' https://fonts.gstatic.com;img-src 'self' data: https://raw.githubusercontent.com https://cdn.sportmonks.com https://d2ol7oe51mr4n9.cloudfront.net;connect-src 'self'";
+/* Tiki-Data Lab Google OpenID Connect (authorization code + PKCE).
+ * Login is deliberately disabled until the site owner provides credentials via
+ * production Cloudflare Pages secrets GOOGLE_OAUTH_CLIENT_ID/GOOGLE_OAUTH_CLIENT_SECRET.
+ * Google tokens never reach the browser and are never stored in D1.
+ */
+const TD_AUTH_ORIGIN='https://tiki-data.com';
+const TD_AUTH_SESSION_COOKIE='__Host-td_session';
+const TD_AUTH_FLOW_COOKIE='__Host-td_oauth';
+const TD_AUTH_SESSION_TTL=30*86400;
+const TD_AUTH_FLOW_TTL=600;
+let tdAuthJwks=null,tdAuthJwksUntil=0;
+const tdAuthEpoch=()=>Math.floor(Date.now()/1000);
+const tdAuthRandom=(bytes=32)=>{
+ const a=new Uint8Array(bytes);crypto.getRandomValues(a);
+ return tdAuthB64url(a);
+};
+function tdAuthB64url(input){
+ let binary='';for(const b of input)binary+=String.fromCharCode(b);
+ return btoa(binary).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
+}
+function tdAuthUnb64(value){
+ if(!/^[a-zA-Z0-9_-]+$/.test(value||''))throw Error('invalid_base64url');
+ const binary=atob(value.replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-value.length%4)%4));
+ return Uint8Array.from(binary,ch=>ch.charCodeAt(0));
+}
+async function tdAuthHash(s){
+ const raw=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));
+ return Array.from(new Uint8Array(raw),b=>b.toString(16).padStart(2,'0')).join('');
+}
+function tdAuthCookie(name,value,age){
+ return name+'='+value+'; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age='+age;
+}
+function tdAuthReadCookie(req,name){
+ const fields=String(req.headers.get('Cookie')||'').split(';');
+ for(const field of fields){const i=field.indexOf('=');if(i>0&&field.slice(0,i).trim()===name)return field.slice(i+1).trim();}
+ return '';
+}
+function tdAuthJson(data,status=200){
+ return new Response(JSON.stringify(data),{status,headers:{
+  'Content-Type':'application/json; charset=utf-8','Cache-Control':'private, no-store',
+  'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'}});
+}
+function tdAuthRedirect(url,cookies=[]){
+ const response=new Response(null,{status:302,headers:{Location:url,'Cache-Control':'no-store','Referrer-Policy':'no-referrer'}});
+ for(const cookie of cookies)response.headers.append('Set-Cookie',cookie);
+ return response;
+}
+function tdAuthConfigured(req,env){
+ const id=String(env?.GOOGLE_OAUTH_CLIENT_ID||'').trim();
+ const secret=String(env?.GOOGLE_OAUTH_CLIENT_SECRET||'').trim();
+ return !!env?.TIKI_DB&&new URL(req.url).origin===TD_AUTH_ORIGIN&&
+   id.length>25&&id.length<300&&id.endsWith('.apps.googleusercontent.com')&&secret.length>=12;
+}
+function tdAuthWriteAllowed(req){
+ const origin=req.headers.get('Origin');
+ return req.method==='POST'&&origin===new URL(req.url).origin&&origin===TD_AUTH_ORIGIN;
+}
+async function tdAuthReadSession(req,env){
+ const raw=tdAuthReadCookie(req,TD_AUTH_SESSION_COOKIE);
+ if(!/^[a-zA-Z0-9_-]{40,90}$/.test(raw)||!env?.TIKI_DB)return null;
+ const hash=await tdAuthHash(raw);
+ const row=await env.TIKI_DB.prepare(
+  'SELECT s.session_hash,s.user_id,s.csrf_token,u.email,u.display_name,u.avatar_url,'+
+  'p.teams_json,p.leagues_json,p.language FROM td_auth_sessions s '+
+  'INNER JOIN td_auth_users u ON u.user_id=s.user_id '+
+  'LEFT JOIN td_user_preferences p ON p.user_id=s.user_id '+
+  'WHERE s.session_hash=?1 AND s.expires_at>?2'
+ ).bind(hash,tdAuthEpoch()).first();
+ return row||null;
+}
+function tdAuthList(json,max){
+ try{const a=JSON.parse(json||'[]');return Array.isArray(a)?a.filter(x=>typeof x==='string').slice(0,max):[];}
+ catch{return []}
+}
+async function tdAuthSession(req,env){
+ if(req.method!=='GET')return tdAuthJson({error:'method_not_allowed'},405);
+ try{
+  const row=await tdAuthReadSession(req,env);
+  if(!row)return tdAuthJson({authenticated:false,login_enabled:tdAuthConfigured(req,env),mode:'guest'});
+  return tdAuthJson({authenticated:true,login_enabled:true,
+   user:{display_name:row.display_name,email:row.email,avatar_url:row.avatar_url||null},
+   preferences:{teams:tdAuthList(row.teams_json,40),leagues:tdAuthList(row.leagues_json,12),language:row.language||'el'},
+   csrf_token:row.csrf_token,mode:'account'});
+ }catch{return tdAuthJson({authenticated:false,login_enabled:false,mode:'guest',error:'account_unavailable'},503)}
+}
+async function tdAuthStart(req,env){
+ if(req.method!=='GET')return tdAuthJson({error:'method_not_allowed'},405);
+ if(!tdAuthConfigured(req,env))return tdAuthJson({error:'google_sign_in_not_configured'},503);
+ try{
+  const state=tdAuthRandom(),verifier=tdAuthRandom(48),nonce=tdAuthRandom(),now=tdAuthEpoch();
+  const challenge=tdAuthB64url(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(verifier))));
+  const db=env.TIKI_DB;
+  await db.prepare('DELETE FROM td_auth_login_states WHERE expires_at<?1').bind(now).run();
+  await db.prepare('INSERT INTO td_auth_login_states(state_hash,verifier,nonce,expires_at) VALUES(?1,?2,?3,?4)')
+   .bind(await tdAuthHash(state),verifier,nonce,now+TD_AUTH_FLOW_TTL).run();
+  const u=new URL('https://accounts.google.com/o/oauth2/v2/auth');
+  const values={client_id:String(env.GOOGLE_OAUTH_CLIENT_ID).trim(),redirect_uri:TD_AUTH_ORIGIN+'/auth/google/callback',
+   response_type:'code',scope:'openid email profile',state,nonce,code_challenge:challenge,
+   code_challenge_method:'S256',access_type:'online'};
+  for(const [key,val] of Object.entries(values))u.searchParams.set(key,val);
+  return tdAuthRedirect(u.href,[tdAuthCookie(TD_AUTH_FLOW_COOKIE,state,TD_AUTH_FLOW_TTL)]);
+ }catch{return tdAuthJson({error:'google_sign_in_unavailable'},503)}
+}
+async function tdAuthGoogleClaims(jwt,clientId,nonce){
+ if(typeof jwt!=='string'||jwt.length>25000)throw Error('invalid_identity_token');
+ const parts=jwt.split('.');if(parts.length!==3)throw Error('invalid_identity_token');
+ const decode=v=>JSON.parse(new TextDecoder().decode(tdAuthUnb64(v)));
+ const head=decode(parts[0]),claims=decode(parts[1]);
+ if(head.alg!=='RS256'||typeof head.kid!=='string'||head.kid.length>150)throw Error('invalid_signature_type');
+ const now=tdAuthEpoch();
+ if(!['https://accounts.google.com','accounts.google.com'].includes(claims.iss)||
+    claims.aud!==clientId||!Number.isFinite(claims.exp)||claims.exp<=now||
+    !Number.isFinite(claims.iat)||claims.iat>now+120||claims.iat<now-7200||
+    claims.nonce!==nonce||typeof claims.sub!=='string'||!/^\d{6,30}$/.test(claims.sub)||
+    !claims.email_verified||typeof claims.email!=='string'||claims.email.length>250)
+    throw Error('invalid_identity_claims');
+ if(!tdAuthJwks||Date.now()>tdAuthJwksUntil){
+  const r=await fetch('https://www.googleapis.com/oauth2/v3/certs',{headers:{Accept:'application/json'}});
+  if(!r.ok)throw Error('identity_keys_unavailable');
+  const obj=await r.json();
+  if(!Array.isArray(obj.keys)||obj.keys.length>20)throw Error('invalid_identity_keys');
+  tdAuthJwks=obj.keys;tdAuthJwksUntil=Date.now()+30*60000;
+ }
+ let jwk=tdAuthJwks.find(x=>x.kid===head.kid&&x.kty==='RSA'&&x.use==='sig');
+ if(!jwk){
+  tdAuthJwksUntil=0;
+  const rr=await fetch('https://www.googleapis.com/oauth2/v3/certs',{headers:{Accept:'application/json'}});
+  if(!rr.ok)throw Error('identity_keys_unavailable');
+  const object=await rr.json();if(!Array.isArray(object.keys)||object.keys.length>20)throw Error('invalid_identity_keys');
+  tdAuthJwks=object.keys;tdAuthJwksUntil=Date.now()+30*60000;
+  jwk=tdAuthJwks.find(x=>x.kid===head.kid&&x.kty==='RSA'&&x.use==='sig');
+ }
+ if(!jwk)throw Error('identity_key_not_found');
+ const pub=await crypto.subtle.importKey('jwk',jwk,{name:'RSASSA-PKCS1-v1_5',hash:'SHA-256'},false,['verify']);
+ const valid=await crypto.subtle.verify('RSASSA-PKCS1-v1_5',pub,tdAuthUnb64(parts[2]),new TextEncoder().encode(parts[0]+'.'+parts[1]));
+ if(!valid)throw Error('identity_signature_invalid');
+ return claims;
+}
+async function tdAuthCallback(req,env){
+ if(req.method!=='GET')return tdAuthJson({error:'method_not_allowed'},405);
+ if(!tdAuthConfigured(req,env))return tdAuthJson({error:'google_sign_in_not_configured'},503);
+ const clearFlow=tdAuthCookie(TD_AUTH_FLOW_COOKIE,'',0);
+ const failed=()=>tdAuthRedirect(TD_AUTH_ORIGIN+'/?signin=failed',[clearFlow]);
+ const u=new URL(req.url),state=u.searchParams.get('state')||'',code=u.searchParams.get('code')||'';
+ const cookieState=tdAuthReadCookie(req,TD_AUTH_FLOW_COOKIE);
+ if(u.searchParams.has('error'))return failed();
+ if(!/^[a-zA-Z0-9_-]{40,90}$/.test(state)||state!==cookieState||code.length<10||code.length>3000)return failed();
+ try{
+  const now=tdAuthEpoch(),db=env.TIKI_DB;
+  const stored=await db.prepare('DELETE FROM td_auth_login_states WHERE state_hash=?1 AND expires_at>?2 RETURNING verifier,nonce')
+    .bind(await tdAuthHash(state),now).first();
+  if(!stored?.verifier||!stored?.nonce)return failed();
+  const body=new URLSearchParams({code,client_id:String(env.GOOGLE_OAUTH_CLIENT_ID).trim(),
+   client_secret:String(env.GOOGLE_OAUTH_CLIENT_SECRET).trim(),redirect_uri:TD_AUTH_ORIGIN+'/auth/google/callback',
+   grant_type:'authorization_code',code_verifier:stored.verifier});
+  const exchanged=await fetch('https://oauth2.googleapis.com/token',{method:'POST',
+   headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body.toString()});
+  if(!exchanged.ok)return failed();
+  const tokens=await exchanged.json();
+  const claim=await tdAuthGoogleClaims(tokens.id_token,String(env.GOOGLE_OAUTH_CLIENT_ID).trim(),stored.nonce);
+  const userId=crypto.randomUUID(),display=String(claim.name||claim.given_name||'Φίλος του Tiki-Data').slice(0,100),
+   email=claim.email.slice(0,250),sub=claim.sub;
+  const avatar=typeof claim.picture==='string'&&/^https:\/\/(?:lh\d+|lh3)\.googleusercontent\.com\//.test(claim.picture)?claim.picture.slice(0,350):null;
+  await db.prepare(
+    'INSERT INTO td_auth_users(user_id,google_sub,email,display_name,avatar_url,created_at,updated_at) '+
+    'VALUES(?1,?2,?3,?4,?5,?6,?7) ON CONFLICT(google_sub) DO UPDATE SET '+
+    'email=excluded.email,display_name=excluded.display_name,avatar_url=excluded.avatar_url,updated_at=excluded.updated_at'
+  ).bind(userId,sub,email,display,avatar,now,now).run();
+  const user=await db.prepare('SELECT user_id FROM td_auth_users WHERE google_sub=?1').bind(sub).first();
+  if(!user?.user_id)return failed();
+  await db.prepare('INSERT OR IGNORE INTO td_user_preferences(user_id,teams_json,leagues_json,language,updated_at) VALUES(?1,?2,?3,?4,?5)')
+   .bind(user.user_id,'[]','[]','el',now).run();
+  const token=tdAuthRandom(48),csrf=tdAuthRandom(24);
+  const old=tdAuthReadCookie(req,TD_AUTH_SESSION_COOKIE);
+  if(old&&/^[a-zA-Z0-9_-]{40,90}$/.test(old)){
+   await db.prepare('DELETE FROM td_auth_sessions WHERE session_hash=?1').bind(await tdAuthHash(old)).run();
+  }
+  await db.prepare('DELETE FROM td_auth_sessions WHERE expires_at<?1').bind(now).run();
+  await db.prepare('INSERT INTO td_auth_sessions(session_hash,user_id,csrf_token,created_at,expires_at) VALUES(?1,?2,?3,?4,?5)')
+   .bind(await tdAuthHash(token),user.user_id,csrf,now,now+TD_AUTH_SESSION_TTL).run();
+  return tdAuthRedirect(TD_AUTH_ORIGIN+'/?signin=success',
+    [clearFlow,tdAuthCookie(TD_AUTH_SESSION_COOKIE,token,TD_AUTH_SESSION_TTL)]);
+ }catch{return failed()}
+}
+async function tdAuthAuthorizedWrite(req,env){
+ if(!tdAuthWriteAllowed(req))return null;
+ const row=await tdAuthReadSession(req,env);
+ if(!row)return null;
+ const csrf=req.headers.get('X-CSRF-Token')||'';
+ return csrf.length>=30&&csrf===row.csrf_token?row:null;
+}
+async function tdAuthPreferences(req,env){
+ if(req.method!=='POST')return tdAuthJson({error:'method_not_allowed'},405);
+ try{
+  const user=await tdAuthAuthorizedWrite(req,env);
+  if(!user)return tdAuthJson({error:'not_authenticated_or_csrf'},403);
+  if(!String(req.headers.get('Content-Type')||'').toLowerCase().startsWith('application/json'))return tdAuthJson({error:'json_required'},415);
+  if(Number(req.headers.get('Content-Length')||0)>6000)return tdAuthJson({error:'payload_too_large'},413);
+  const text=await req.text();if(text.length>6000)return tdAuthJson({error:'payload_too_large'},413);
+  const data=JSON.parse(text);
+  if(!data||typeof data!=='object'||!Array.isArray(data.teams)||!Array.isArray(data.leagues))return tdAuthJson({error:'invalid_preferences'},400);
+  if(data.teams.length>40||data.leagues.length>12)return tdAuthJson({error:'preferences_limit'},400);
+  const teams=[...new Set(data.teams.map(v=>typeof v==='string'?v.trim():'').filter(v=>v.length>=2&&v.length<=80&&!/[\u0000-\u001f<>]/.test(v)))];
+  const allowed=new Set(['ucl','uel','uecl','epl','laliga','bundesliga','seriea','ligue1','greece','cyprus']);
+  const leagues=[...new Set(data.leagues.filter(x=>typeof x==='string'&&allowed.has(x)))];
+  const lang=['el','en'].includes(data.language)?data.language:'el';
+  const now=tdAuthEpoch();
+  await env.TIKI_DB.prepare('INSERT INTO td_user_preferences(user_id,teams_json,leagues_json,language,updated_at) '+
+   'VALUES(?1,?2,?3,?4,?5) ON CONFLICT(user_id) DO UPDATE SET teams_json=excluded.teams_json,'+
+   'leagues_json=excluded.leagues_json,language=excluded.language,updated_at=excluded.updated_at')
+   .bind(user.user_id,JSON.stringify(teams),JSON.stringify(leagues),lang,now).run();
+  return tdAuthJson({ok:true,preferences:{teams,leagues,language:lang}});
+ }catch{return tdAuthJson({error:'save_unavailable'},503)}
+}
+async function tdAuthLogout(req,env){
+ if(req.method!=='POST')return tdAuthJson({error:'method_not_allowed'},405);
+ try{
+  const user=await tdAuthAuthorizedWrite(req,env);
+  if(!user)return tdAuthJson({error:'not_authenticated_or_csrf'},403);
+  await env.TIKI_DB.prepare('DELETE FROM td_auth_sessions WHERE session_hash=?1').bind(user.session_hash).run();
+  const response=tdAuthJson({ok:true});response.headers.append('Set-Cookie',tdAuthCookie(TD_AUTH_SESSION_COOKIE,'',0));return response;
+ }catch{return tdAuthJson({error:'logout_unavailable'},503)}
+}
+async function tdAuthDeleteAccount(req,env){
+ if(req.method!=='POST')return tdAuthJson({error:'method_not_allowed'},405);
+ try{
+  const user=await tdAuthAuthorizedWrite(req,env);
+  if(!user)return tdAuthJson({error:'not_authenticated_or_csrf'},403);
+  await env.TIKI_DB.batch([
+    env.TIKI_DB.prepare('DELETE FROM td_user_preferences WHERE user_id=?1').bind(user.user_id),
+    env.TIKI_DB.prepare('DELETE FROM td_auth_sessions WHERE user_id=?1').bind(user.user_id),
+    env.TIKI_DB.prepare('DELETE FROM td_auth_users WHERE user_id=?1').bind(user.user_id)
+  ]);
+  const response=tdAuthJson({ok:true});response.headers.append('Set-Cookie',tdAuthCookie(TD_AUTH_SESSION_COOKIE,'',0));return response;
+ }catch{return tdAuthJson({error:'delete_unavailable'},503)}
+}
 /* AdSense ownership verification only.
  * No advertising scripts are loaded until site approval and a certified CMP are configured.
  * Configure ADSENSE_PUBLISHER_ID as a Cloudflare Pages environment variable (ca-pub-... or pub-...).
@@ -2681,5 +2917,5 @@ function tdHtmlWithAdsenseVerification(html,env){
  return id?html.replace('</head>','<meta name="google-adsense-account" content="ca-'+id+'"></head>'):html;
 }
 function asset(body,mime){return new Response(body,{status:200,headers:{'Content-Type':mime,'Cache-Control':(/text\/html|javascript/.test(mime)?'no-cache, must-revalidate':'public,max-age=180'),'X-Content-Type-Options':'nosniff','Referrer-Policy':'strict-origin-when-cross-origin','Content-Security-Policy':CSP}})}
-export default {async fetch(req,env,ctx){const u=new URL(req.url),path=u.pathname;if(!['GET','HEAD'].includes(req.method))return new Response('Method Not Allowed',{status:405});if(path==='/'||path==='/index.html')return asset(tdHtmlWithAdsenseVerification(HTML_HOME,env),'text/html; charset=utf-8');if(path==='/predictions'||path==='/predictions/')return asset(tdHtmlWithAdsenseVerification(HTML_PREDICTIONS,env),'text/html; charset=utf-8');if(path==='/about'||path==='/about/')return asset(tdHtmlWithAdsenseVerification(LEGAL_ABOUT,env),'text/html; charset=utf-8');if(path==='/privacy'||path==='/privacy/')return asset(tdHtmlWithAdsenseVerification(LEGAL_PRIVACY,env),'text/html; charset=utf-8');if(path==='/terms'||path==='/terms/')return asset(tdHtmlWithAdsenseVerification(LEGAL_TERMS,env),'text/html; charset=utf-8');if(path==='/cookies'||path==='/cookies/')return asset(tdHtmlWithAdsenseVerification(LEGAL_COOKIES,env),'text/html; charset=utf-8');if(path==='/contact'||path==='/contact/')return asset(tdHtmlWithAdsenseVerification(LEGAL_CONTACT,env),'text/html; charset=utf-8');if(path==='/legal.css')return asset(LEGAL_CSS,'text/css; charset=utf-8');if(path==='/ads.txt'){const publisher=tdAdsensePublisherId(env);return publisher?asset('google.com, '+publisher+', DIRECT, f08c47fec0942fa0\n','text/plain; charset=utf-8'):new Response('Not Found',{status:404,headers:{'Cache-Control':'no-store'}});}
+export default {async fetch(req,env,ctx){const u=new URL(req.url),path=u.pathname;if(path==='/api/auth/session')return tdAuthSession(req,env);if(path==='/auth/google/start')return tdAuthStart(req,env);if(path==='/auth/google/callback')return tdAuthCallback(req,env);if(path==='/api/auth/preferences')return tdAuthPreferences(req,env);if(path==='/api/auth/logout')return tdAuthLogout(req,env);if(path==='/api/auth/delete')return tdAuthDeleteAccount(req,env);if(!['GET','HEAD'].includes(req.method))return new Response('Method Not Allowed',{status:405});if(path==='/'||path==='/index.html')return asset(tdHtmlWithAdsenseVerification(HTML_HOME,env),'text/html; charset=utf-8');if(path==='/predictions'||path==='/predictions/')return asset(tdHtmlWithAdsenseVerification(HTML_PREDICTIONS,env),'text/html; charset=utf-8');if(path==='/about'||path==='/about/')return asset(tdHtmlWithAdsenseVerification(LEGAL_ABOUT,env),'text/html; charset=utf-8');if(path==='/privacy'||path==='/privacy/')return asset(tdHtmlWithAdsenseVerification(LEGAL_PRIVACY,env),'text/html; charset=utf-8');if(path==='/terms'||path==='/terms/')return asset(tdHtmlWithAdsenseVerification(LEGAL_TERMS,env),'text/html; charset=utf-8');if(path==='/cookies'||path==='/cookies/')return asset(tdHtmlWithAdsenseVerification(LEGAL_COOKIES,env),'text/html; charset=utf-8');if(path==='/contact'||path==='/contact/')return asset(tdHtmlWithAdsenseVerification(LEGAL_CONTACT,env),'text/html; charset=utf-8');if(path==='/legal.css')return asset(LEGAL_CSS,'text/css; charset=utf-8');if(path==='/ads.txt'){const publisher=tdAdsensePublisherId(env);return publisher?asset('google.com, '+publisher+', DIRECT, f08c47fec0942fa0\n','text/plain; charset=utf-8'):new Response('Not Found',{status:404,headers:{'Cache-Control':'no-store'}});}
 if(path==='/robots.txt')return asset(ADSENSE_ROBOTS,'text/plain; charset=utf-8');if(path==='/sitemap.xml')return asset(ADSENSE_SITEMAP,'application/xml; charset=utf-8');if(path==='/data'||path==='/data/')return new Response(null,{status:302,headers:{Location:'/predictions','Cache-Control':'no-store'}});if(path==='/data.css')return asset(CSS_DATA,'text/css; charset=utf-8');if(path==='/data.js')return asset(JS_DATA,'application/javascript; charset=utf-8');if(path==='/home-v23.css')return asset(HOME_V23_CSS,'text/css; charset=utf-8');if(path==='/home-v23.js')return asset(HOME_V23_JS,'application/javascript; charset=utf-8');if(path==='/styles.css')return asset(CSS,'text/css; charset=utf-8');if(path==='/logos.js')return asset(LOGOS,'application/javascript; charset=utf-8');if(path==='/home.js')return asset(HOME,'application/javascript; charset=utf-8');if(path==='/app.js')return asset(JS,'application/javascript; charset=utf-8');if(path==='/mobile-ui.js')return asset(MOBILE_UI_JS,'application/javascript; charset=utf-8');if(path==='/mobile-ui.css')return asset(MOBILE_UI_CSS,'text/css; charset=utf-8');if(path==='/stadium.svg')return asset(STADIUM,'image/svg+xml');if(path==='/brand.svg')return asset(BRAND,'image/svg+xml');if(path==='/favicon.svg')return asset(FAVICON,'image/svg+xml');if(path.startsWith('/api/allsports/')||path.startsWith('/api/sport/')||path==='/api/home-v23'||path==='/api/fixtures'||path.startsWith('/api/logo/team/'))return new Response(JSON.stringify({error:'retired_api'}),{status:410,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});if(path==='/api/sportmonks/health')return smCheckAccess(req,env);if(path==='/api/sportmonks/stage')return smStage(req,env);if(path==='/api/home-focus')return smFocusResponse(req,env,ctx);if(path==='/api/uefa/evidence-status')return tdUefaEvidenceStatus(env);if(path==='/api/uefa/stages')return tdUefaStages(req,env,ctx);if(path==='/api/live')return smLiveResponse(req,env,ctx);if(/^\/api\/match\/sportmonks-[1-9]\d{0,13}$/.test(path))return tdMatchDetails(req,env,ctx,Number(path.split('-').at(-1)));if(path==='/api/model/backtest')return tdBacktestResponse(req,env,ctx);if(path==='/api/model/sync-status')return tdSyncStatus(req,env);if(path==='/api/history/fixtures')return smHistoryFixturesRoute(req,env,ctx);if(path==='/api/history/odds/summary')return smHistoryOddsRoute(req,env,ctx);return new Response('Not Found',{status:404})}};
