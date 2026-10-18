@@ -19,8 +19,8 @@ const hAliases=new Map([
  ['athletic bilbao','athletic club'],['athletic club','athletic club'],
  ['rb leipzig','rb leipzig'],['asteras tripolis','asteras tripolis']
 ]);
-const hSafeCatalog=x=>typeof x==='string'&&/^https:\/\/raw\.githubusercontent\.com\//.test(x)?x:null;
-function hKnownTeamLogo(name){const key=hNorm(name);const target=hAliases.get(key)||key;return hSafeCatalog(hMap.get(target)||hMap.get(key))||null;}
+const hSafeCatalog=x=>typeof x==='string'&&/^https:\/\/(?:raw\.githubusercontent\.com|d2ol7oe51mr4n9\.cloudfront\.net)\//.test(x)?x:null;
+function hKnownTeamLogo(name){if(/(omoni|ομον)/i.test(String(name||''))&&/29/.test(String(name||''))&&/(mai|may|μα[ιΐ]|maio)/i.test(String(name||'')))return "https://d2ol7oe51mr4n9.cloudfront.net/user_3KbDlDrtS3WJpvJUdX17ksOLOSL/753375b7-7137-4e56-99bc-b3ca04d2249c.jpg";const key=hNorm(name);const target=hAliases.get(key)||key;return hSafeCatalog(hMap.get(target)||hMap.get(key))||null;}
 document.addEventListener('error',e=>{const im=e.target;if(im?.tagName==='IMG'&&(im.classList.contains('home-crest-logo')||im.classList.contains('home-league-logo'))){const p=im.parentElement;im.remove();if(p?.classList.contains('has-real-team')&&!p.querySelector('.home-crest-logo'))p.classList.remove('has-real-team');}},true);
 const num=n=>typeof n==='number'&&Number.isFinite(n)?n:null;
 const pct=n=>num(n)===null?'—':n.toLocaleString('el-GR',{maximumFractionDigits:1})+'%';

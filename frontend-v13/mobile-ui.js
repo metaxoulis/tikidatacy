@@ -11,12 +11,13 @@ const when=x=>{try{return new Date(x).toLocaleString('el-GR',{day:'numeric',mont
 const live=m=>['LIVE','1H','2H','1ST','2ND','HT','ET'].includes(String(m?.status||'').toUpperCase());
 const score=m=>Number.isInteger(m?.home_score)&&Number.isInteger(m?.away_score)?m.home_score+' : '+m.away_score:'VS';
 const pct=x=>typeof x==='number'&&Number.isFinite(x)?x.toLocaleString('el-GR',{maximumFractionDigits:1})+'%':'—';
-const trusted=x=>typeof x==='string'&&/^https:\/\/(cdn\.sportmonks\.com|raw\.githubusercontent\.com)\//.test(x);
+const trusted=x=>typeof x==='string'&&/^https:\/\/(cdn\.sportmonks\.com|raw\.githubusercontent\.com|d2ol7oe51mr4n9\.cloudfront\.net)\//.test(x);
 const badge=(name,url)=>trusted(url)?'<img src="'+E(url)+'" loading="lazy" alt="'+E(name)+'">':'<span class="tdm-team-avatar">'+E(String(name).slice(0,2).toUpperCase())+'</span>';
 const club=(n,l)=>'<div class="tdm-team">'+badge(n,l)+'<strong>'+E(n)+'</strong></div>';
 const source=m=>({team:'Ιστορικό ομάδων',partial_team:'Μερικό ιστορικό',league:'Μέσοι όροι λίγκας',cross_league:'Γενική βάση · χαμηλή βεβαιότητα'})[m.prediction_tier]||'Πειραματική ανάλυση';
 const pr=m=>{const p=live(m)?m.live_outlook||m.live_prediction:m;return p&&typeof p.p1==='number'&&typeof p.px==='number'&&typeof p.p2==='number'?p:null};
-const logoH=m=>m.logos?.home||m.home_logo,logoA=m=>m.logos?.away||m.away_logo;
+const is29=n=>/(omoni|ομον)/i.test(String(n||''))&&/29/.test(String(n||''))&&/(mai|may|μα[ιΐ]|maio)/i.test(String(n||''));
+const logoH=m=>is29(m.home)?"https://d2ol7oe51mr4n9.cloudfront.net/user_3KbDlDrtS3WJpvJUdX17ksOLOSL/753375b7-7137-4e56-99bc-b3ca04d2249c.jpg":m.logos?.home||m.home_logo,logoA=m=>is29(m.away)?"https://d2ol7oe51mr4n9.cloudfront.net/user_3KbDlDrtS3WJpvJUdX17ksOLOSL/753375b7-7137-4e56-99bc-b3ca04d2249c.jpg":m.logos?.away||m.away_logo;
 const stamp=m=>live(m)?'<span class="tdm-live">● LIVE '+(Number.isInteger(m.minute)?m.minute+'′':'')+'</span>':E(when(m.date));
 const row=(a,b)=>'<div class="tdm-row"><span>'+E(a)+'</span><b>'+E(b??'—')+'</b></div>';
 const title=(a,link,v)=>'<div class="tdm-section"><h2>'+E(a)+'</h2>'+(link?'<button class="tdm-link" data-view="'+v+'">'+E(link)+' →</button>':'')+'</div>';
