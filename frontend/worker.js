@@ -2338,9 +2338,16 @@ async function tdSyncUefaEvidence(env){
   const saved=await db.prepare('SELECT payload_json FROM sportapi_home_cache WHERE cache_key=?1').bind(TD_UEFA_CURSOR).first();
   const old=JSON.parse(saved?.payload_json||'null');
   const last=smAddDay(new Date().toISOString().slice(0,10),-3);
+  // A completed historical scan is refreshed with a short recent window only.
+  // Recover the earlier cursor if its next_end was already before the archive start.
+  if(!old?.complete&&smIsoDay(old?.next_end)&&old.next_end<TD_UEFA_START){
+   await write(TD_UEFA_CURSOR,{...old,complete:true,next_end:null,finished_at:stamp},2147483647);
+   await write(TD_UEFA_LOCK,{status:'complete',historical_through:TD_UEFA_START,windows:old.windows},now+86400);
+   return;
+  }
   const end=old?.complete===true?last:(smIsoDay(old?.next_end)&&old.next_end<=last?old.next_end:last);
   if(!end||!smIsoDay(end))throw Error('uefa_cursor_invalid');
-  const first=smAddDay(end,-(TD_UEFA_LATEST_DAYS-1));
+  const first=smAddDay(end,-(old?.complete===true?27:TD_UEFA_LATEST_DAYS-1));
   const start=first<TD_UEFA_START?TD_UEFA_START:first;
   range={start,end};
   const filters='fixtureLeagues:'+Object.values(UEFA_LEAGUE_IDS).join(',');
@@ -2374,7 +2381,7 @@ async function tdSyncUefaEvidence(env){
    records+=chunk.length;xgRecords+=chunk.filter(m=>m.home_xg!==null&&m.away_xg!==null).length;
   }
   // Persist the forward/backward cursor only after successful fully paginated provider retrieval.
-  const complete=end<=TD_UEFA_START;
+  const complete=old?.complete===true||start<=TD_UEFA_START;
   const nextEnd=complete?null:smAddDay(start,-1);
   await write(TD_UEFA_CURSOR,{next_end:nextEnd,complete,earliest:TD_UEFA_START,through:start,
     last_success:stamp,last_window:range,last_rows:records,last_xg_rows:xgRecords,
