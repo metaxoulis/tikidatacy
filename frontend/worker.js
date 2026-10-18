@@ -1033,7 +1033,7 @@ function smPublishedScore(row){
 }
 async function smHttp(relative,token,requestFetch=fetch,objectResponse=false){
  if(typeof token!=='string'||!token.trim())throw Error('sportmonks_not_configured');
- if(!/^(?:leagues\/date\/\d{4}-\d{2}-\d{2}|leagues\/(?:2|5|2286)|fixtures\/date\/\d{4}-\d{2}-\d{2}|livescores\/inplay|predictions\/live\/probabilities|fixtures\/between\/\d{4}-\d{2}-\d{2}\/\d{4}-\d{2}-\d{2}(?:\/\d{1,14})?|odds\/premium\/history|fixtures\/\d{1,14}|expected\/(?:fixtures|lineups))\?/.test(relative))throw Error('sportmonks_path_invalid');
+ if(!/^(?:leagues\/date\/\d{4}-\d{2}-\d{2}|leagues\/(?:2|5|2286)|fixtures\/date\/\d{4}-\d{2}-\d{2}|livescores\/inplay|predictions\/live\/probabilities|predictions\/probabilities\/fixtures\/\d{1,14}|fixtures\/between\/\d{4}-\d{2}-\d{2}\/\d{4}-\d{2}-\d{2}(?:\/\d{1,14})?|odds\/premium\/history|fixtures\/\d{1,14}|expected\/(?:fixtures|lineups))\?/.test(relative))throw Error('sportmonks_path_invalid');
  if(relative.startsWith('expected/')){
   const u=new URL(SM_ROOT+relative),filter=u.searchParams.get('filters');
   if(!/^fixtureIds:[1-9]\d{0,13}$/.test(filter||'')||u.searchParams.get('page')!=='1')throw Error('sportmonks_expected_scope_invalid');
@@ -1669,6 +1669,43 @@ async function tdAttachUefaForm(db,matches){
  }
 }
 
+/* Sportmonks official pre-match probabilities, strictly fixture-scoped.
+ * Failure or missing Predictions entitlement never becomes a fabricated forecast.
+ */
+async function tdOfficialFixturePrediction(token,fixture){
+ const id=Number(String(fixture.id||'').replace(/^sportmonks-/,''));
+ if(!Number.isSafeInteger(id)||id<=0)return null;
+ try{
+  const response=await smHttp('predictions/probabilities/fixtures/'+id+'?include=type',token,fetch);
+  const row=response.data.find(r=>(Number(r?.fixture_id)===id)&&
+   (Number(r?.type_id)===237||String(r?.type?.developer_name||'').toUpperCase()==='FULLTIME_RESULT_PROBABILITY')&&
+   r?.predictions&&typeof r.predictions==='object');
+  if(!row)return null;
+  const p=row.predictions;
+  const values=[Number(p.home),Number(p.draw),Number(p.away)];
+  if(!values.every(v=>Number.isFinite(v)&&v>=0&&v<=100)||Math.abs(values.reduce((a,b)=>a+b,0)-100)>2)return null;
+  const [p1,px,p2]=values.map(v=>Math.round(v*10)/10);
+  return {p1,px,p2,source:'sportmonks_prematch_probabilities',method:'sportmonks_official_fixture_probability',
+   prediction_tier:'provider',tier:'provider',validated:false,
+   model_note:'Pre-match probabilities supplied by Sportmonks; accuracy not independently verified.'};
+ }catch{return null;}
+}
+async function tdAttachOfficialPredictions(matches,token){
+ const upcoming=matches.filter(m=>Number.isFinite(Date.parse(m.date))&&
+  Date.parse(m.date)>Date.now()&&m.home_id&&m.away_id).slice(0,24);
+ // Bounded concurrency avoids excessive requests and latency.
+ for(let i=0;i<upcoming.length;i+=8){
+  await Promise.all(upcoming.slice(i,i+8).map(async m=>{
+   const official=await tdOfficialFixturePrediction(token,m);
+   if(!official)return;
+   const prior=m.model;
+   m.model={...(prior||{}),...official};
+   m.p1=official.p1;m.px=official.px;m.p2=official.p2;
+   m.prediction_tier='provider';m.evidence_source='sportmonks_official';
+   m.coverage='sportmonks_official_probabilities';
+  }));
+ }
+}
 async function smFocusResponse(req,env,ctx){
  if(req.method!=='GET')return smResponse({error:'method_not_allowed'},405);
  if(!env?.SPORTMONKS_API_TOKEN)return smResponse({error:'sportmonks_not_configured'},503);
@@ -1688,6 +1725,7 @@ async function smFocusResponse(req,env,ctx){
    fhLoadModel(db,ctx),smInplay(env.SPORTMONKS_API_TOKEN,classify,fetch,start).catch(()=>[])]);
   if(week.partial)throw Error('sportmonks_incomplete_fixture_window');
   const nowMs=Date.now(),selected=smBuildFocus(week.fixtures,live,model,nowMs);
+  await tdAttachOfficialPredictions(selected.matches,env.SPORTMONKS_API_TOKEN);
   await tdEnrichUpcoming(db,env.SPORTMONKS_API_TOKEN,selected,ctx);
   await tdAttachUefaForm(db,selected.matches);
   const publicMatch=m=>{if(!m)return null;const {model,...safe}=m;return safe};
