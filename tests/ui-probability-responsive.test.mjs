@@ -37,3 +37,11 @@ test('the site prevents probability boxes from overflowing',()=>{
  assert.match(mobile,/\.tdm-core-cell b\{[^}]*white-space:nowrap/);
  assert.match(mobile,/\.tdm-top\{[^}]*justify-content:center/);
 });
+
+test('light theme tabs stay legible on desktop and mobile',()=>{
+ const css=get('frontend-v13/mobile-ui.css'),worker=get('frontend/worker.js');
+ assert.match(css,/html\.td-mobile-ready\{color-scheme:light!important\}/);
+ assert.match(css,/#td-mobile-root \.tdm-tab:not\(\.active\)\{color:#24434d;background:#fff\}/);
+ const embedded=worker.match(/^const MOBILE_UI_CSS=(.*);$/m);
+ assert.ok(embedded);assert.equal(JSON.parse(embedded[1]),css);
+});

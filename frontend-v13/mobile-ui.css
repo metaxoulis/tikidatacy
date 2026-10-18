@@ -1,5 +1,7 @@
 @media(min-width:0px){
+html.td-mobile-ready{color-scheme:light!important}
 html.td-mobile-ready,html.td-mobile-ready body{margin:0!important;background:#f6f8f9!important;overflow-x:hidden!important}
+#td-mobile-root{color-scheme:light}
 html.td-mobile-ready body>.app,html.td-mobile-ready body>.shell,html.td-mobile-ready body>.modal-mount{display:none!important}
 #td-mobile-root{display:block;min-height:100dvh;padding:0 0 calc(85px + env(safe-area-inset-bottom,0px));background:#f6f8f9;color:#182c35;font:14px/1.5 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 #td-mobile-root *{box-sizing:border-box}#td-mobile-root button,#td-mobile-root input{font:inherit}#td-mobile-root button{cursor:pointer}
@@ -65,7 +67,7 @@ html.td-mobile-ready body>.app,html.td-mobile-ready body>.shell,html.td-mobile-r
 #td-mobile-root .tdm-scoreboard .tdm-teams{margin:23px 0 15px}
 #td-mobile-root .tdm-scoreboard-caption{text-align:center;color:#78ebc5;font-size:11px;font-weight:900}
 #td-mobile-root .tdm-tabs{display:flex;gap:8px;overflow-x:auto;margin:0 -18px 18px;padding:0 18px 8px;scrollbar-width:none}
-#td-mobile-root .tdm-tab{border:1px solid #dfe6e8;background:#fff;border-radius:11px;padding:10px 12px;white-space:nowrap;font-weight:850;font-size:11px}
+#td-mobile-root .tdm-tab{border:1px solid #dfe6e8;background:#fff;color:#24434d;border-radius:11px;padding:10px 12px;white-space:nowrap;font-weight:850;font-size:11px}
 #td-mobile-root .tdm-tab.active{background:#219d82;color:white;border-color:#219d82}
 #td-mobile-root .tdm-panel{background:#fff;border:1px solid #e0e8ea;border-radius:16px;padding:16px;margin:0 0 14px}
 #td-mobile-root .tdm-panel h3{font-size:15px;margin:0 0 13px;font-weight:900}
@@ -262,3 +264,8 @@ html.td-mobile-ready body>.app,html.td-mobile-ready body>.shell,html.td-mobile-r
  #td-mobile-root .tdm-core-cell b{font-size:10px}
  #td-mobile-root .tdm-pitch{min-height:390px}
 }
+/* Prevent hidden white-on-white labels under the former dark form-control scheme. */
+#td-mobile-root :is(button,input,select,textarea){color-scheme:light}
+#td-mobile-root .tdm-tab:not(.active){color:#24434d;background:#fff}
+#td-mobile-root .tdm-tab:focus-visible{outline:2px solid #159d82;outline-offset:2px}
+#td-mobile-root .tdm-tab:disabled{color:#6e858e}
