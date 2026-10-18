@@ -26,7 +26,7 @@ test('mobile first paint is not blocked by the slower live scores feed',()=>{
  const fixture=js.indexOf("state.matches=items.sort(");
  const live=js.indexOf("void fetch('/api/live'");
  assert.ok(fixture>0&&live>fixture,'fixtures should be painted before optional live fetch');
- assert.match(js,/Date\.now\(\)-c\.saved>300000/);
+ assert.match(js,/Date\.now\(\)-c\.saved>21600000/);
 });
 test('the site prevents probability boxes from overflowing',()=>{
  const desktop=get('frontend-v13/styles.css');

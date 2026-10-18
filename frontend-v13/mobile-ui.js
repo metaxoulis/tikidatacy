@@ -142,7 +142,7 @@ root.addEventListener('change',e=>{if(e.target.matches('[data-pick-day]')){state
 root.addEventListener('input',e=>{if(e.target.matches('[data-search]')){state.query=e.target.value;render(true)}});root.addEventListener('keydown',e=>{if(e.target.matches('[data-open]')&&(e.key==='Enter'||e.key===' ')){e.preventDefault();e.target.click()}});
 /* Show the most recent verified public fixture snapshot immediately on return visits.
  * Cache lifetime is 5 minutes; network refresh runs independently of live events. */
-const warmKey='tiki.unified.fixture.snapshot.v2';
+const warmKey='tiki.mobile.fixture.snapshot.v1';
 function rememberFixtures(){
  try{
   const fields=['id','home','away','date','league','league_key','status','minute','home_score','away_score','p1','px','p2','logos','home_logo','away_logo','prediction_tier','live_outlook','live_prediction','over25','under25','btts','mu_home','mu_away','most_likely_score'];
