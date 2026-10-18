@@ -1366,6 +1366,9 @@ function smBuildFocus(fixtures,live,model,now,estimate=null,likely=null){
 /* Match intelligence v1: normalize only verified Sportmonks values.
  * Missing xG / lineups / metadata remain missing: never infer confirmation.
  */
+/* Match intelligence v1: normalize only verified Sportmonks values.
+ * Missing xG / lineups / metadata remain missing: never infer confirmation.
+ */
 const smInt=v=>Number.isSafeInteger(v)&&v>0?v:null;
 const smLabel=(v,n=95)=>typeof v==='string'?v.trim().slice(0,n):'';
 const smFinite=v=>{const x=typeof v==='number'?v:typeof v==='string'&&v.trim()?Number(v):NaN;return Number.isFinite(x)&&x>=0&&x<=1000?x:null};
@@ -1391,7 +1394,7 @@ function normalizedPlayers(rows,id,homeId,awayId,type){
   const playerId=smInt(x.player_id),name=smLabel(x.player_name??x.player?.name,85);
   if(!name)continue;
   const key=team+'|'+(playerId||name);if(ids.has(key))continue;ids.add(key);
-  const n=Number(x.jersey_number),order=Number(x.formation_position);
+  const n=x.jersey_number==null?NaN:Number(x.jersey_number),order=x.formation_position==null?NaN:Number(x.formation_position);
   const expected=smArray(x.expected??x.xglineup??x.xGLineup);
   const px=expectedXg(expected,id,'',true).find(v=>v.player_id===playerId);
   const person={id:playerId,name,number:Number.isInteger(n)&&n>=0&&n<=99?n:null,
