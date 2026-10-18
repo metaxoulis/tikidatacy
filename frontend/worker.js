@@ -2768,7 +2768,7 @@ async function tdAuthStart(req,env){
    code_challenge_method:'S256',access_type:'online'};
   for(const [key,val] of Object.entries(values))u.searchParams.set(key,val);
   return tdAuthRedirect(u.href,[tdAuthCookie(TD_AUTH_FLOW_COOKIE,state,TD_AUTH_FLOW_TTL)]);
- }catch{return tdAuthJson({error:'google_sign_in_unavailable'},503)}
+ }catch{return tdAuthRedirect(TD_AUTH_ORIGIN+'/?signin=start_error')}
 }
 async function tdAuthGoogleClaims(jwt,clientId,nonce){
  if(typeof jwt!=='string'||jwt.length>25000)throw Error('invalid_identity_token');
@@ -2809,24 +2809,28 @@ async function tdAuthCallback(req,env){
  if(req.method!=='GET')return tdAuthJson({error:'method_not_allowed'},405);
  if(!tdAuthConfigured(req,env))return tdAuthJson({error:'google_sign_in_not_configured'},503);
  const clearFlow=tdAuthCookie(TD_AUTH_FLOW_COOKIE,'',0);
- const failed=()=>tdAuthRedirect(TD_AUTH_ORIGIN+'/?signin=failed',[clearFlow]);
+ const failed=(reason='failed')=>tdAuthRedirect(TD_AUTH_ORIGIN+'/?signin='+encodeURIComponent(reason),[clearFlow]);
+ let phase='flow_error';
  const u=new URL(req.url),state=u.searchParams.get('state')||'',code=u.searchParams.get('code')||'';
  const cookieState=tdAuthReadCookie(req,TD_AUTH_FLOW_COOKIE);
- if(u.searchParams.has('error'))return failed();
- if(!/^[a-zA-Z0-9_-]{40,90}$/.test(state)||state!==cookieState||code.length<10||code.length>3000)return failed();
+ if(u.searchParams.has('error'))return failed('google_denied');
+ if(!/^[a-zA-Z0-9_-]{40,90}$/.test(state)||state!==cookieState||code.length<10||code.length>3000)return failed('flow_error');
  try{
   const now=tdAuthEpoch(),db=env.TIKI_DB;
   const stored=await db.prepare('DELETE FROM td_auth_login_states WHERE state_hash=?1 AND expires_at>?2 RETURNING verifier,nonce')
     .bind(await tdAuthHash(state),now).first();
-  if(!stored?.verifier||!stored?.nonce)return failed();
+  if(!stored?.verifier||!stored?.nonce)return failed('flow_error');
+  phase='token_error';
   const body=new URLSearchParams({code,client_id:String(env.GOOGLE_OAUTH_CLIENT_ID).trim(),
    client_secret:String(env.GOOGLE_OAUTH_CLIENT_SECRET).trim(),redirect_uri:TD_AUTH_ORIGIN+'/auth/google/callback',
    grant_type:'authorization_code',code_verifier:stored.verifier});
   const exchanged=await fetch('https://oauth2.googleapis.com/token',{method:'POST',
    headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body.toString()});
-  if(!exchanged.ok)return failed();
+  if(!exchanged.ok)return failed('token_error');
   const tokens=await exchanged.json();
+  phase='identity_error';
   const claim=await tdAuthGoogleClaims(tokens.id_token,String(env.GOOGLE_OAUTH_CLIENT_ID).trim(),stored.nonce);
+  phase='storage_error';
   const userId=crypto.randomUUID(),display=String(claim.name||claim.given_name||'Φίλος του Tiki-Data').slice(0,100),
    email=claim.email.slice(0,250),sub=claim.sub;
   const avatar=typeof claim.picture==='string'&&/^https:\/\/(?:lh\d+|lh3)\.googleusercontent\.com\//.test(claim.picture)?claim.picture.slice(0,350):null;
@@ -2849,7 +2853,7 @@ async function tdAuthCallback(req,env){
    .bind(await tdAuthHash(token),user.user_id,csrf,now,now+TD_AUTH_SESSION_TTL).run();
   return tdAuthRedirect(TD_AUTH_ORIGIN+'/?signin=success',
     [clearFlow,tdAuthCookie(TD_AUTH_SESSION_COOKIE,token,TD_AUTH_SESSION_TTL)]);
- }catch{return failed()}
+ }catch{return failed(phase)}
 }
 async function tdAuthAuthorizedWrite(req,env){
  if(!tdAuthWriteAllowed(req))return null;
