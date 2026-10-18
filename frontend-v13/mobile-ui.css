@@ -321,3 +321,6 @@ html.td-mobile-ready body>.app,html.td-mobile-ready body>.shell,html.td-mobile-r
 #td-mobile-root .tdm-form-figures>span{display:flex;justify-content:space-between;gap:7px;font-size:11px}
 #td-mobile-root .tdm-form-figures b{color:#147f6c}
 @media(max-width:450px){#td-mobile-root .tdm-form-pair{grid-template-columns:1fr}}
+
+#td-mobile-root .tdm-stage-label{margin:0!important;padding:0px 15px 7px;font-size:10px;letter-spacing:.2px;color:#637e85;font-weight:700;line-height:1.5}
+#td-mobile-root .tdm-stage-label:before{content:'UEFA · ';color:#117d71;font-weight:850}

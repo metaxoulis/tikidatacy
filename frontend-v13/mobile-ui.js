@@ -2,6 +2,8 @@
 const deepCache=new Map(),deepLoading=new Set();
 const favKey='tiki.followedTeams.v2',params=new URLSearchParams(location.search),state={view:location.pathname.includes('/predictions')?'matches':'home',previous:'matches',mode:params.get('filter')==='live'?'live':'all',league:['ucl','uel','uecl'].includes(params.get('league'))?params.get('league'):'all',day:'all',query:'',tab:'info',id:'',matches:[],loading:true,error:'',fromCache:false,visible:42,liveUpdatedAt:'',livePending:false};
 let followed=[];try{const f=JSON.parse(localStorage.getItem(favKey)||'[]');if(Array.isArray(f))followed=f.filter(v=>typeof v==='string')}catch{}
+const uefaStageById=new Map();
+const stageLabel=m=>Number.isSafeInteger(m?.stage_id)?uefaStageById.get(m.stage_id)||null:null;
 const SITE_FOOTER="<footer class=\"tdm-site-footer\" aria-label=\"Σχετικά και πολιτικές\"><span>© 2026 Tiki-Data · Στατιστικές εκτιμήσεις, όχι στοιχηματικές αποδόσεις</span><nav aria-label=\"Πληροφορίες\"><a href=\"/about\">Σχετικά</a><a href=\"/privacy\">Απόρρητο</a><a href=\"/terms\">Όροι</a><a href=\"/cookies\">Cookies</a><a href=\"/contact\">Επικοινωνία</a></nav></footer>";
 const root=document.createElement('div');root.id='td-mobile-root';
 const E=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -70,7 +72,7 @@ const card=m=>{const p=pr(m),vals=p?[p.p1,p.px,p.p2]:[null,null,null];
  const highest=p?Math.max(...vals):null;
  const inner='<div class="tdm-core-prob" aria-label="Πιθανότητες 1 Χ 2">'+['1','Χ','2'].map((k,i)=>'<span class="tdm-core-cell'+(vals[i]!==null&&vals[i]===highest?' winner':'')+'"><small>'+k+'</small><b>'+pct(vals[i])+'</b></span>').join('')+'</div>';
  return '<article class="tdm-card tdm-match-compact" role="button" tabindex="0" data-open="'+E(m.id)+'"><div class="tdm-card-top"><b class="tdm-league-name">'+(trusted(m.league_logo)?'<img class="tdm-league-emblem" loading="lazy" src="'+E(m.league_logo)+'" alt="">':'')+E(m.league||m.league_key)+'</b><span>'+stamp(m)+'</span></div>'+
- '<div class="tdm-teams">'+club(m.home,logoH(m))+'<div class="tdm-centre">'+inner+(live(m)?'<span class="tdm-live-score">'+E(score(m))+'</span>':'')+'</div>'+club(m.away,logoA(m))+'</div>'+
+ (stageLabel(m)?'<p class="tdm-stage-label">'+E(stageLabel(m))+'</p>':'')+'<div class="tdm-teams">'+club(m.home,logoH(m))+'<div class="tdm-centre">'+inner+(live(m)?'<span class="tdm-live-score">'+E(score(m))+'</span>':'')+'</div>'+club(m.away,logoA(m))+'</div>'+
  liveStatsBlock(m,true)+liveMethodNote(m)+olderEstimateTag(m)+missingUefaEvidence(m)+'<div class="tdm-card-bottom"><b>'+(live(m)?'Live αναμέτρηση':'Πιθανότητες 1Χ2')+'</b><small>Ανάλυση αγώνα ↗</small></div></article>'};
 const empty=x=>'<div class="tdm-empty">'+E(x)+'</div>';
 function home(){const future=state.matches.filter(m=>!live(m));return lead('Τα γήπεδα, στην οθόνη σου.','Όλοι οι αγώνες, live ενημερώσεις και ανάλυση Tiki-Data σε μία εμπειρία.')+
@@ -143,7 +145,7 @@ function details(){
  const is=live(m),d=deepCache.get(state.id),valid=d&&!d.error;
  const p=!is&&valid&&d.context_prediction?d.context_prediction:pr(m),g=is?m.live_outlook:p||m;
  let content='';
- if(state.tab==='info')content='<section class="tdm-panel"><h3>Πληροφορίες αγώνα</h3>'+row('Διοργάνωση',m.league||m.league_key)+row('Ημερομηνία',when(m.date))+row('Κατάσταση',is?'LIVE':m.status)+row('Πηγή','Sportmonks')+row('Ποιότητα μοντέλου',source(m))+(valid&&d.venue?row('Γήπεδο',d.venue):'')+'</section>'+
+ if(state.tab==='info')content='<section class="tdm-panel"><h3>Πληροφορίες αγώνα</h3>'+row('Διοργάνωση',m.league||m.league_key)+(stageLabel(m)?row('Φάση UEFA',stageLabel(m)):'')+row('Ημερομηνία',when(m.date))+row('Κατάσταση',is?'LIVE':m.status)+row('Πηγή','Sportmonks')+row('Ποιότητα μοντέλου',source(m))+(valid&&d.venue?row('Γήπεδο',d.venue):'')+'</section>'+
  uefaFormBlock(m)+'<section class="tdm-panel"><h3>Ιστορικό τεκμηρίωσης</h3>'+row('Γηπεδούχος εντός',m.analysis?.home_venue_matches??m.historical_sample?.home)+row('Φιλοξενούμενη εκτός',m.analysis?.away_venue_matches??m.historical_sample?.away)+'</section>';
  if(state.tab==='summary')content=liveStatsBlock(m)+recentFormBlock(m)+'<section class="tdm-panel"><h3>Πιθανότητες τελικού αποτελέσματος</h3>'+(p?'<div class="tdm-probs tdm-probs-featured">'+metric('1 · '+m.home,p.p1)+metric('Χ · Ισοπαλία',p.px)+metric('2 · '+m.away,p.p2)+'</div>':empty('Δεν υπάρχουν διαθέσιμα αριθμητικά δεδομένα.'))+'</section>'+
  uefaFormBlock(m)+'<section class="tdm-panel"><h3>Σενάρια γκολ</h3><div class="tdm-large-stats">'+row('Over 2.5',pct(g?.over25))+row('Under 2.5',pct(g?.under25))+row('GG / BTTS',pct(g?.btts))+row('Πιθανότερο σκορ',is?g?.most_likely_final?.score:m.most_likely_score?.score)+'</div></section>'+
@@ -284,7 +286,8 @@ async function refreshLive(){
  }catch{state.livePending=true;render()}
  finally{liveUpdating=false}
 }
-function init(){document.body.appendChild(root);document.documentElement.classList.add('td-mobile-ready');restoreFixtures();baseMatches=state.matches.slice();render();void refresh();void refreshLive();setInterval(()=>{if(!document.hidden)void refresh()},300000);setInterval(()=>{if(!document.hidden)void refreshLive()},20000)}
+async function loadUefaStages(){try{const r=await fetch('/api/uefa/stages',{headers:{Accept:'application/json'}});if(!r.ok)return;const d=await r.json();if(!Array.isArray(d?.leagues))return;for(const league of d.leagues)for(const stage of league.stages||[]){if(Number.isSafeInteger(stage.id)&&typeof stage.name==='string')uefaStageById.set(stage.id,stage.name)}if(uefaStageById.size)render();}catch{}}
+function init(){document.body.appendChild(root);document.documentElement.classList.add('td-mobile-ready');restoreFixtures();baseMatches=state.matches.slice();render();void refresh();void refreshLive();void loadUefaStages();setInterval(()=>{if(!document.hidden)void refresh()},300000);setInterval(()=>{if(!document.hidden)void refreshLive()},20000)}
 window.matchMedia('(min-width:781px)').addEventListener('change',()=>{if(root.isConnected)render()});
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();
