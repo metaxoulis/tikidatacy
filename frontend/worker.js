@@ -2323,7 +2323,7 @@ async function tdBackfillHistory(env){
 const TD_UEFA_LOCK='uefa_history_backfill_lock_v1';
 const TD_UEFA_CURSOR='uefa_history_backfill_cursor_v1';
 const TD_UEFA_START='2024-07-01';
-const TD_UEFA_LATEST_DAYS=28;
+const TD_UEFA_LATEST_DAYS=84;
 async function tdSyncUefaEvidence(env){
  const db=env?.TIKI_DB,token=env?.SPORTMONKS_API_TOKEN;
  if(!db||!token)return;
