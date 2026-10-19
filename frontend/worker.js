@@ -1842,7 +1842,7 @@ async function smFocusResponse(req,env,ctx){
  if(Date.now()<tdD1UnavailableUntil)return tdProviderFocus(req,env,ctx);
  if(db){
   try{const old=await db.prepare("SELECT payload_json FROM sportapi_home_cache WHERE cache_key=?1 AND expires_at>?2")
-   .bind(key,now).first();if(old?.payload_json){const cached=JSON.parse(old.payload_json);if(!cached.model?.trained_at&&tdRecoveryPayload())return tdRecoveryResponse();return smResponse(cached,200,40);}}catch{tdD1UnavailableUntil=Date.now()+300000;return tdProviderFocus(req,env,ctx);}
+   .bind(key,now).first();if(old?.payload_json){const cached=JSON.parse(old.payload_json);if(!cached.model?.trained_at&&tdRecoveryPayload())return tdProviderFocus(req,env,ctx);return smResponse(cached,200,40);}}catch{tdD1UnavailableUntil=Date.now()+300000;return tdProviderFocus(req,env,ctx);}
  }
  if(ctx?.waitUntil&&db){
   ctx.waitUntil(tdMaybeSyncHistory(env).catch(()=>{}));
@@ -1856,7 +1856,7 @@ async function smFocusResponse(req,env,ctx){
   const [week,model,live]=await Promise.all([smWeek(start,env.SPORTMONKS_API_TOKEN,classify,fetch,7),
    fhLoadModel(db,ctx),smInplay(env.SPORTMONKS_API_TOKEN,classify,fetch,start).catch(()=>[])]);
   if(week.partial)throw Error('sportmonks_incomplete_fixture_window');
-  if(!model&&tdRecoveryPayload())return tdRecoveryResponse();
+  if(!model&&tdRecoveryPayload())return tdProviderFocus(req,env,ctx);
   const nowMs=Date.now(),selected=smBuildFocus(week.fixtures,live,model,nowMs);
   const ownForecasts=selected.matches.filter(m=>m.model?.tier==='team').map(m=>({id:m.id,date:m.date,p1:m.p1,px:m.px,p2:m.p2}));
   if(ctx?.waitUntil&&db)ctx.waitUntil(tdSyncAllTeamHistory(db,env.SPORTMONKS_API_TOKEN,selected.matches.filter(m=>Object.hasOwn(UEFA_LEAGUE_IDS,m.league_key))).catch(()=>{}));
@@ -1887,7 +1887,7 @@ async function smFocusResponse(req,env,ctx){
      .bind(key,JSON.stringify(payload),now+120,payload.updated_at).run().catch(()=>{}));
   }
   return smResponse(payload,200,40);
- }catch(e){if(tdRecoveryPayload())return tdRecoveryResponse();return smResponse({error:'sportmonks_unavailable',message:String(e?.message||'').slice(0,80)},502);}
+ }catch(e){if(tdRecoveryPayload())return tdProviderFocus(req,env,ctx);return smResponse({error:'sportmonks_unavailable',message:String(e?.message||'').slice(0,80)},502);}
 }
 
 /* Live intelligence is computed in the Cloudflare backend, shared in D1.
