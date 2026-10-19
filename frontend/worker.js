@@ -1765,7 +1765,7 @@ async function tdAttachOfficialPredictions(matches,token){
 }
 
 async function tdSyncAllTeamHistory(db,token,matches){
- const now=Math.floor(Date.now()/1000),stamp=new Date().toISOString(),ids=[...new Set(matches.flatMap(m=>[m.home_id,m.away_id]))].filter(Number.isSafeInteger);
+ const now=Math.floor(Date.now()/1000),stamp=new Date().toISOString(),ids=[...new Set(matches.slice().sort((a,b)=>Number(!!a.model)-Number(!!b.model)).flatMap(m=>[m.home_id,m.away_id]))].filter(Number.isSafeInteger);
  let processed=0;
  for(const id of ids){
   if(processed>=4)break;
