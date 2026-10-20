@@ -96,12 +96,12 @@ async function load(){
 }
 
 function liveProb(m){
- const p=m.live_outlook||m.live_prediction;
+ const p=m.live_outlook||m.live_prediction||m.prematch_prediction;
  const own=!!m.live_outlook;
  if(!p||![p.p1,p.px,p.p2].every(n=>typeof n==='number'&&n>=0&&n<=100)){
   return '<div class="home-live-context">Πραγματικό σκορ και γεγονότα σε εξέλιξη · δεν υπάρχουν αρκετά δεδομένα για αξιόπιστα ποσοστά.</div>';
  }
- const headline=own?'TIKI-DATA · LIVE POISSON (ΠΕΙΡΑΜΑΤΙΚΟ)':'SPORTMONKS · LIVE 1Χ2';
+ const headline=own?'TIKI-DATA · LIVE POISSON (ΠΕΙΡΑΜΑΤΙΚΟ)':m.live_prediction?'LIVE · 1Χ2':'ΠΡΙΝ ΤΗ ΣΕΝΤΡΑ · ΠΕΙΡΑΜΑΤΙΚΟ (ΟΧΙ LIVE)';
  const next=own&&p.next_goal?'<div class="home-live-extra"><span>Επόμενο γκολ · '+esc(m.home)+' '+pct(p.next_goal.home)+' · '+esc(m.away)+' '+pct(p.next_goal.away)+'</span>'+
    '<span>Κανένα άλλο γκολ '+pct(p.next_goal.none)+'</span></div>':'';
  return '<div class="live-probs"><span>'+headline+'</span><div>'+
