@@ -62,7 +62,7 @@ test('embedded Worker candidate is opt-in, default forecast stays unchanged', as
     dataset_slug: league + '-2026-27', match_date: day, home_team: h, away_team: a,
     home_team_id: hid, away_team_id: aid, home_score: gh, away_score: ga,
     source_provider: 'sportmonks'});
-  for (let i = 0; i < 50; i++) {
+  for (let i = 0; i < 90; i++) {
     const day = new Date(Date.UTC(2026, 4, 1 + i)).toISOString().slice(0, 10);
     add('sm462', day, 'Benfica', 'Porto', 605, 652, 2, 1);
     add('sm253', day, 'Omonia', 'APOEL', 700, 701, 2, 1);
