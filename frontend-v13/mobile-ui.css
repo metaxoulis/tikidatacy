@@ -544,3 +544,10 @@ html.td-mobile-ready body>.app,html.td-mobile-ready body>.shell,html.td-mobile-r
 }
 
 #td-mobile-root .tdm-stat-scroll{overflow:auto;max-width:100%}#td-mobile-root .tdm-stat-table{width:100%;border-collapse:collapse;font-size:12px;margin:12px 0}#td-mobile-root .tdm-stat-table th,#td-mobile-root .tdm-stat-table td{padding:9px 10px;border-bottom:1px solid #e5edf0;text-align:right;min-width:90px}#td-mobile-root .tdm-stat-table th:first-child{text-align:left;min-width:145px}#td-mobile-root .tdm-stat-table thead{background:#edf6f8;color:#164457}#td-mobile-root .tdm-stat-evidence summary{cursor:pointer;font-weight:700;padding:12px 0}#td-mobile-root .tdm-stat-evidence .tdm-note{line-height:1.6}
+/* Keep observed evidence visible while numeric forecasts are under review. */
+.tdm-evidence-vs{font-size:18px;font-weight:800;color:#6d8490;letter-spacing:2px}
+.tdm-card-evidence{margin:8px 0 12px;padding:12px 16px;background:#f4f8fb;border-radius:12px;color:#183547}
+.tdm-evidence-heading{font-size:10px;font-weight:800;letter-spacing:.08em;margin-bottom:8px;color:#52717e}
+.tdm-evidence-row{display:grid;grid-template-columns:minmax(35px,1fr) minmax(0,2fr) minmax(35px,1fr);gap:8px;align-items:center;padding:5px 0;text-align:center}
+.tdm-evidence-row b{font-size:17px;font-variant-numeric:tabular-nums}.tdm-evidence-row span{font-size:11px;color:#486575}
+.tdm-card-evidence>small{display:block;font-size:10px;line-height:1.5;color:#607a88;margin-top:8px}
