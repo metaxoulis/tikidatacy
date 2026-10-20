@@ -484,7 +484,7 @@ async function loadAudit(){
  finally{auditLoading=false;render();}
 }
 
-function init(){document.body.appendChild(root);document.documentElement.classList.add('td-mobile-ready');restoreFixtures();baseMatches=state.matches.slice();render();if(state.view==='transparency'){void loadAudit();return}void accountLoad();void refresh();void refreshLive();void loadUefaStages();setInterval(()=>{if(!document.hidden)void refresh()},300000);setInterval(()=>{if(!document.hidden)void refreshLive()},20000)}
+function init(){document.body.appendChild(root);document.documentElement.classList.add('td-mobile-ready');if(state.view==='transparency'){render();void loadAudit();return}restoreFixtures();baseMatches=state.matches.slice();render();void accountLoad();void refresh();void refreshLive();void loadUefaStages();setInterval(()=>{if(!document.hidden)void refresh()},300000);setInterval(()=>{if(!document.hidden)void refreshLive()},20000)}
 window.matchMedia('(min-width:781px)').addEventListener('change',()=>{if(root.isConnected)render()});
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();
