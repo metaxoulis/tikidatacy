@@ -711,3 +711,4 @@ html.td-mobile-ready body{background:#f4f7fb!important;color-scheme:light!import
  }
  #td-mobile-root .tdm-card .tdm-team strong{overflow-wrap:anywhere;min-width:0}
 }
+#td-mobile-root .tdm-audit-calendar{flex-wrap:wrap;justify-content:flex-start} #td-mobile-root .tdm-audit-calendar label{display:flex;align-items:center;gap:8px}

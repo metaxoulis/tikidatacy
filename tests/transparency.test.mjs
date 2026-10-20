@@ -26,8 +26,14 @@ test('D1 unavailable never removes fixtures',async()=>{
  const d=await(await h.context.audit(new Request('https://example.com/api/transparency'),h.env,{})).json();
  assert.equal(d.matches.length,10);assert.equal(d.partial,true);assert(d.matches.every(m=>m.probabilities===null));
 });
+test('18 October completed fixtures are included in the audit',async()=>{
+ const h=harness();
+ h.context.smPages=async()=>[{id:18,sport_id:1,league_id:8,starting_at:'2026-10-18 15:00:00',state:{short_name:'FT'},participants:[{id:100,name:'Home',meta:{location:'home'}},{id:200,name:'Away',meta:{location:'away'}}],scores:[{description:'CURRENT',score:{participant:'home',goals:2}},{description:'CURRENT',score:{participant:'away',goals:1}}]}];
+ const d=await(await h.context.audit(new Request('https://example.com/api/transparency?end=2026-10-20'),h.env,{})).json();
+ assert.equal(d.start,'2026-10-18');assert.equal(d.matches.length,1);assert.equal(d.matches[0].final,true);assert.equal(d.matches[0].home_score,2);
+});
 test('bad dates rejected and provider failure does not report empty success',async()=>{
- const h=harness();assert.equal((await h.context.audit(new Request('https://example.com/api/transparency?start=2026-10-18'),h.env,{})).status,400);
+ const h=harness();assert.equal((await h.context.audit(new Request('https://example.com/api/transparency?start=2026-10-17'),h.env,{})).status,400);
  h.context.smPages=async()=>{throw Error('pagination incomplete')};
  assert.equal((await h.context.audit(new Request('https://example.com/api/transparency'),h.env,{})).status,503);
 });

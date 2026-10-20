@@ -1,5 +1,5 @@
 /* Fixture-led audit. No training, result-table scans or retrospective forecasts. */
-const AUDIT_START='2026-10-19';
+const AUDIT_START='2026-10-18';
 const AUDIT_LEAGUES={8:'epl',564:'laliga',82:'bundesliga',384:'seriea',301:'ligue1',325:'greece',253:'cyprus',2:'ucl',5:'uel',2286:'uecl'};
 function auditLocalDay(value){return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Nicosia',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(value));}
 function auditVerdict(m){
@@ -18,7 +18,7 @@ async function tdTransparency(req,env,ctx){
  if(!smIsoDay(horizon)||horizon>smAddDay(today,370)||horizon<AUDIT_START)return smResponse({error:'invalid_end'},400);
  if(!smIsoDay(start)||start<AUDIT_START||start>horizon)return smResponse({error:'invalid_start'},400);
  const end=[smAddDay(start,27),horizon].sort()[0],next=end<horizon?smAddDay(end,1):null;
- const key='tiki:transparency:v1:'+start+':'+end,kv=env.MATCHIQ_CACHE;
+ const key='tiki:transparency:v2:'+start+':'+end,kv=env.MATCHIQ_CACHE;
  let cached;try{cached=await kv?.get(key,'json')}catch{}
  if(cached&&Date.now()-Date.parse(cached.updated_at)<300000)return smResponse(cached,200,60);
  try{
