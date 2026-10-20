@@ -9,7 +9,7 @@ test('do not mix other confederations, women or domestic competitions',()=>{
 test('all three league keys flow through worker normalizer, training and cache',()=>{
  const w=readFileSync(new URL('../frontend/worker.js',import.meta.url),'utf8');
  assert.match(w,/const key=classify\(league,country,id\)/);
- assert.match(w,/const SM_FOCUS_CACHE_KEY='focus_historical_v7_uefa'/);
+ assert.match(w,/const SM_FOCUS_CACHE_KEY='focus_identity_balanced_v11'/);
  assert.match(w,/tdAllowedLeague=new Set\(\['epl'.*'ucl','uel','uecl'\]\)/);
  assert.match(w,/function smInplay\(/);
 });

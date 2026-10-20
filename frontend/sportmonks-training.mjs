@@ -24,6 +24,7 @@ function normalizeFinishedSportmonks(fixtures){
   const start=Number(day.slice(0,4))-(Number(day.slice(5,7))<7?1:0),end=String((start+1)%100).padStart(2,'0');
   rows.push({fixture_id:fixtureId,league_key:m.league_key,dataset_slug:m.league_key+'-'+start+'-'+end,
    match_date:day,home_team:m.home.trim().slice(0,105),away_team:m.away.trim().slice(0,105),
+   home_team_id:Number.isSafeInteger(m.home_id)?m.home_id:null,away_team_id:Number.isSafeInteger(m.away_id)?m.away_id:null,
    home_score:result.home,away_score:result.away,match_status:'FINISHED',
    source_provider:'sportmonks'});
   seen.add(fixtureId);

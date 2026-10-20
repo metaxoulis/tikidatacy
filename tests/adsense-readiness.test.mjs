@@ -17,9 +17,10 @@ test('footer links remain visible after unified match center rerenders',()=>{
  assert.match(js,/\+'<\/main>'\+SITE_FOOTER/);
  for(const page of ['about','privacy','terms','cookies','contact'])assert.ok(js.includes('/'+page));
 });
-test('no ad network script or fake cookie CMP is activated',()=>{
+test('ad script activation requires an explicitly configured publisher ID',()=>{
  const worker=get('frontend/worker.js');
- assert.doesNotMatch(worker,/pagead2\.googlesyndication\.com\/pagead\/js\/adsbygoogle\.js/);
+ assert.match(worker,/function tdHtmlWithAdsenseVerification/);
+ assert.match(worker,/return id\?html\.replace/);
  assert.match(worker,/const ADSENSE_ROBOTS=/);
  assert.match(worker,/const ADSENSE_SITEMAP=/);
 });

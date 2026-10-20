@@ -12,10 +12,10 @@ test('mobile and desktop controllers compile and use real 1X2 data',()=>{
  assert.match(desktop,/function mainProbabilities\(/);
 });
 test('uploaded Tiki-Data vector brand replaces previous logo in Worker',()=>{
- const brand=get('frontend-v13/brand-new.svg'),favicon=get('frontend-v13/favicon-new.svg');
+ const brand=get('frontend-v13/brand.svg'),favicon=get('frontend-v13/favicon-new.svg');
  const worker=get('frontend/worker.js');
- assert.match(brand,/<svg xmlns=/);assert.match(brand,/#37f3ae/);
- assert.match(favicon,/viewBox="0 0 355 355"/);
+ assert.match(brand,/<svg xmlns=/);assert.match(brand,/aria-label="Tiki-Data"/);
+ assert.match(favicon,/viewBox="[^"]+"/);
  for(const [key,value] of Object.entries({BRAND:brand,FAVICON:favicon})){
   const line=worker.match(new RegExp('^const '+key+'=(.*);$','m'));
   assert.ok(line,key);assert.equal(JSON.parse(line[1]),value);

@@ -2,11 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const file=s=>readFileSync(new URL('../'+s,import.meta.url),'utf8');
-test('brand uses reference cyan-to-mint gradient and is bundled without replacement drift',()=>{
+test('current uploaded brand is bundled without replacement drift',()=>{
  const svg=file('frontend-v13/brand.svg'),worker=file('frontend/worker.js');
- assert(svg.includes('linearGradient id="td"'));
- assert(svg.includes('#0acbff')&&svg.includes('#37f3ae'));
- assert(worker.includes('linearGradient id='));
+ assert.match(svg,/<svg[^>]+aria-label="Tiki-Data"/);
+ assert.match(svg,/<image[^>]+href="data:image\/webp;base64,/); 
+ assert(worker.includes('const BRAND='));
  for(const k of ['HTML_HOME','HTML_PREDICTIONS','JS','CSS','HOME_V23_CSS','BRAND']){
   const m=worker.match(new RegExp('^const '+k+'=(.*);$','m'));assert(m,'missing '+k);
   const p={HTML_HOME:'frontend-v13/home-v23.html',HTML_PREDICTIONS:'frontend-v13/predictions.html',JS:'frontend-v13/app.js',CSS:'frontend-v13/styles.css',HOME_V23_CSS:'frontend-v13/home-v23.css',BRAND:'frontend-v13/brand.svg'}[k];

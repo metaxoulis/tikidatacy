@@ -1,0 +1,28 @@
+"""Rebuild embedded assets without silently changing the reviewed source files."""
+import json
+import re
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+worker = ROOT / 'frontend/worker.js'
+text = worker.read_text()
+assets = {
+    'JS': 'app.js', 'HOME_V23_JS': 'home-v23.js', 'HOME_V23_CSS': 'home-v23.css',
+    'HTML_HOME': 'home-v23.html', 'HTML_PREDICTIONS': 'predictions.html',
+    'JS_DATA': 'data.js', 'CSS_DATA': 'data.css', 'HTML_DATA': 'data.html',
+    'MOBILE_UI_JS': 'mobile-ui.js', 'MOBILE_UI_CSS': 'mobile-ui.css',
+    'BRAND': 'brand.svg', 'FAVICON': 'favicon-new.svg',
+    **{'LEGAL_' + page.upper(): page + '.html' for page in ['about', 'privacy', 'terms', 'cookies', 'contact']},
+}
+for key, filename in assets.items():
+    value = (ROOT / 'frontend-v13' / filename).read_text()
+    pattern = r'^const ' + key + r'=.*;$'
+    text, count = re.subn(pattern, lambda _: 'const ' + key + '=' + json.dumps(value, ensure_ascii=False) + ';', text, flags=re.M)
+    if count != 1:
+        raise RuntimeError('Expected exactly one bundle for ' + key)
+module = (ROOT / 'frontend/forecast-integrity.mjs').read_text().replace('export function ', 'function ')
+text, count = re.subn(r'/\* forecast-integrity:start \*/.*?/\* forecast-integrity:end \*/', lambda _: '/* forecast-integrity:start */\n' + module + '\n/* forecast-integrity:end */', text, flags=re.S)
+if count != 1:
+    raise RuntimeError('Missing forecast-integrity module markers')
+# Existing Worker uses CRLF. Preserve it to keep diffs focused on the changes.
+worker.write_bytes(text.replace('\r\n', '\n').replace('\n', '\r\n').encode())

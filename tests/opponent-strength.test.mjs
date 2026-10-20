@@ -11,14 +11,14 @@ const model=fhTrain(rows,new Date('2026-10-19T00:00:00Z'));
 assert.ok(model.all_teams.strong.home.attack>model.all_teams.weak.home.attack);
 // Identical goals scored/conceded against stronger opponents imply stronger attack.
 assert.ok(model.all_teams['test a'].home.attack>model.all_teams['test b'].home.attack);
-const p=fhEstimate({home:'Test A',away:'Strong',league_key:'uel'},model);
+const p=fhEstimate({home:'Test A',away:'Strong',league_key:'epl'},model);
 assert.equal(p.tier,'team');assert.equal(p.strength.iterations,8);
 assert.ok(Math.abs(p.p1+p.px+p.p2-100)<.01);
-const unknown=fhEstimate({home:'Unknown',away:'Weak',league_key:'uel'},model);
+const unknown=fhEstimate({home:'Unknown',away:'Weak',league_key:'epl'},model);
 assert.equal(unknown.tier,'partial_team');assert.equal(unknown.confidence,'low');
-const noTeams=fhEstimate({home:'Missing A',away:'Missing B',league_key:'uel'},model);
+const noTeams=fhEstimate({home:'Missing A',away:'Missing B',league_key:'unseen'},model);
 assert.equal(noTeams.tier,'cross_league');assert.equal(noTeams.confidence,'very_low');
-const fixtures=[['Test A','Strong'],['Unknown','Weak'],['Missing A','Missing B']].map(([home,away],i)=>({id:'test-'+i,home,away,date:'2026-10-22T12:00:00Z',league_key:'uel',status:'NS'}));
+const fixtures=[['Test A','Strong'],['Unknown','Weak'],['Missing A','Missing B']].map(([home,away],i)=>({id:'test-'+i,home,away,date:'2026-10-22T12:00:00Z',league_key:'epl',status:'NS'}));
 const focus=smBuildFocus(fixtures,[],model,Date.parse('2026-10-19T00:00:00Z'));
 assert.equal(focus.coverage.with_prediction,3);assert.equal(focus.matches.length,3);
 const dupe=fhTrain([...rows,rows[0],{...rows[0],match_date:'2026-10-19'}],new Date('2026-10-19T00:00:00Z'));

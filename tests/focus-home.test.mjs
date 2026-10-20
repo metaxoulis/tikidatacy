@@ -10,7 +10,7 @@ test('classifies exactly top five plus Greece/Cyprus, guards ambiguous cross-cou
  assert.equal(fhLeague('1st Division','Cyprus'),'cyprus');
  assert.equal(fhLeague('Super League 1','Greece'),'greece');
  assert.equal(fhLeague('Serie B','Italy'),null);
- assert.equal(fhLeague('Champions League','Europe'),null);
+ assert.equal(fhLeague('Champions League','Europe'),'ucl');
  assert.equal(fhLeague('Cypriot First Division',''),'cyprus');
 });
 test('train real historical final-score parameters without future leakage and abstain on unknown teams',()=>{

@@ -22,7 +22,7 @@ test('date controls are active and linked to actual day state',()=>{
 });
 test('mobile first paint is not blocked by the slower live scores feed',()=>{
  const js=get('frontend-v13/mobile-ui.js');
- assert.match(js,/restoreFixtures\(\);baseMatches=state\.matches\.slice\(\);render\(\);void refresh\(\);void refreshLive\(\)/);
+ assert.match(js,/restoreFixtures\(\);baseMatches=state\.matches\.slice\(\);render\(\);(?:void accountLoad\(\);)?void refresh\(\);void refreshLive\(\)/);
  const fixture=js.indexOf("baseMatches=payload.matches.filter(");
  const live=js.indexOf("async function refreshLive()");
  assert.ok(fixture>0&&live>fixture,'fixtures should be painted before optional live fetch');
@@ -48,14 +48,14 @@ test('light theme tabs stay legible on desktop and mobile',()=>{
 
 test('live data are calculated and cached by the backend, never in the mobile client',()=>{
  const worker=get('frontend/worker.js'),ui=get('frontend-v13/mobile-ui.js');
- assert.match(worker,/const SM_LIVE_SNAPSHOT_KEY='sportmonks_live_snapshot_v1'/);
+ assert.match(worker,/const SM_LIVE_SNAPSHOT_KEY='sportmonks_live_snapshot_v11_identity'/);
  assert.match(worker,/async function smComputeLiveSnapshot\(/);
  assert.match(worker,/async function smRebuildLiveSnapshot\(/);
  assert.match(worker,/ON CONFLICT\(cache_key\) DO UPDATE SET expires_at=excluded.expires_at/);
  assert.match(ui,/async function refreshLive\(/);
  assert.match(ui,/setInterval\(\(\)=>\{if\(!document.hidden\)void refreshLive\(\)\},20000\)/);
  assert.match(ui,/liveMatches=snapshot.matches/);
- assert.match(ui,/snapshot\?\.pending/);
+ assert.match(ui,/snapshot\.refreshing\|\|snapshot\.stale\|\|snapshot\.pending/);
 });
 
 test('last live 1X2 values survive refreshing and carry an explicit old-estimate label',()=>{
