@@ -1554,7 +1554,7 @@ function tdContextForecast(){return null}
 const SM_FOCUS_CACHE_KEY='focus_identity_balanced_v11';
 const SM_FINISHED=new Set(['FT','FINISHED','FULL_TIME','AET','PEN','CANCELLED','POSTPONED','DELAYED','ABANDONED']);
 function smBuildFocus(fixtures,live,model,now,estimate=null,likely=null){
- const actual=new Map((Array.isArray(live)?live:[]).map(m=>[String(m.id),m]));
+ const actual=new Map((Array.isArray(live)?live:[]).filter(m=>!['NS','NOT_STARTED','SCHEDULED','TBD'].includes(String(m?.status||'').toUpperCase())).map(m=>[String(m.id),m]));
  const map=new Map();
  for(const f of [...(Array.isArray(fixtures)?fixtures:[]),...(Array.isArray(live)?live:[])]){
   if(!f||!f.id||!f.home||!f.away||!Number.isFinite(Date.parse(f.date)))continue;
@@ -3195,7 +3195,7 @@ async function tdRunScheduledTraining(req,env){
 }
 async function tdTrainingStatus(env){
  const model=await tdPublishedModel(env),status=await env.MATCHIQ_CACHE?.get(TD_TRAIN_STATUS,'json').catch(()=>null);
- return smResponse({schedule:'every_4_hours_UTC',training:status,model:model?{version:model.model_version,
+ return smResponse({schedule:'twice_daily_04_16_UTC',training:status,model:model?{version:model.model_version,
   trained_at:model.trained_at,cutoff:model.cutoff,historical_matches:model.training_records,
   origin:model.training_origin,teams:Object.keys(model.all_teams).length,cross_competition_validation:model.cross_competition_validation,uefa_team_history_refresh:model.uefa_team_history_refresh||null,experimental:true,validated:false}:null},200,30);
 }
@@ -3328,7 +3328,7 @@ async function tdAttachStatisticalEvidence(env,selected){
 async function tdPersistCachedHistory(db,rows,stamp){
  if(!db||!rows.length)return;
  for(let i=0;i<rows.length;i+=75){
-  const batch=rows.slice(i,i+75).map(r=>db.prepare('INSERT INTO sportmonks_training_results(fixture_id,dataset_slug,league_key,match_date,home_team,away_team,home_score,away_score,observed_at,home_team_id,away_team_id) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11) ON CONFLICT(fixture_id) DO UPDATE SET dataset_slug=excluded.dataset_slug,league_key=excluded.league_key,home_team=excluded.home_team,away_team=excluded.away_team,home_score=excluded.home_score,away_score=excluded.away_score,home_team_id=excluded.home_team_id,away_team_id=excluded.away_team_id,observed_at=excluded.observed_at').bind(r.fixture_id,r.dataset_slug,r.league_key,r.match_date,r.home_team,r.away_team,r.home_score,r.away_score,stamp,r.home_team_id,r.away_team_id));
+  const batch=rows.slice(i,i+75).map(r=>db.prepare('INSERT INTO sportmonks_training_results(fixture_id,dataset_slug,league_key,match_date,home_team,away_team,home_score,away_score,observed_at,home_team_id,away_team_id) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11) ON CONFLICT(fixture_id) DO UPDATE SET dataset_slug=excluded.dataset_slug,league_key=excluded.league_key,home_team=excluded.home_team,away_team=excluded.away_team,home_score=excluded.home_score,away_score=excluded.away_score,home_team_id=excluded.home_team_id,away_team_id=excluded.away_team_id,observed_at=excluded.observed_at WHERE sportmonks_training_results.dataset_slug IS NOT excluded.dataset_slug OR sportmonks_training_results.league_key IS NOT excluded.league_key OR sportmonks_training_results.match_date IS NOT excluded.match_date OR sportmonks_training_results.home_team IS NOT excluded.home_team OR sportmonks_training_results.away_team IS NOT excluded.away_team OR sportmonks_training_results.home_score IS NOT excluded.home_score OR sportmonks_training_results.away_score IS NOT excluded.away_score OR sportmonks_training_results.home_team_id IS NOT excluded.home_team_id OR sportmonks_training_results.away_team_id IS NOT excluded.away_team_id').bind(r.fixture_id,r.dataset_slug,r.league_key,r.match_date,r.home_team,r.away_team,r.home_score,r.away_score,stamp,r.home_team_id,r.away_team_id));
   await db.batch(batch);
  }
 }
