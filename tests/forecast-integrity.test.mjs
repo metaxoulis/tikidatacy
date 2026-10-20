@@ -47,3 +47,24 @@ test('an acceptance flag cannot bypass independent evaluation and domestic cover
  const f={home:'A',away:'B',league_key:'uel'};
  assert.deepEqual(forecastIntegrity(f,m,fhTeamKey).reasons,['insufficient_domestic_venue_history','cross_competition_calibration_not_established']);
 });
+
+
+test('UEFA keeps certification withheld but offers only labeled, identity-safe numerical research previews',()=>{
+ const home={matches:12,attack:1.25,defence:.8,competitions:{ucl:10,'sm462':2}},away={matches:9,attack:1.0,defence:1.12,competitions:{ucl:7,'sm462':2}};
+ const model={model_version:'tiki-identity-balanced-poisson-v11',trained_at:new Date().toISOString(),cutoff:'2026-10-17',global:{matches:200,hmean:1.55,amean:1.15},all_teams:{'sportmonks:101':{home},'sportmonks:202':{away}},cross_competition_validation:{accepted:false}};
+ const f={id:'sportmonks-400',home:'Home',away:'Away',home_id:101,away_id:202,league_key:'ucl',status:'NS',date:new Date(Date.now()+48*3600000).toISOString()};
+ assert.equal(forecastIntegrity(f,model,fhTeamKey).status,'withheld');
+ assert.equal(fhEstimate(f,model),null);
+ const p=fhEstimate(f,model,{experimentalPreview:true});
+ assert.ok(p);assert.equal(p.tier,'team');assert.ok(Math.abs(p.p1+p.px+p.p2-100)<1);
+ const out=smBuildFocus([f],[],model,Date.now());
+ assert.equal(out.matches[0].forecast_review.status,'withheld');
+ assert.equal(out.matches[0].p1,null);
+ assert.ok(out.matches[0].experimental_preview?.preview_only);
+ assert.equal(out.matches[0].experimental_preview?.validated,false);
+ assert.ok(Math.abs(out.matches[0].experimental_preview.p1+out.matches[0].experimental_preview.px+out.matches[0].experimental_preview.p2-100)<1);
+ const noId=smBuildFocus([{...f,id:'sportmonks-401',home_id:null}],[],model,Date.now());
+ assert.equal(noId.matches[0].experimental_preview,null);
+ const tiny={...model,all_teams:{'sportmonks:101':{home:{...home,matches:2}},'sportmonks:202':{away}}};
+ assert.equal(smBuildFocus([f],[],tiny,Date.now()).matches[0].experimental_preview,null);
+});
