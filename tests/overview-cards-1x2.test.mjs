@@ -19,11 +19,11 @@ test('comparative team and match live statistics are reserved for match details'
   assert.match(ui, /if\(state\.tab==='stats'\)content=currentSeasonFormBlock\(m,d\)\+allStatisticsBlock\(m,d\)\+content/);
 });
 
-test('no invalid or withheld 1X2 can be displayed from overview or deep API', () => {
+test('only independently gated or explicit experimental-preview 1X2 can be displayed', () => {
   assert.match(ui, /const valid123=p=>/);
   assert.match(ui, /Math\.abs\(p\.p1\+p\.px\+p\.p2-100\)<1/);
-  assert.match(ui, /const pr=m=>\{if\(m\.forecast_review\?\.status==='withheld'\)return null/);
-  assert.match(ui, /const p=m\.forecast_review\?\.status==='withheld'\?null:/);
+  assert.match(ui, /const pr=m=>\{if\(m\.forecast_review\?\.status==='withheld'\)return !live\(m\)&&valid123\(m\.experimental_preview\)/);
+  assert.match(ui, /const p=m\.forecast_review\?\.status==='withheld'\?pr\(m\):/);
   assert.doesNotThrow(() => new Function(ui));
 });
 
