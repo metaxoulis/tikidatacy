@@ -16,7 +16,7 @@ test('match overview always uses compact 1-X-2 columns even when forecast is wit
 test('comparative team and match live statistics are reserved for match details', () => {
   assert.doesNotMatch(card, /liveStatsBlock\(m,true\)|liveMethodNote\(m\)/);
   assert.match(ui, /if\(state\.tab==='summary'\)content=currentSeasonFormBlock\(m,d\)\+historicalSummaryBlock\(m,d\)\+allStatisticsBlock\(m,d\)\+liveStatsBlock\(m\)/);
-  assert.match(ui, /if\(state\.tab==='stats'\)content=allStatisticsBlock\(m,d\)\+content/);
+  assert.match(ui, /if\(state\.tab==='stats'\)content=currentSeasonFormBlock\(m,d\)\+allStatisticsBlock\(m,d\)\+content/);
 });
 
 test('no invalid or withheld 1X2 can be displayed from overview or deep API', () => {
