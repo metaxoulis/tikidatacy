@@ -1,0 +1,72 @@
+name: Tiki-Data — Cloudflare Pages deployment
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  deployments: write
+
+concurrency:
+  group: tiki-data-production
+  cancel-in-progress: false
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the exact Git commit
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Rebuild the Pages Worker from versioned frontend assets
+        run: python3 scripts/sync-worker-assets.py
+      - name: Verify Worker JavaScript syntax
+        run: node --check frontend/worker.js
+      - name: Run regression tests
+        run: node --test tests/*.test.mjs
+      - name: Verify Python research tests
+        run: python3 -m unittest discover -s research/statsbomb -p 'test_*.py'
+      - name: Prepare Direct Upload bundle
+        run: |
+          mkdir -p dist
+          cp frontend/worker.js dist/_worker.js
+          node --check dist/_worker.js
+          test -s dist/_worker.js
+      - name: Save tested bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: tiki-data-pages-worker
+          path: dist/_worker.js
+          if-no-files-found: error
+          retention-days: 7
+
+  deploy-production:
+    needs: build-and-test
+    if: ${{ github.ref == 'refs/heads/main' && vars.TIKI_AUTO_DEPLOY_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Download exactly the tested bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: tiki-data-pages-worker
+          path: dist
+      - name: Check Cloudflare credentials are configured
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo 'Missing CLOUDFLARE_API_TOKEN'; exit 1; }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo 'Missing CLOUDFLARE_ACCOUNT_ID'; exit 1; }
+      - name: Deploy to existing Cloudflare Pages project
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=tiki-data --branch=main
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
