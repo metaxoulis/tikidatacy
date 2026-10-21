@@ -1,8 +1,9 @@
 (()=>{'use strict';
 const deepCache=new Map(),deepLoading=new Set();
-const favKey='tiki.followedTeams.v2',params=new URLSearchParams(location.search),state={view:params.get('account')==='1'?'account':location.pathname.startsWith('/transparency')?'transparency':location.pathname.includes('/predictions')?'matches':'home',previous:'matches',mode:params.get('filter')==='live'?'live':'all',league:['ucl','uel','uecl'].includes(params.get('league'))?params.get('league'):'all',day:'all',query:'',tab:'summary',id:'',matches:[],loading:true,error:'',fromCache:false,visible:42,liveUpdatedAt:'',livePending:false};
+const favKey='tiki.followedTeams.v2',params=new URLSearchParams(location.search),state={view:params.get('account')==='1'?'account':location.pathname.startsWith('/transparency')?'transparency':location.pathname.includes('/predictions')?(params.get('match')&&/^sportmonks-[1-9]\d{0,13}$/.test(params.get('match'))?'detail':params.get('filter')==='live'?'live':'matches'):'home',previous:['home','matches','live','teams'].includes(params.get('from'))?params.get('from'):params.get('filter')==='live'?'live':'matches',mode:params.get('filter')==='live'?'live':'all',league:['ucl','uel','uecl'].includes(params.get('league'))?params.get('league'):'all',day:'all',query:'',tab:'summary',id:/^sportmonks-[1-9]\d{0,13}$/.test(params.get('match')||'')?params.get('match'):'',matches:[],loading:true,error:'',fromCache:false,visible:42,liveUpdatedAt:'',livePending:false};
 let followed=[];try{const f=JSON.parse(localStorage.getItem(favKey)||'[]');if(Array.isArray(f))followed=f.filter(v=>typeof v==='string')}catch{}
 let guestFollowed=followed.slice(),accountUser=null,accountCsrf='',loginEnabled=null,accountLeagues=[],accountError='';let saving=Promise.resolve();
+let accountLoaded=false,accountLoading=false;
 const authResult=(new URLSearchParams(location.search)).get('signin')||'';
 const authText={success:'Η Google επιβεβαίωσε τη σύνδεση. Φορτώνονται οι ρυθμίσεις σου…',start_error:'Δεν ξεκίνησε η σύνδεση. Ελέγξτε τη σύνδεση Cloudflare και δοκιμάστε ξανά.',google_denied:'Η Google δεν επέτρεψε τη σύνδεση. Αν η εφαρμογή βρίσκεται σε Testing, πρόσθεσε το Google email σου στους Test users.',flow_error:'Η αίτηση σύνδεσης έληξε ή το cookie ελέγχου δεν βρέθηκε. Δοκίμασε ξανά από το ίδιο πρόγραμμα περιήγησης.',token_error:'Η Google δεν ολοκλήρωσε την ανταλλαγή του κωδικού OAuth. Έλεγξε το Client Secret και το Redirect URI.',identity_error:'Η ταυτότητα Google δεν επαληθεύτηκε. Δοκίμασε ξανά ή επικοινώνησε με τη διαχείριση.',storage_error:'Η σύνδεση Google προχώρησε, αλλά δεν αποθηκεύτηκε η συνεδρία στη βάση.',failed:'Η σύνδεση δεν ολοκληρώθηκε. Δοκίμασε ξανά.'};
 if(authText[authResult])accountError=authText[authResult];
@@ -12,6 +13,7 @@ const stageLabel=m=>Number.isSafeInteger(m?.stage_id)?uefaStageById.get(m.stage_
 const SITE_FOOTER="<footer class=\"tdm-site-footer\" aria-label=\"Σχετικά και πολιτικές\"><span>© 2026 Tiki-Data · Στατιστικές εκτιμήσεις, όχι στοιχηματικές αποδόσεις</span><nav aria-label=\"Πληροφορίες\"><a href=\"/transparency\">Διαφάνεια</a><a href=\"/about\">Σχετικά</a><a href=\"/privacy\">Απόρρητο</a><a href=\"/terms\">Όροι</a><a href=\"/cookies\">Cookies</a><a href=\"/contact\">Επικοινωνία</a></nav></footer>";
 
 let auditArchive={matches:[]},auditLoading=true,auditError='';
+let auditLoaded=false,auditPromise=null;
 let auditFilter='all',auditLeague='all',auditDay='all';
 const auditDayKey=value=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Nicosia',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(value));
 function auditOutcome(m){
@@ -155,6 +157,8 @@ function home(){
 }
 
 async function accountLoad(){
+ if(accountLoaded||accountLoading)return;
+ accountLoading=true;let completed=false;
  try{
   const r=await fetch('/api/auth/session',{credentials:'same-origin',cache:'no-store'});
   const d=await r.json();loginEnabled=!!d.login_enabled;
@@ -164,8 +168,9 @@ async function accountLoad(){
    followed=Array.isArray(d.preferences?.teams)?d.preferences.teams.slice(0,40):[];
    accountLeagues=Array.isArray(d.preferences?.leagues)?d.preferences.leagues.slice(0,12):[];
   }else{accountUser=null;accountCsrf='';followed=guestFollowed.slice();accountLeagues=[]}
+  completed=true;
  }catch{accountUser=null;accountCsrf='';loginEnabled=null;accountError='Δεν φορτώθηκε η κατάσταση σύνδεσης. Ανανέωσε τη σελίδα ή δοκίμασε ξανά.';followed=guestFollowed.slice()}
- render();
+ finally{accountLoaded=completed;accountLoading=false;if(state.view==='account')render();}
 }
 function accountSave(){
  if(!accountUser||!accountCsrf)return;
@@ -382,24 +387,70 @@ function render(focus=false){root.classList.toggle('tdm-account-page',state.view
 (state.fromCache?'<div class="tdm-cache-note">Αποθηκευμένα δεδομένα'+(state.snapshotAt?' · ενημέρωση '+E(new Date(state.snapshotAt).toLocaleString(window.__tdLocale==='el'?'el-GR':'en-GB',{timeZone:'Asia/Nicosia',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))+' ώρα Κύπρου':'')+' · η ανανέωση είναι προσωρινά μη διαθέσιμη</div>':'')+(state.error?'<div class="tdm-empty">'+E(state.error)+' <button data-retry class="tdm-link">Ξανά</button></div>':'')+
 (state.view==='transparency'?transparency():state.view==='home'?home():state.view==='teams'?teams():state.view==='account'?accountPanel():state.view==='detail'?details():fixtures())+'</main>'+SITE_FOOTER+'</div><nav class="tdm-bottom">'+[['home','Αρχική'],['matches','Αγώνες'],['live','Live'],['transparency','Διαφάνεια'],['account','Προφίλ']].map(([x,y])=>'<button data-view="'+x+'" '+((state.view===x||(x==='account'&&state.view==='teams'))?'class="active" aria-current="page"':'')+'>'+ico(x)+'<span>'+y+'</span></button>').join('')+'</nav>';
 syncResponsiveNavigation();
+ if(state.view==='detail')lastDetailSignature=matchRenderKey(state.matches.find(m=>String(m.id)===String(state.id)));
  if(focus){const i=root.querySelector('[data-search]');if(i){i.focus();try{i.setSelectionRange(pos,pos)}catch{}}}}
 window.addEventListener('resize',syncResponsiveNavigation);
-function navigate(v){if(v==='transparency'){location.assign('/transparency');return}state.visible=42;state.previous=state.view==='detail'?state.previous:state.view;state.view=v;state.query='';state.league='all';if(v!=='detail')state.id='';render();window.scrollTo(0,0)}
-root.addEventListener('click',e=>{const allDays=e.target.closest('[data-audit-all-days]');if(allDays){auditDay='all';render();return}const shift=e.target.closest('[data-audit-shift]');if(shift){const day=auditDay==='all'?auditDayKey(Date.now()):auditDay;const next=new Date(Date.parse(day+'T12:00:00Z')+Number(shift.dataset.auditShift)*86400000).toISOString().slice(0,10);auditDay=next<'2026-10-18'?'2026-10-18':next>auditDayKey(Date.now())?auditDayKey(Date.now()):next;render();return}const leagueButton=e.target.closest('[data-audit-league]');if(leagueButton){auditLeague=leagueButton.getAttribute('data-audit-league');render();return}const auditButton=e.target.closest('[data-audit-status]');if(auditButton){auditFilter=auditButton.getAttribute('data-audit-status');render();return}const b=e.target.closest('[data-team],[data-view],[data-back],[data-open],[data-mode],[data-league],[data-day],[data-tab],[data-retry],[data-more],[data-auth-league],[data-auth-import],[data-auth-logout],[data-auth-delete]');if(!b)return;const a=n=>b.getAttribute('data-'+n);
+function routeForView(v){return v==='home'?'/':v==='matches'?'/predictions':v==='live'?'/predictions?filter=live':v==='transparency'?'/transparency':v==='account'?'/?account=1':null}
+function navigate(v,targetPath=null){
+ const nextPath=targetPath||routeForView(v);
+ if(nextPath&&(location.pathname+location.search+location.hash)!==nextPath)history.pushState({tdView:v},'',nextPath);
+ state.visible=42;state.previous=state.view==='detail'?state.previous:state.view;state.view=v;
+ state.mode=v==='live'?'live':'all';
+ state.query='';
+ const target=targetPath?new URL(targetPath,location.origin):null;
+ state.league=target&&['ucl','uel','uecl'].includes(target.searchParams.get('league'))?target.searchParams.get('league'):'all';
+ if(v!=='detail')state.id='';
+ if(v==='transparency')void loadAudit();
+ if(v==='account')void accountLoad();
+ render();
+ if(['home','matches','live'].includes(v)){void refresh();void refreshLive();}
+ if(target?.hash){const id=decodeURIComponent(target.hash.slice(1));requestAnimationFrame(()=>document.getElementById(id)?.scrollIntoView())}else window.scrollTo(0,0);
+}
+function openMatch(id,targetPath=null){
+ if(!/^sportmonks-[1-9]\d{0,13}$/.test(String(id||'')))return;
+ const prior=state.view==='detail'?state.previous:state.view;
+ state.previous=prior;state.id=id;state.view='detail';state.tab='summary';
+ const q=new URLSearchParams();if(prior==='live'||state.mode==='live')q.set('filter','live');if(prior==='home'||prior==='teams')q.set('from',prior);q.set('match',id);
+ const nextPath=targetPath||('/predictions?'+q.toString());
+ if((location.pathname+location.search+location.hash)!==nextPath)history.pushState({tdView:'detail',matchId:id},'',nextPath);
+ if(deepCache.has(id)||deepLoading.has(id))render();else void fetchDeep(id);
+ window.scrollTo(0,0);
+}
+function syncRouteFromLocation(){
+ const q=new URLSearchParams(location.search),signIn=q.get('signin'),candidate=q.get('match');
+ const matchId=/^sportmonks-[1-9]\d{0,13}$/.test(candidate||'')?candidate:'';
+ const next=q.get('account')==='1'||authText[signIn]?'account':location.pathname.startsWith('/transparency')?'transparency':location.pathname.includes('/predictions')?(matchId?'detail':q.get('filter')==='live'?'live':'matches'):'home';
+ const from=q.get('from');
+ state.previous=next==='detail'?(['home','matches','live','teams'].includes(from)?from:q.get('filter')==='live'?'live':'matches'):(state.view==='detail'?state.previous:state.view);
+ state.view=next;state.mode=q.get('filter')==='live'?'live':'all';state.query='';
+ state.league=['ucl','uel','uecl'].includes(q.get('league'))?q.get('league'):'all';state.id=next==='detail'?matchId:'';state.visible=42;
+ if(next==='detail'&&state.id&&!deepCache.has(state.id)&&!deepLoading.has(state.id))void fetchDeep(state.id);else render();
+ if(next==='transparency')void loadAudit();
+ if(next==='account')void accountLoad();
+ if(['home','matches','live'].includes(next)){void refresh();void refreshLive();}
+ window.scrollTo(0,0);
+}
+window.addEventListener('popstate',syncRouteFromLocation);
+root.addEventListener('click',e=>{const link=e.target.closest('a[href]');if(link&&!e.defaultPrevented&&e.button===0&&!e.metaKey&&!e.ctrlKey&&!e.shiftKey&&!e.altKey&&(!link.target||link.target==='_self')&&!link.hasAttribute('download')){const url=new URL(link.href,location.href);if(url.origin===location.origin&&!(url.hash&&url.pathname===location.pathname&&url.search===location.search)){if(url.pathname==='/transparency'){e.preventDefault();navigate('transparency',url.pathname+url.search+url.hash);return}if(url.pathname==='/predictions'&&url.searchParams.get('match')){e.preventDefault();openMatch(url.searchParams.get('match'),url.pathname+url.search+url.hash);return}if(url.pathname==='/predictions'){e.preventDefault();navigate(url.searchParams.get('filter')==='live'?'live':'matches',url.pathname+url.search+url.hash);return}if(url.pathname==='/'&&url.searchParams.get('account')==='1'){e.preventDefault();navigate('account',url.pathname+url.search+url.hash);return}if(url.pathname==='/'&&!url.search){e.preventDefault();navigate('home',url.pathname+url.search+url.hash);return}}}const allDays=e.target.closest('[data-audit-all-days]');if(allDays){auditDay='all';render();return}const shift=e.target.closest('[data-audit-shift]');if(shift){const day=auditDay==='all'?auditDayKey(Date.now()):auditDay;const next=new Date(Date.parse(day+'T12:00:00Z')+Number(shift.dataset.auditShift)*86400000).toISOString().slice(0,10);auditDay=next<'2026-10-18'?'2026-10-18':next>auditDayKey(Date.now())?auditDayKey(Date.now()):next;render();return}const leagueButton=e.target.closest('[data-audit-league]');if(leagueButton){auditLeague=leagueButton.getAttribute('data-audit-league');render();return}const auditButton=e.target.closest('[data-audit-status]');if(auditButton){auditFilter=auditButton.getAttribute('data-audit-status');render();return}const b=e.target.closest('[data-team],[data-view],[data-back],[data-open],[data-mode],[data-league],[data-day],[data-tab],[data-retry],[data-more],[data-auth-league],[data-auth-import],[data-auth-logout],[data-auth-delete]');if(!b)return;const a=n=>b.getAttribute('data-'+n);
 if(b.hasAttribute('data-team')){const v=a('team');followed=(isFav(v)?followed.filter(x=>norm(x)!==norm(v)):[...followed,v]).slice(0,40);if(accountUser)accountSave();else{guestFollowed=followed.slice();try{localStorage.setItem(favKey,JSON.stringify(guestFollowed))}catch{}}render();return}if(b.hasAttribute('data-auth-import')){followed=[...new Set([...followed,...guestFollowed])].slice(0,40);accountSave();render();return}if(b.hasAttribute('data-auth-league')){const k=a('auth-league');accountLeagues=accountLeagues.includes(k)?accountLeagues.filter(x=>x!==k):[...accountLeagues,k].slice(0,12);accountSave();render();return}if(b.hasAttribute('data-auth-logout')){void accountAction('logout');return}if(b.hasAttribute('data-auth-delete')){void accountAction('delete');return}
 if(b.hasAttribute('data-view'))return navigate(a('view'));if(b.hasAttribute('data-back'))return navigate(state.previous==='detail'?'matches':state.previous);
-if(b.hasAttribute('data-open')){state.previous=state.view;state.id=a('open');state.view='detail';state.tab='summary';render();void fetchDeep(state.id);window.scrollTo(0,0);return}
+if(b.hasAttribute('data-open')){openMatch(a('open'));return}
 if(b.hasAttribute('data-more')){state.visible+=42;render();return}if(b.hasAttribute('data-mode')){state.mode=a('mode');state.visible=42;ensureAvailableDay();render();return}if(b.hasAttribute('data-league')){state.league=a('league');state.dayAllExplicit=false;state.visible=42;ensureAvailableDay();render();return}if(b.hasAttribute('data-day')){state.day=a('day');state.dayAllExplicit=state.day==='all';state.visible=42;render();return}if(b.hasAttribute('data-tab')){state.tab=a('tab');render();if(!deepCache.has(state.id))void fetchDeep(state.id);return}if(b.hasAttribute('data-retry'))refresh()});
 root.addEventListener('change',e=>{if(e.target.matches('[data-audit-day]')){const value=e.target.value;auditDay=/^\d{4}-\d{2}-\d{2}$/.test(value)&&value>='2026-10-18'&&value<=auditDayKey(Date.now())?value:'all';render();return}if(e.target.matches('[data-pick-day]')){state.day=/^\d{4}-\d{2}-\d{2}$/.test(e.target.value)?e.target.value:'all';render()}});
 root.addEventListener('input',e=>{if(e.target.matches('[data-search]')){state.query=e.target.value;render(true)}});root.addEventListener('keydown',e=>{if(e.target.matches('[data-open]')&&(e.key==='Enter'||e.key===' ')){e.preventDefault();e.target.click()}});
 /* Show the most recent verified public fixture snapshot immediately on return visits.
  * Cache lifetime is 5 minutes; network refresh runs independently of live events. */
 const warmKey='tiki.mobile.fixture.snapshot.v11';
+let lastSavedFixturesSignature='',lastFixtureStorageAt=0;
 function rememberFixtures(){
  try{
   const fields=['id','home','away','date','league','league_key','status','minute','home_score','away_score','p1','px','p2','logos','home_logo','away_logo','league_logo','statistical_evidence','forecast_review','experimental_preview','history_competitions','historical_sample','european_form','strength','prediction_tier','live_outlook','live_prediction','prematch_prediction','over25','under25','btts','mu_home','mu_away','most_likely_score'];
   const recent=state.matches.slice(0,150).map(m=>Object.fromEntries(fields.filter(k=>Object.prototype.hasOwnProperty.call(m,k)).map(k=>[k,m[k]])));
-  localStorage.setItem(warmKey,JSON.stringify({saved:Date.now(),matches:recent}));
+  const signature=JSON.stringify(recent),now=Date.now();
+  if(signature===lastSavedFixturesSignature&&now-lastFixtureStorageAt<21600000)return;
+  if(now-lastFixtureStorageAt<60000)return;
+  localStorage.setItem(warmKey,JSON.stringify({saved:now,matches:recent}));
+  lastSavedFixturesSignature=signature;lastFixtureStorageAt=now;
  }catch{}
 }
 function restoreFixtures(){
@@ -413,7 +464,10 @@ function restoreFixtures(){
 
 /* Two independent streams: slow 7-day fixture updates and fast lightweight
  * completed live snapshots from the backend. The browser NEVER runs forecasts. */
-let updating=false,liveUpdating=false,baseMatches=[],liveMatches=[];
+let updating=false,liveUpdating=false,baseMatches=[],liveMatches=[],lastFixtureRequestAt=0,lastLiveRequestAt=0,lastPaintSignature='',lastDetailSignature='';
+function matchRenderKey(m){if(!m)return '';return JSON.stringify([m.id,m.home,m.away,m.date,m.league,m.league_key,m.status,m.minute,m.home_score,m.away_score,m.p1,m.px,m.p2,m.live_outlook?.p1,m.live_outlook?.px,m.live_outlook?.p2,m.live_prediction?.p1,m.live_prediction?.px,m.live_prediction?.p2,m.prematch_prediction?.p1,m.prematch_prediction?.px,m.prematch_prediction?.p2,m.over25,m.under25,m.btts,m.mu_home,m.mu_away,m.prediction_tier,m.live_probability_stale,m.logos?.home,m.logos?.away,m.home_logo,m.away_logo,m.league_logo,m.live_stats,m.events,m.lineups,m.recent_form]);}
+function matchListRenderKey(list){return list.map(matchRenderKey).join('|');}
+function canRenderDataView(){return ['home','matches','live','teams','detail'].includes(state.view);}
 function paintMatches(){
  const all=new Map(baseMatches.map(x=>[String(x.id),x]));
  const oldShown=new Map(state.matches.map(x=>[String(x.id),x]));
@@ -435,12 +489,25 @@ function paintMatches(){
    live_probability_score:prev.live_probability_score||[prev.home_score,prev.away_score],
    live_probability_minute:prev.live_probability_minute??prev.minute??null});
  }
- state.matches=[...all.values()].filter(x=>x?.id&&x.home&&x.away&&Number.isFinite(Date.parse(x.date)))
+ const nextMatches=[...all.values()].filter(x=>x?.id&&x.home&&x.away&&Number.isFinite(Date.parse(x.date)))
   .sort((a,b)=>Date.parse(a.date)-Date.parse(b.date));
- rememberFixtures();render();
+ const signature=matchListRenderKey(nextMatches),changed=signature!==lastPaintSignature;
+ state.matches=nextMatches;
+ if(changed)lastPaintSignature=signature;
+ rememberFixtures();
+ if(!changed)return false;
+ if(state.view==='detail'){
+  const detailKey=matchRenderKey(state.matches.find(x=>String(x.id)===String(state.id)));
+  if(detailKey!==lastDetailSignature){lastDetailSignature=detailKey;render();return true;}
+  return false;
+ }
+ if(['home','matches','live','teams'].includes(state.view)){render();return true;}
+ return false;
 }
 async function refresh(){
- if(updating)return;updating=true;
+ const now=Date.now();
+ if(updating||['transparency','account'].includes(state.view)||now-lastFixtureRequestAt<30000)return;
+ updating=true;lastFixtureRequestAt=now;
  try{
   const controller=new AbortController(),abort=setTimeout(()=>controller.abort(),16000);
   let payload;
@@ -448,13 +515,18 @@ async function refresh(){
    if(!response.ok)throw Error('fixture_api');payload=await response.json()}
   finally{clearTimeout(abort)}
   if(!Array.isArray(payload?.matches))throw Error('fixture_shape');
+  const previousMeta=JSON.stringify([state.loading,state.error,state.fromCache,state.snapshotAt]);
   baseMatches=payload.matches.filter(x=>x?.id&&x.home&&x.away&&Number.isFinite(Date.parse(x.date)));
-  state.loading=false;state.error='';state.fromCache=!!payload.stale;state.snapshotAt=payload.snapshot_saved_at||payload.updated_at||'';paintMatches();
- }catch{state.loading=false;if(!state.matches.length)state.error='Προσωρινό πρόβλημα σύνδεσης δεδομένων.';render()}
+  state.loading=false;state.error='';state.fromCache=!!payload.stale;state.snapshotAt=payload.snapshot_saved_at||payload.updated_at||'';
+  const matchesChanged=paintMatches();
+  if(!matchesChanged&&previousMeta!==JSON.stringify([state.loading,state.error,state.fromCache,state.snapshotAt])&&canRenderDataView())render();
+ }catch{const prior=state.error,wasLoading=state.loading;state.loading=false;if(!state.matches.length)state.error='Προσωρινό πρόβλημα σύνδεσης δεδομένων.';if(canRenderDataView()&&(state.error!==prior||state.loading!==wasLoading))render()}
  finally{updating=false}
 }
 async function refreshLive(){
- if(liveUpdating||document.hidden)return;liveUpdating=true;
+ const now=Date.now();
+ if(liveUpdating||document.hidden||['transparency','account'].includes(state.view)||now-lastLiveRequestAt<15000)return;
+ liveUpdating=true;lastLiveRequestAt=now;
  try{
   const controller=new AbortController(),abort=setTimeout(()=>controller.abort(),18000);
   let snapshot;
@@ -462,34 +534,49 @@ async function refreshLive(){
    if(!response.ok)throw Error('live_backend_unavailable');snapshot=await response.json()}
   finally{clearTimeout(abort)}
   if(!Array.isArray(snapshot?.matches)){
-   state.livePending=true;render();return;
+   const changed=!state.livePending;state.livePending=true;if(changed&&canRenderDataView())render();return;
   }
   const timestamp=Date.parse(snapshot.updated_at);
   if(!Number.isFinite(timestamp)||timestamp>Date.now()+60000||Date.now()-timestamp>900000){
-   state.livePending=true;render();return;
+   const changed=!state.livePending;state.livePending=true;if(changed&&canRenderDataView())render();return;
   }
+  const wasPending=state.livePending;
   liveMatches=snapshot.matches;
   state.liveUpdatedAt=snapshot.updated_at;state.livePending=!!(snapshot.refreshing||snapshot.stale||snapshot.pending);
-  paintMatches();
- }catch{state.livePending=true;render()}
+  const matchesChanged=paintMatches();
+  if(wasPending!==state.livePending&&!matchesChanged&&canRenderDataView())render();
+ }catch{const changed=!state.livePending;state.livePending=true;if(changed&&canRenderDataView())render()}
  finally{liveUpdating=false}
 }
-async function loadUefaStages(){try{const r=await fetch('/api/uefa/stages',{headers:{Accept:'application/json'}});if(!r.ok)return;const d=await r.json();if(!Array.isArray(d?.leagues))return;for(const league of d.leagues)for(const stage of league.stages||[]){if(Number.isSafeInteger(stage.id)&&typeof stage.name==='string')uefaStageById.set(stage.id,stage.name)}if(uefaStageById.size)render();}catch{}}
+async function loadUefaStages(){try{const r=await fetch('/api/uefa/stages',{headers:{Accept:'application/json'}});if(!r.ok)return;const d=await r.json();if(!Array.isArray(d?.leagues))return;for(const league of d.leagues)for(const stage of league.stages||[]){if(Number.isSafeInteger(stage.id)&&typeof stage.name==='string')uefaStageById.set(stage.id,stage.name)}if(uefaStageById.size&&canRenderDataView())render();}catch{}}
 async function loadAudit(){
- auditLoading=true;auditError='';const matches=new Map();let start='2026-10-18';const end=auditDayKey(Date.now());
- try{while(start){
-  const r=await fetch('/api/transparency?start='+encodeURIComponent(start)+'&end='+end,{headers:{Accept:'application/json'}});
-  if(!r.ok)throw Error('audit_unavailable');const d=await r.json();
-  if(!Array.isArray(d.matches))throw Error('audit_shape');
-  for(const m of d.matches)matches.set(m.fixture_id,m);
-  auditArchive={matches:[...matches.values()].sort((a,b)=>a.kickoff.localeCompare(b.kickoff))};
-  if(d.partial||d.stale)auditError='Μερική διαθεσιμότητα δεδομένων · ο έλεγχος δεν ολοκληρώθηκε.';
-  render();if(d.next&&d.next<=start)throw Error('audit_cursor');start=d.next;
- }}catch{auditError='Δεν ολοκληρώθηκε η φόρτωση όλων των αγώνων. Ανανέωσε τη σελίδα.';}
- finally{auditLoading=false;render();}
+ if(auditLoaded)return Promise.resolve();
+ if(auditPromise)return auditPromise;
+ auditLoading=true;auditError='';
+ auditPromise=(async()=>{
+  const matches=new Map();let start='2026-10-18',completed=false;const end=auditDayKey(Date.now());
+  try{
+   while(start){
+    const r=await fetch('/api/transparency?start='+encodeURIComponent(start)+'&end='+end,{headers:{Accept:'application/json'}});
+    if(!r.ok)throw Error('audit_unavailable');const d=await r.json();
+    if(!Array.isArray(d.matches))throw Error('audit_shape');
+    for(const m of d.matches)matches.set(m.fixture_id,m);
+    if(d.partial||d.stale)auditError='Μερική διαθεσιμότητα δεδομένων · ο έλεγχος δεν ολοκληρώθηκε.';
+    if(d.next&&d.next<=start)throw Error('audit_cursor');start=d.next;
+   }
+   auditArchive={matches:[...matches.values()].sort((a,b)=>a.kickoff.localeCompare(b.kickoff))};
+   completed=true;auditLoaded=true;
+  }catch{auditError='Δεν ολοκληρώθηκε η φόρτωση όλων των αγώνων. Ανανέωσε τη σελίδα.';}
+  finally{
+   auditLoading=false;auditPromise=null;
+   if(!completed)auditLoaded=false;
+   if(state.view==='transparency')render();
+  }
+ })();
+ return auditPromise;
 }
 
-function init(){document.body.appendChild(root);document.documentElement.classList.add('td-mobile-ready');if(state.view==='transparency'){render();void loadAudit();return}restoreFixtures();baseMatches=state.matches.slice();render();void accountLoad();void refresh();void refreshLive();void loadUefaStages();setInterval(()=>{if(!document.hidden)void refresh()},300000);setInterval(()=>{if(!document.hidden)void refreshLive()},20000)}
+function init(){document.body.appendChild(root);document.documentElement.classList.add('td-mobile-ready');if(state.view==='transparency'){render();void loadAudit();return}restoreFixtures();baseMatches=state.matches.slice();render();void accountLoad();void refresh();void refreshLive();if(state.view==='detail'&&state.id)void fetchDeep(state.id);void loadUefaStages();setInterval(()=>{if(!document.hidden)void refresh()},300000);setInterval(()=>{if(!document.hidden)void refreshLive()},20000)}
 window.matchMedia('(min-width:781px)').addEventListener('change',()=>{if(root.isConnected)render()});
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();

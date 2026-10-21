@@ -6,6 +6,8 @@ import vm from 'node:vm';
 const worker=readFileSync(new URL('../frontend/worker.js',import.meta.url),'utf8');
 const bundles={
   JS:'frontend-v13/app.js',
+  MOBILE_UI_JS:'frontend-v13/mobile-ui.js',
+  MOBILE_UI_CSS:'frontend-v13/mobile-ui.css',
   HOME_V23_JS:'frontend-v13/home-v23.js',
   HOME_V23_CSS:'frontend-v13/home-v23.css',
   HTML_HOME:'frontend-v13/home-v23.html',
