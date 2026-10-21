@@ -164,9 +164,39 @@
     catch (error) { console.error('[Tiki-Data] '+label,error); return false; }
   }
 
+  // Display the most recent non-live fixtures before the network round trip.
+  // Cache is per browser session and expires after five minutes.
+  const HOME_CACHE_KEY='td-home-fixtures-v2';
+  const HOME_CACHE_MS=5*60*1000;
+  function homeCacheRead() {
+    try {
+      const value=JSON.parse(sessionStorage.getItem(HOME_CACHE_KEY)||'null');
+      if (!value || !Number.isFinite(value.saved) || Date.now()-value.saved>HOME_CACHE_MS || !Array.isArray(value.matches)) return null;
+      return value.matches.filter(m=>m&&m.id!=null&&m.home&&m.away&&m.date&&Number.isFinite(Date.parse(m.date)));
+    } catch { return null; }
+  }
+  function homeCacheWrite(rows) {
+    try { sessionStorage.setItem(HOME_CACHE_KEY,JSON.stringify({saved:Date.now(),matches:rows.filter(m=>!['LIVE','1H','2H','HT','ET','1ST','2ND'].includes(String(m.status||'').toUpperCase()))})); } catch {}
+  }
+  function showMatches(rows) {
+    matches=rows.filter(m=>m&&m.id!=null&&m.home&&m.away&&m.date&&Number.isFinite(Date.parse(m.date))).sort((a,b)=>Date.parse(a.date)-Date.parse(b.date));
+    const now=Date.now();
+    const future=matches.filter(m=>Date.parse(m.date)>=now);
+    safeRender('summary',()=>renderSummary(matches));
+    safeRender('featured',()=>renderFeatured(future.find(validModel)||future[0]||null));
+    safeRender('upcoming',()=>renderUpcoming(future.slice(0,3)));
+    document.body.dataset.tikiDataState='ready';
+    document.dispatchEvent(new CustomEvent('tiki:home-ready',{detail:{matches:matches.length,upcoming:future.length}}));
+  }
   async function fetchFixtures() {
     if (inFlight) return inFlight;
-    setBusy(true);
+    const cached=homeCacheRead();
+    if (cached) {
+      showMatches(cached);
+      setBusy(false);
+    } else {
+      setBusy(true);
+    }
     const controller=new AbortController();
     const timeout=setTimeout(()=>controller.abort(),15000);
     inFlight=(async()=>{
@@ -175,17 +205,16 @@
         if (!response.ok) throw new Error('HTTP '+response.status);
         const body=await response.json();
         if (!body || !Array.isArray(body.matches)) throw new Error('Invalid matches[] response');
-        matches=body.matches.filter(m=>m&&m.id!=null&&m.home&&m.away&&m.date&&Number.isFinite(Date.parse(m.date))).sort((a,b)=>Date.parse(a.date)-Date.parse(b.date));
-        const now=Date.now();
-        const future=matches.filter(m=>Date.parse(m.date)>=now);
-        safeRender('summary',()=>renderSummary(matches));
-        safeRender('featured',()=>renderFeatured(future.find(validModel)||future[0]||null));
-        safeRender('upcoming',()=>renderUpcoming(future.slice(0,3)));
-        document.body.dataset.tikiDataState='ready';
-        document.dispatchEvent(new CustomEvent('tiki:home-ready',{detail:{matches:matches.length,upcoming:future.length}}));
+        const rows=body.matches.filter(m=>m&&m.id!=null&&m.home&&m.away&&m.date&&Number.isFinite(Date.parse(m.date)));
+        homeCacheWrite(rows);
+        showMatches(rows);
       } catch (error) {
-        document.body.dataset.tikiDataState='error';
-        safeRender('error UI',()=>renderError(error));
+        if (!cached && !matches.length) {
+          document.body.dataset.tikiDataState='error';
+          safeRender('error UI',()=>renderError(error));
+        } else {
+          console.warn('[Tiki-Data] Refresh failed; showing last available fixtures.',error);
+        }
       } finally {
         clearTimeout(timeout);
         inFlight=null;
