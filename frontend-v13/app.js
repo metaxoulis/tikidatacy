@@ -258,7 +258,67 @@ let prev=null,html='';for(const m of shown){const k=kt(m.date);if(k!==prev){html
 function update(){drawMode();renderOverview();if(state.feed==='loading'){renderLoading();return}finishLoading();if(IS_PREDICTIONS){renderLeagues();renderDates();renderTable()}else{renderFeatured();renderStatsSummary();renderUpcoming()}}
 function persistFav(){try{localStorage.setItem(STORAGE,JSON.stringify([...state.favorites]))}catch{}}
 function toggleFavorite(id){if(state.favorites.has(String(id)))state.favorites.delete(String(id));else state.favorites.add(String(id));persistFav();update()}
-async function fetchFixtures(){const requestId=++state.requestId;state.feed='loading';state.error='';update();try{const url='/api/home-focus';const r=await fetch(url,{headers:{Accept:'application/json'},cache:'no-store'});const json=await r.json();if(requestId!==state.requestId)return;if(!r.ok||!Array.isArray(json.matches))throw new Error(json?.message||'Δεν επιστράφηκαν επαληθεύσιμες αναλύσεις αγώνων.');state.base=json.matches.filter(m=>m&&m.id!=null&&m.home&&m.away&&m.date&&Number.isFinite(Date.parse(m.date)));reconcileMatches();state.feed='ready';$('.status-dot')?.classList.add('connected');if($('#feedStatus'))$('#feedStatus').textContent='Δεδομένα συνδεδεμένα';update()}catch(e){if(state.requestId===requestId){state.all=[];state.base=[];state.error=String(e?.message||e).slice(0,120);state.feed='error';$('.status-dot')?.classList.remove('connected');if($('#feedStatus'))$('#feedStatus').textContent='Σφάλμα δεδομένων';update()}}}
+/* Show recently verified fixtures immediately while refreshing in the background.
+ * Session-only cache, bounded lifetime, and no cached live scores.
+ * Never turn a failed refresh into an empty screen when verified fixtures exist.
+ */
+const FIXTURE_CACHE_KEY='td-fixtures-focus-v2';
+const FIXTURE_CACHE_MS=5*60*1000;
+function cachedFixtures(){
+ try{
+  const entry=JSON.parse(sessionStorage.getItem(FIXTURE_CACHE_KEY)||'null');
+  if(!entry||!Number.isFinite(entry.saved)||Date.now()-entry.saved>FIXTURE_CACHE_MS||!Array.isArray(entry.matches))return null;
+  return entry.matches.filter(m=>m&&m.id!=null&&m.home&&m.away&&m.date&&Number.isFinite(Date.parse(m.date))&&!inProgress(m));
+ }catch{return null}
+}
+function storeFixtures(rows){
+ try{
+  const safe=rows.filter(m=>!inProgress(m));
+  sessionStorage.setItem(FIXTURE_CACHE_KEY,JSON.stringify({saved:Date.now(),matches:safe}));
+ }catch{} // Quota errors must not block the UI.
+}
+let fixtureFetchPromise=null;
+async function fetchFixtures(){
+ if(fixtureFetchPromise)return fixtureFetchPromise;
+ const requestId=++state.requestId;
+ const cached=state.feed==='ready'?null:cachedFixtures();
+ if(cached){
+  state.base=cached;
+  reconcileMatches();
+  state.feed='ready';
+  state.error='';
+  if($('#feedStatus'))$('#feedStatus').textContent='Αποθηκευμένοι αγώνες · ανανέωση…';
+  update();
+ }else if(state.feed!=='ready'){
+  state.feed='loading';state.error='';update();
+ }
+ fixtureFetchPromise=(async()=>{
+  try{
+   const response=await fetch('/api/home-focus',{headers:{Accept:'application/json'},cache:'no-store'});
+   const json=await response.json();
+   if(requestId!==state.requestId)return;
+   if(!response.ok||!Array.isArray(json.matches))throw new Error(json?.message||'Δεν επιστράφηκαν επαληθεύσιμες αναλύσεις αγώνων.');
+   const rows=json.matches.filter(m=>m&&m.id!=null&&m.home&&m.away&&m.date&&Number.isFinite(Date.parse(m.date)));
+   state.base=rows;storeFixtures(rows);
+   reconcileMatches();state.feed='ready';state.error='';
+   $('.status-dot')?.classList.add('connected');
+   if($('#feedStatus'))$('#feedStatus').textContent='Δεδομένα συνδεδεμένα';
+   update();
+  }catch(e){
+   if(requestId!==state.requestId)return;
+   state.error=String(e?.message||e).slice(0,120);
+   if(state.feed==='ready'){
+    if($('#feedStatus'))$('#feedStatus').textContent='Προσωρινά αποθηκευμένοι αγώνες · αποτυχία ανανέωσης';
+   }else{
+    state.all=[];state.base=[];state.feed='error';
+    $('.status-dot')?.classList.remove('connected');
+    if($('#feedStatus'))$('#feedStatus').textContent='Σφάλμα δεδομένων';
+    update();
+   }
+  }
+ })();
+ try{return await fixtureFetchPromise}finally{fixtureFetchPromise=null}
+}
 function evidenceNote(m){
  const e=m.analysis||{},sample=e.home_venue_matches??m.historical_sample?.home??0,away=e.away_venue_matches??m.historical_sample?.away??0;
  return tierExplanation(m)+' Ιστορικό: '+sample+' εντός έδρας αγώνες '+m.home+' / '+away+' εκτός έδρας '+m.away+
