@@ -12,6 +12,10 @@ async function json(url,options={}) {
  if(!response.ok)throw Error('Pipeline HTTP '+response.status);
  return response.json();
 }
+export function captureRows(feed,now=Date.now()) {
+ if(feed.stale||feed.partial||now-Date.parse(feed.updated_at)>600000)return [];
+ return (feed.matches||[]).filter(m=>m.forecast_source==='published_trained_model'&&m.forecast_calculated_at===feed.model?.trained_at&&m.status==='NS'&&Date.parse(m.date)>now+60000&&m.model?.tier==='team'&&[m.model.p1,m.model.px,m.model.p2].every(p=>typeof p==='number'&&Number.isFinite(p)&&p>=0&&p<=100)&&Math.abs(m.model.p1+m.model.px+m.model.p2-100)<0.1);
+}
 export async function runPipeline(env) {
  const failures=[];const report={event:'forecast_pipeline'};
  try {
@@ -23,6 +27,15 @@ export async function runPipeline(env) {
  try {
   const result=await json('https://tiki-data.pages.dev/api/home-focus');
   report.predictions_available=result.model_predictions_available??result.coverage?.with_prediction??0;
+  const snapshot=await env.TIKI_DB.prepare('SELECT model_key FROM focus_model_snapshots WHERE trained_at=?1').bind(result.model?.trained_at||'').all();
+  if(snapshot.results.length!==1)throw Error('Ambiguous published model identity');
+  const rows=captureRows(result);
+  let captured=0;
+  for(let i=0;i<rows.length;i+=50) {
+   const writes=await env.TIKI_DB.batch(rows.slice(i,i+50).map(m=>env.TIKI_DB.prepare("INSERT OR IGNORE INTO prospective_forecast_log (fixture_key,created_at,model_version,data_cutoff,source_sync_at,ph,pd,pa) VALUES (?1,datetime('now'),?2,?3,?4,?5,?6,?7)").bind(m.id+':'+m.date,snapshot.results[0].model_key,result.model.historical_cutoff,result.updated_at,m.model.p1/100,m.model.px/100,m.model.p2/100)));
+   captured+=writes.reduce((n,r)=>n+(r.meta?.changes||0),0);
+  }
+  report.captured=captured;
  }catch(e){failures.push('capture: '+e.message);}
  try {
   if(!env.TIKI_DB)throw Error('Settlement database binding missing');
