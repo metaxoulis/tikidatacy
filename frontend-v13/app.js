@@ -60,7 +60,7 @@ const dateFmt=(d,mode='short')=>new Intl.DateTimeFormat('el-GR',mode==='full'?{w
 const clock=d=>new Intl.DateTimeFormat('el-GR',{hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(d));
 const inProgress=m=>['LIVE','1H','2H','1ST','2ND','HT','ET','BREAK','1ST_HALF','2ND_HALF','HALF_TIME'].includes(String(m?.status||'').toUpperCase());
 const liveForecast=m=>m?.live_outlook||m?.live_prediction||m?.prematch_prediction||null;
-const liveForecastSource=m=>m?.live_outlook?'TIKI-DATA LIVE · ΠΕΙΡΑΜΑΤΙΚΟ':m?.live_prediction?'SPORTMONKS LIVE · 1Χ2':m?.prematch_prediction?'ΠΡΙΝ ΤΗ ΣΕΝΤΡΑ · ΠΕΙΡΑΜΑΤΙΚΟ (ΟΧΙ LIVE)':'LIVE ΧΩΡΙΣ ΔΙΑΘΕΣΙΜΗ ΠΙΘΑΝΟΤΗΤΑ';
+const liveForecastSource=m=>m?.live_outlook?(m.live_probability_stale?'TIKI-DATA LIVE · ΑΝΑΜΟΝΗ ΕΝΗΜΕΡΩΣΗΣ':m.live_outlook.live_stats_applied?'TIKI-DATA LIVE · LIVE STATS ΣΤΟ ΜΟΝΤΕΛΟ':'TIKI-DATA LIVE · ΧΩΡΙΣ ΔΙΟΡΘΩΣΗ STATS'):m?.live_prediction?'SPORTMONKS LIVE · 1Χ2':m?.prematch_prediction?'ΠΡΙΝ ΤΗ ΣΕΝΤΡΑ · ΠΕΙΡΑΜΑΤΙΚΟ (ΟΧΙ LIVE)':'LIVE ΧΩΡΙΣ ΔΙΑΘΕΣΙΜΗ ΠΙΘΑΝΟΤΗΤΑ';
 function tierLabel(m){
  const tier=m?.prediction_tier;
  if(tier==='team')return 'ΟΜΑΔΙΚΑ ΔΕΔΟΜΕΝΑ · ΠΕΙΡΑΜΑΤΙΚΟ';
@@ -202,6 +202,13 @@ async function refreshLive(){
  }catch{if($('#overviewUpdated')&&!state.liveUpdatedAt)$('#overviewUpdated').textContent='Η live ενημέρωση δεν είναι διαθέσιμη';}
  finally{state.liveFetchBusy=false}
 }
+function liveStatsModelNote(m){
+ if(!inProgress(m)||!m.live_outlook)return '';
+ const labels={on_target:'Σουτ στην εστία',shots:'Σουτ',dangerous:'Επικίνδυνες επιθέσεις',attacks:'Επιθέσεις',possession:'Κατοχή',corners:'Κόρνερ',red:'Κόκκινες κάρτες'};
+ const p=m.live_outlook,metrics=(p.live_stats_adjustment?.metrics_used||[]).filter(k=>Object.hasOwn(labels,k)).map(k=>labels[k]);
+ const text=m.live_probability_stale?'Αναμονή νεότερης live εκτίμησης.':p.live_stats_applied?'Live stats στο μοντέλο: '+metrics.join(', ')+'. Συνδυάζονται με ιστορικά στοιχεία, σκορ και λεπτό.':'Χωρίς διόρθωση από live stats: η εκτίμηση βασίζεται σε ιστορικά στοιχεία, σκορ και λεπτό.';
+ return '<div class="intel-caveat">'+esc(text)+' Πειραματική διόρθωση με περιορισμένη βαρύτητα.</div>';
+}
 function matchLine(m){const probability=inProgress(m)?liveForecast(m):valid(m)?m:null;const p=probability?[probability.p1,probability.px,probability.p2]:[null,null,null],max=p.every(x=>x!==null)?Math.max(...p):null,bt=num(inProgress(m)?m.live_outlook?.btts:m.btts),nb=num(inProgress(m)?null:m.no_btts),o=num(inProgress(m)?m.live_outlook?.over25:m.over25),u=num(inProgress(m)?m.live_outlook?.under25:m.under25),ouBest=pairPreferred(o,u),btBest=pairPreferred(bt,nb),fav=state.favorites.has(String(m.id));const quality=inProgress(m)?liveForecastSource(m):valid(m)?tierLabel(m):'ΕΠΑΛΗΘΕΥΜΕΝΟΣ ΑΓΩΝΑΣ · ΠΕΡΙΟΡΙΣΜΕΝΑ ΣΤΟΙΧΕΙΑ';const briefing=summaryInsight(m);
 const mobile='<article class="td-mobile-card"><div class="td-mobile-meta">'+competition(m.league,'small-league',m.league_key)+'<span class="td-mobile-league">'+esc(lname(m.league))+'</span><time>'+(inProgress(m)?'● LIVE '+(num(m.home_score)!==null&&num(m.away_score)!==null?esc(m.home_score+'–'+m.away_score):''):esc(clock(m.date)))+'</time></div>'
 +'<div class="td-mobile-teams"><div class="td-mobile-team">'+crest(m.home,'table-crest',m.logos?.home)+'<span class="td-mobile-name">'+esc(m.home)+'</span></div><span class="td-mobile-vs">'+(inProgress(m)&&num(m.home_score)!==null?esc(m.home_score+'–'+m.away_score):'VS')+'</span><div class="td-mobile-team">'+crest(m.away,'table-crest',m.logos?.away)+'<span class="td-mobile-name">'+esc(m.away)+'</span></div></div>'
@@ -275,7 +282,7 @@ function insightNarrative(m){
    notes.push({title:'Εικόνα αγώνα',body:diff===0?'Το σκορ είναι ισόπαλο ('+m.home_score+'–'+m.away_score+'). Το αποτέλεσμα παραμένει ανοιχτό.':
     (diff>0?m.home:m.away)+' προηγείται με '+m.home_score+'–'+m.away_score+'. Η ομάδα που χάνει χρειάζεται τουλάχιστον '+Math.abs(diff)+' γκολ για την ισοπαλία.'});
   }else notes.push({title:'Εικόνα αγώνα',body:'Ο αγώνας είναι σε εξέλιξη. Αναμένεται έγκυρη ενημέρωση σκορ.'});
-  if(m.live_outlook)notes.push({title:'Πιθανή συνέχεια',body:'Με βάση το πραγματικό σκορ και το '+minutes+'ο λεπτό, το ανεξάρτητο Poisson εκτιμά '+Number(m.live_outlook.remaining_expected_goals.home).toFixed(2)+' γκολ για '+m.home+' και '+Number(m.live_outlook.remaining_expected_goals.away).toFixed(2)+' για '+m.away+' στον εναπομείναντα κανονικό χρόνο. Δεν λαμβάνει υπόψη κάρτες και απουσίες.'});
+  if(m.live_outlook)notes.push({title:'Πιθανή συνέχεια',body:'Με βάση το πραγματικό σκορ και το '+minutes+'ο λεπτό, το ανεξάρτητο Poisson εκτιμά '+Number(m.live_outlook.remaining_expected_goals.home).toFixed(2)+' γκολ για '+m.home+' και '+Number(m.live_outlook.remaining_expected_goals.away).toFixed(2)+' για '+m.away+' στον εναπομείναντα κανονικό χρόνο. Συνυπολογίζει έγκυρα live stats όταν παρέχονται.'});
   else if(m.live_prediction)notes.push({title:'Τρέχουσα πρόβλεψη',body:'Υπάρχουν live πιθανότητες 1Χ2 από το Sportmonks. Δεν υπάρχουν επαρκή δεδομένα για δική μας τεκμηριωμένη αριθμητική πρόβλεψη επιμέρους αγορών.'});
   else notes.push({title:'Σενάρια',body:'Το ισόπαλο, η ανατροπή ή η διατήρηση του σκορ εξαρτώνται από τον χρόνο, τα γεγονότα και τη δυναμική του αγώνα. Χωρίς αξιόπιστα στοιχεία δεν δίνουμε κατασκευασμένα ποσοστά.'});
  }else if(forecast){
@@ -335,11 +342,11 @@ function showModal(id,refresh=false){
  const body='<div class="intel-section-head"><h3>Τι μπορεί να συμβεί;</h3><span>ΕΡΜΗΝΕΙΑ ΔΕΔΟΜΕΝΩΝ</span></div><div class="intel-narrative">'+insightNarrative(m)+'</div>';
  const details=live?'<div class="intel-section-head"><h3>Δεδομένα αγώνα σε εξέλιξη</h3><span>SPORTMONKS EVENTS</span></div>'+liveDetailPanel(m):'';
  const caveat='<div class="intel-caveat">Η ανάλυση είναι πειραματική, δεν προβλέπει με βεβαιότητα μελλοντικά γεγονότα και δεν αποτελεί στοιχηματική σύσταση. Οι μέσοι όροι πρωταθλημάτων δεν αποτελούν τεκμηριωμένη πρόβλεψη για συγκεκριμένη ομάδα. '+
-  (live&&m.live_outlook?'Το live Poisson δεν λαμβάνει υπόψη αποβολές, τραυματισμούς, αλλαγές και καθυστερήσεις. ':'')+
+  (live&&m.live_outlook?'Το live Poisson συνυπολογίζει έγκυρα live stats, μαζί με αποβολές όταν παρέχονται. Δεν μοντελοποιεί τραυματισμούς, αλλαγές και καθυστερήσεις. ':'')+
   'Όπου δεν υπάρχει επαρκής τεκμηρίωση εμφανίζεται «—» αντί για κατασκευασμένα ποσοστά.</div>';
  $('#modalMount').innerHTML='<div class="modal-backdrop" data-close-backdrop="1"><section class="modal intel-modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">'+
   '<div class="modal-header intel-modal-head"><div><span class="section-kicker">TIKI-DATA · MATCH INTELLIGENCE</span><h2 id="modalTitle">Ανάλυση αγώνα</h2></div><button class="modal-close" data-close-modal="1" aria-label="Κλείσιμο">×</button></div>'+
-  '<div class="modal-body intel-body">'+mast+teams+probabilities+markets+body+details+caveat+'</div></section></div>';
+  '<div class="modal-body intel-body">'+mast+teams+liveStatsModelNote(m)+probabilities+markets+body+details+caveat+'</div></section></div>';
  document.body.style.overflow='hidden';
  if(refresh){$('.modal').scrollTop=scroll;}else $('[data-close-modal]').focus();
 }
