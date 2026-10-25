@@ -99,6 +99,15 @@ const matchesForFilters=()=>state.matches.filter(m=>(state.view==='live'?covered
 const availableDays=()=>[...new Set(matchesForFilters().map(m=>dayKey(m.date)))].filter(Boolean).sort();
 function ensureAvailableDay(){const days=availableDays();if(!days.length){state.day='all';return}if(state.day!=='all'&&days.includes(state.day))return;const today=dayKey(new Date());state.day=days.find(k=>k>=today)||days[days.length-1]}
 const dateChips=()=>{const days=availableDays(),today=dayKey(new Date()),tomorrow=dayKey(Date.now()+86400000);return '<div class="tdm-chips tdm-day-chips" aria-label="Φίλτρο ανά ημέρα"><button data-day="all" class="tdm-chip '+(state.day==='all'?'active':'')+'">Όλες</button>'+days.map(k=>'<button data-day="'+k+'" aria-label="'+E(new Date(k+'T12:00:00').toLocaleDateString(window.__tdLocale==='el'?'el-GR':'en-GB',{weekday:'long',day:'numeric',month:'long'}))+'" class="tdm-chip tdm-calendar-chip '+(state.day===k?'active':'')+'">'+calendarBadge(k)+'<span>'+(k===today?'Σήμερα':k===tomorrow?'Αύριο':E(new Date(k+'T12:00:00').toLocaleDateString(window.__tdLocale==='el'?'el-GR':'en-GB',{weekday:'short'})))+'</span></button>').join('')+'</div>'};
+const liveStatsLabels={on_target:'Σουτ στην εστία',shots:'Σουτ',dangerous:'Επικίνδυνες επιθέσεις',attacks:'Επιθέσεις',possession:'Κατοχή',corners:'Κόρνερ',red:'Κόκκινες κάρτες'};
+function liveStatsModelNote(m,compact=false){
+ if(!live(m)||!valid123(m.live_outlook))return '';
+ const p=m.live_outlook,active=p.live_stats_applied===true,stale=!!(m.live_probability_stale||state.livePending);
+ const metrics=(p.live_stats_adjustment?.metrics_used||[]).filter(k=>Object.hasOwn(liveStatsLabels,k)).map(k=>liveStatsLabels[k]);
+ const title=stale?'Live εκτίμηση · αναμονή ενημέρωσης':active?'● Live stats στο μοντέλο':'Live μοντέλο · χωρίς διόρθωση stats';
+ const explanation=stale?'Η ένδειξη αφορά την τελευταία διαθέσιμη εκτίμηση.':active?'Οι πιθανότητες συνυπολογίζουν '+metrics.join(', ')+', μαζί με ιστορικά στοιχεία, σκορ και λεπτό.':'Οι πιθανότητες βασίζονται σε ιστορικά στοιχεία, σκορ και λεπτό. Τα διαθέσιμα stats δεν αλλάζουν αυτή την εκτίμηση.';
+ return '<div class="tdm-live-model-note'+(active&&!stale?' is-active':'')+'"><strong>'+E(title)+'</strong>'+(compact?'':'<p>'+E(explanation)+' Πειραματική διόρθωση με περιορισμένη βαρύτητα.</p>')+'</div>';
+}
 /* Live measurements are sourced from Sportmonks, not from the probability model. */
 function liveStatsBlock(m,compact=false){
  if(!live(m))return '';
@@ -119,7 +128,7 @@ function recentFormBlock(m){
  return '<section class="tdm-panel tdm-form-panel"><h3>Πρόσφατη φόρμα · ιστορική βάση D1</h3><div class="tdm-form-pair">'+panel(form.home,m.home)+panel(form.away,m.away)+'</div>'+
   '<p class="tdm-note">Επαληθευμένα τελικά σκορ από εγχώριες και ευρωπαϊκές διοργανώσεις · τελευταίοι έως 8 αγώνες. Δεν αποτελούν ζωντανές μετρήσεις ή αξιολογημένες πιθανότητες.</p></section>';
 }
-const liveMethodNote=m=>live(m)&&m.live_outlook?.source==='recent_form_live_poisson'?
+const liveMethodNote=m=>live(m)&&valid123(m.live_outlook)?liveStatsModelNote(m):live(m)&&m.live_outlook?.source==='recent_form_live_poisson'?
  '<p class="tdm-live-method-note">Πειραματική πιθανότητα από ιστορική φόρμα και τρέχον σκορ/λεπτό. Χαμηλή βεβαιότητα · όχι εγγύηση.</p>':
  live(m)&&m.live_outlook?'<p class="tdm-live-method-note">Πειραματικό live Poisson από επαληθευμένες ιστορικές επιδόσεις.</p>':
  live(m)&&m.live_prediction?'<p class="tdm-live-method-note">Πιθανότητες από Live Predictions.</p>':
@@ -131,7 +140,7 @@ const card=m=>{const p=pr(m),vals=p?[p.p1,p.px,p.p2]:[null,null,null];
  const inner='<div class="tdm-core-prob" aria-label="Πιθανότητες 1 Χ 2">'+['1','Χ','2'].map((k,i)=>'<span class="tdm-core-cell'+(vals[i]!==null&&vals[i]===highest?' winner':'')+'"><small>'+k+'</small><b>'+pct(vals[i])+'</b></span>').join('')+'</div>';
  return '<article class="tdm-card tdm-match-compact" role="button" tabindex="0" data-open="'+E(m.id)+'"><div class="tdm-card-top"><b class="tdm-league-name">'+(trusted(m.league_logo)?'<img class="tdm-league-emblem" loading="lazy" src="'+E(m.league_logo)+'" alt="">':'')+E(m.league||m.league_key)+'</b><span>'+stamp(m)+'</span></div>'+
  (stageLabel(m)?'<p class="tdm-stage-label">'+E(stageLabel(m))+'</p>':'')+'<div class="tdm-teams">'+club(m.home,logoH(m))+'<div class="tdm-centre">'+inner+(live(m)?'<span class="tdm-live-score">'+E(score(m))+'</span>':'')+'</div>'+club(m.away,logoA(m))+'</div>'+
- olderEstimateTag(m)+missingUefaEvidence(m)+'<div class="tdm-card-bottom"><b>'+(live(m)?valid123(m.live_outlook)?'LIVE · Πειραματικό 1Χ2':valid123(m.live_prediction)?'LIVE · 1Χ2':valid123(m.prematch_prediction)?'Πριν τη σέντρα · όχι LIVE':'LIVE · Χωρίς πιθανότητες':m.forecast_review?.status==='withheld'?(p?'1Χ2 · Πειραματικό μοντέλο':'1Χ2 · Χωρίς επαρκές δείγμα'):!p?'1Χ2 · Μη διαθέσιμη εκτίμηση':'Πιθανότητες 1Χ2')+'</b><small>Ανάλυση αγώνα ↗</small></div></article>'};
+ olderEstimateTag(m)+liveStatsModelNote(m,true)+missingUefaEvidence(m)+'<div class="tdm-card-bottom"><b>'+(live(m)?valid123(m.live_outlook)?'LIVE · Πειραματικό 1Χ2':valid123(m.live_prediction)?'LIVE · 1Χ2':valid123(m.prematch_prediction)?'Πριν τη σέντρα · όχι LIVE':'LIVE · Χωρίς πιθανότητες':m.forecast_review?.status==='withheld'?(p?'1Χ2 · Πειραματικό μοντέλο':'1Χ2 · Χωρίς επαρκές δείγμα'):!p?'1Χ2 · Μη διαθέσιμη εκτίμηση':'Πιθανότητες 1Χ2')+'</b><small>Ανάλυση αγώνα ↗</small></div></article>'};
 const empty=x=>'<div class="tdm-empty">'+E(x)+'</div>';
 function home(){
  const rank=m=>(isFav(m.home)||isFav(m.away)?5:0)+(accountLeagues.includes(m.league_key)?2:0);
@@ -496,7 +505,7 @@ function restoreFixtures(){
 /* Two independent streams: slow 7-day fixture updates and fast lightweight
  * completed live snapshots from the backend. The browser NEVER runs forecasts. */
 let updating=false,liveUpdating=false,baseMatches=[],liveMatches=[],lastFixtureRequestAt=0,lastLiveRequestAt=0,lastPaintSignature='',lastDetailSignature='';
-function matchRenderKey(m){if(!m)return '';return JSON.stringify([m.id,m.home,m.away,m.date,m.league,m.league_key,m.status,m.minute,m.home_score,m.away_score,m.p1,m.px,m.p2,m.live_outlook?.p1,m.live_outlook?.px,m.live_outlook?.p2,m.live_prediction?.p1,m.live_prediction?.px,m.live_prediction?.p2,m.prematch_prediction?.p1,m.prematch_prediction?.px,m.prematch_prediction?.p2,m.over25,m.under25,m.btts,m.mu_home,m.mu_away,m.prediction_tier,m.live_probability_stale,m.logos?.home,m.logos?.away,m.home_logo,m.away_logo,m.league_logo,m.live_stats,m.events,m.lineups,m.recent_form]);}
+function matchRenderKey(m){if(!m)return '';return JSON.stringify([m.id,m.home,m.away,m.date,m.league,m.league_key,m.status,m.minute,m.home_score,m.away_score,m.p1,m.px,m.p2,m.live_outlook?.p1,m.live_outlook?.px,m.live_outlook?.p2,m.live_outlook?.live_stats_applied,m.live_outlook?.live_stats_adjustment,m.live_prediction?.p1,m.live_prediction?.px,m.live_prediction?.p2,m.prematch_prediction?.p1,m.prematch_prediction?.px,m.prematch_prediction?.p2,m.over25,m.under25,m.btts,m.mu_home,m.mu_away,m.prediction_tier,m.live_probability_stale,m.logos?.home,m.logos?.away,m.home_logo,m.away_logo,m.league_logo,m.live_stats,m.events,m.lineups,m.recent_form]);}
 function matchListRenderKey(list){return list.map(matchRenderKey).join('|');}
 function canRenderDataView(){return ['home','matches','live','teams','detail'].includes(state.view);}
 function paintMatches(){
