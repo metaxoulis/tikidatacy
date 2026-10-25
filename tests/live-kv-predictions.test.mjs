@@ -9,7 +9,8 @@ test('live endpoint is KV-based and cannot scan D1',()=>{
  const live=worker.slice(worker.indexOf('async function tdProviderLive('),worker.indexOf('async function tdProviderFocus('));
  assert.ok(live.includes('tdPublishedModel(env)'));
  assert.ok(live.includes('fhEstimate(m,published,{experimentalPreview:true})'));
- assert.ok(live.includes('liveOutlook(m,fitted)'));
+ assert.ok(live.includes('liveOutlook(m,fitted,liveStats)'));
+ assert.ok(live.includes('const liveStats=liveStatSummary(m.statistics,m.home_id,m.away_id)'));
  assert.ok(live.includes('prematch_prediction:pregame'));
  assert.ok(!live.includes('TIKI_DB'));
  assert.ok(!live.includes('.prepare('));
