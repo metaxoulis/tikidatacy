@@ -99,7 +99,8 @@ function crest(name,cls='table-crest',providerURL=null){
  +(provider&&provider!==verified?logoImage(provider,'logo-image team-logo-image'):'')+'</span>';
 }
 function competition(s,cls='small-league',key=null){const logo=sportmonksLogo(state.leagueImages.get(s))||safeLogo(LOGO_CATALOG.leagues?.[key]||LOGO_CATALOG.leagues?.[s]||verifiedLeagueLogo(s));const short=labbr(s);return '<span class="'+esc(cls)+(logo?' has-real-logo':'')+'" title="'+esc(lname(s))+'" data-short="'+esc(short)+'">'+(logo?logoImage(logo,'logo-image league-image'):'<span class="league-fallback">'+esc(short)+'</span>')+'</span>'}
-function filteredBase(){let list=state.all.filter(m=>(state.league==='all'||m.league===state.league)&&(state.mode!=='predicted'||(valid(m)&&m.coverage!=='no_team_specific_evidence'))&&(state.mode!=='favorites'||state.favorites.has(String(m.id)))&&(state.mode!=='live'||inProgress(m))&&(!state.query||(m.home+' '+m.away+' '+lname(m.league)).toLocaleLowerCase().includes(state.query)));return list}
+const coveredLive=m=>inProgress(m)&&Date.now()-Date.parse(state.liveUpdatedAt)<85000&&state.liveMatches.has(String(m.id))&&Number.isInteger(m.home_score)&&Number.isInteger(m.away_score)&&(Number.isInteger(m.minute)||m.status==='HT');
+function filteredBase(){let list=state.all.filter(m=>(state.league==='all'||m.league===state.league)&&(state.mode!=='predicted'||(valid(m)&&m.coverage!=='no_team_specific_evidence'))&&(state.mode!=='favorites'||state.favorites.has(String(m.id)))&&(state.mode!=='live'||coveredLive(m))&&(!state.query||(m.home+' '+m.away+' '+lname(m.league)).toLocaleLowerCase().includes(state.query)));return list}
 function filtered(){return filteredBase().filter(m=>state.day==='all'||kt(m.date)===state.day)}
 function hasFilters(){return state.league!=='all'||state.day!=='all'||state.mode!=='all'||!!state.query}
 function syncSearch(){for(const s of ['#globalSearch','#fixtureSearch']){const el=$(s);if(el&&el.value!==state.query)el.value=state.query}}
@@ -164,7 +165,7 @@ function renderOverview(){
  const n=id=>$(id);
  if(!n('#overviewMatches'))return;
  n('#overviewMatches').textContent=String(state.all.length);
- n('#overviewLive').textContent=String(state.all.filter(inProgress).length);
+ n('#overviewLive').textContent=String(state.all.filter(coveredLive).length);
  const estimates=state.all.filter(m=>valid(m)&&!inProgress(m));
  n('#overviewPredicted').textContent=String(estimates.length);
  if(n('#overviewPredictedDetail')){
