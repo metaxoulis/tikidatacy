@@ -1,3 +1,4 @@
+import {learnCalibration} from './ml-calibration.mjs';
 // Keep training, prospective capture and settlement observable and independent.
 export function settlement(m) {
  if(m.final!==true||m.prediction_status!=='recorded'||!Number.isSafeInteger(m.log_id))return null;
@@ -57,6 +58,7 @@ export async function runPipeline(env) {
   }
   report.settled=settled;
  }catch(e){failures.push('settlement: '+e.message);}
+ try {report.ml=await learnCalibration(env.TIKI_DB);}catch(e){failures.push('ml: '+e.message);}
  console.log(JSON.stringify({...report,failures}));
  if(failures.length)throw Error(failures.join('; '));
  return report;
