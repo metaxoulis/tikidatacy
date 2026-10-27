@@ -9,12 +9,12 @@
     try { return localStorage.getItem(KEY); } catch (e) { return null; }
   }
   function current() {
-    return saved() || (media && media.matches ? 'dark' : 'light');
+    return saved() || 'dark';
   }
   function apply(theme) {
     root.setAttribute('data-theme', theme);
     var meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', theme === 'dark' ? '#0b1220' : '#f5f7fb');
+    if (meta) meta.setAttribute('content', theme === 'dark' ? '#06080d' : '#efeadf');
     var btn = document.querySelector('.td-theme-toggle');
     if (btn) {
       btn.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
