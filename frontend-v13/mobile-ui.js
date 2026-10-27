@@ -156,6 +156,9 @@
   function enhanceMatch() {
     var r = document.getElementById('td-mobile-root');
     if (!r || !r.querySelector('.tdm-match-content')) return;
+    // The sticky section tabs sit directly under the sticky header, whatever its height.
+    var top = r.querySelector('.tdm-top');
+    if (top) document.documentElement.style.setProperty('--mx-header-h', top.offsetHeight + 'px');
     var rows = r.querySelectorAll('.tdm-stat-grid-row:not(.tdm-stat-grid-head)');
     for (var i = 0; i < rows.length; i++) {
       var b = rows[i].querySelectorAll('b');

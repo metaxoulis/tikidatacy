@@ -1424,7 +1424,7 @@ html #td-mobile-root .tdm-match-tabs{
 }
 html #td-mobile-root .tdm-match-tabs::-webkit-scrollbar{display:none}
 html #td-mobile-root .tdm-match-tabs .tdm-tab{flex:0 0 auto}
-@media(min-width:781px){html #td-mobile-root .tdm-match-tabs{top:72px}}
+@media(min-width:781px){html #td-mobile-root .tdm-match-tabs{top:var(--mx-header-h,72px)}}
 /* Lineups: striped turf, bold jerseys */
 html #td-mobile-root .tdm-pitch-title{gap:var(--sp-3)!important}
 html #td-mobile-root .tdm-pitch-title h3{font-family:var(--mx-display)!important;font-weight:900!important;text-transform:uppercase;font-size:clamp(22px,2.4vw,30px)!important;line-height:1!important;color:var(--mx-ink)!important}
@@ -1639,6 +1639,75 @@ html #td-mobile-root .tdm-footer-bottom{
   html #td-mobile-root .tdm-site-footer.tdm-footer-pro{grid-template-columns:1fr;gap:var(--sp-5)}
   html #td-mobile-root .tdm-site-footer .tdm-footer-cols{grid-template-columns:repeat(2,minmax(0,1fr))}
   html #td-mobile-root .tdm-site-footer .tdm-footer-col a{min-height:44px!important}
+}
+
+/* ---------- Starting XI: tactical board ---------- */
+html{--mx-shirt:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M22 5 L11 9.5 L1.5 21 L10 30 L16 25.5 L16 60 L48 60 L48 25.5 L54 30 L62.5 21 L53 9.5 L42 5 C40 10.5 36.5 13.5 32 13.5 C27.5 13.5 24 10.5 22 5 Z'/%3E%3C/svg%3E")}
+
+/* Turf: night pitch, 12 mowing stripes, vignette, crisp lines */
+html #td-mobile-root .tdm-pitch-card .tdm-pitch{
+  border:0!important;border-radius:var(--mx-r)!important;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)!important;
+  background:
+    radial-gradient(120% 85% at 50% 50%,transparent 55%,rgba(0,0,0,.38)),
+    repeating-linear-gradient(180deg,#0d2c1e 0 calc(100% / 12),#103424 calc(100% / 12) calc(100% / 6))!important;
+}
+html #td-mobile-root .tdm-pitch-card :is(.tdm-pitch-mid,.tdm-pitch-circle,.tdm-pitch-area){border-color:rgba(255,255,255,.3)!important}
+html #td-mobile-root .tdm-pitch-card .tdm-pitch-circle::after{content:"";position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:rgba(255,255,255,.5)}
+html #td-mobile-root .tdm-pitch-card .tdm-pitch-area::after{content:"";position:absolute;left:30%;right:30%;height:38%;border:1px solid rgba(255,255,255,.3)}
+html #td-mobile-root .tdm-pitch-card .tdm-pitch-area.top::after{top:-1px;border-top:0}
+html #td-mobile-root .tdm-pitch-card .tdm-pitch-area.bottom::after{bottom:-1px;border-bottom:0}
+
+/* Shirt-shaped tokens: home off-white, away volt/blue; a verified kit colour wins */
+html #td-mobile-root .tdm-pitch-card .tdm-pitch-player{gap:4px!important;filter:drop-shadow(0 4px 6px rgba(0,0,0,.45))}
+html #td-mobile-root .tdm-pitch-card .tdm-jersey{
+  --shirt:#f4f1ea;--shirt-ink:#0b0d12;
+  display:grid!important;place-items:center;width:42px!important;height:42px!important;padding-top:8px!important;
+  border:0!important;border-radius:0!important;box-shadow:none!important;background:var(--shirt)!important;
+  -webkit-mask:var(--mx-shirt) center/contain no-repeat;mask:var(--mx-shirt) center/contain no-repeat;
+}
+html #td-mobile-root .tdm-pitch-grid>.tdm-pitch-card:nth-child(2) .tdm-jersey{--shirt:var(--mx-volt);--shirt-ink:var(--mx-volt-ink)}
+html #td-mobile-root .tdm-pitch-card .tdm-jersey:not([style*="365a6b"]){--shirt:var(--kit);--shirt-ink:#ffffff}
+html #td-mobile-root .tdm-pitch-card .tdm-jersey b{
+  font-family:var(--mx-display)!important;font-weight:800!important;font-size:15px!important;line-height:1!important;letter-spacing:0!important;
+  color:var(--shirt-ink)!important;text-shadow:none!important;
+}
+html #td-mobile-root .tdm-pitch-card .tdm-jersey:not([style*="365a6b"]) b{text-shadow:0 0 2px rgba(0,0,0,.7)!important}
+html #td-mobile-root .tdm-pitch-card .tdm-pitch-player strong{
+  max-width:104px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:2px 6px;border-radius:2px;background:rgba(5,8,12,.62);
+  font-size:11px!important;letter-spacing:.05em!important;text-shadow:none!important;
+}
+
+/* Card header: crest, team, formation */
+html #td-mobile-root .tdm-pitch-card .tdm-pitch-title{padding-bottom:var(--sp-3)!important;margin-bottom:var(--sp-4)!important;border-bottom:1px solid var(--mx-line)!important}
+html #td-mobile-root .tdm-pitch-card .tdm-pitch-title img{width:40px!important;height:40px!important;object-fit:contain}
+html #td-mobile-root .tdm-pitch-card .tdm-pitch-title>div{display:flex;align-items:center;gap:var(--sp-3);flex-wrap:wrap}
+html #td-mobile-root .tdm-pitch-grid>.tdm-pitch-card:first-child .tdm-formation-chip{border-color:var(--mx-ink)!important}
+html #td-mobile-root .tdm-pitch-grid>.tdm-pitch-card:nth-child(2) .tdm-formation-chip{border-color:var(--mx-accent)!important;color:var(--mx-accent)!important}
+
+/* Substitutes: expandable row, two-column numbered list */
+html #td-mobile-root .tdm-pitch-card .tdm-bench{margin-top:var(--sp-4)!important;padding:0!important;border:0!important;border-top:1px solid var(--mx-line)!important;background:transparent!important}
+html #td-mobile-root .tdm-pitch-card .tdm-bench summary{
+  display:flex!important;align-items:center;justify-content:space-between;min-height:48px;list-style:none;cursor:pointer;
+  font-family:var(--mx-cond)!important;font-size:13px!important;font-weight:700!important;letter-spacing:.12em!important;text-transform:uppercase;color:var(--mx-ink)!important;
+}
+html #td-mobile-root .tdm-pitch-card .tdm-bench summary::-webkit-details-marker{display:none}
+html #td-mobile-root .tdm-pitch-card .tdm-bench summary::after{content:"+";font-family:var(--mx-display);font-size:22px;font-weight:800;line-height:1;color:var(--mx-accent)}
+html #td-mobile-root .tdm-pitch-card .tdm-bench[open] summary::after{content:"\2013"}
+html #td-mobile-root .tdm-pitch-card .tdm-lineup-rows{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 var(--sp-4)!important;padding:0 0 var(--sp-2)!important}
+html #td-mobile-root .tdm-pitch-card .tdm-player{display:flex!important;align-items:center;gap:var(--sp-2);min-width:0;min-height:38px;padding:0!important;border:0!important;border-bottom:1px solid var(--mx-line)!important;background:transparent!important}
+html #td-mobile-root .tdm-pitch-card .tdm-shirt{
+  flex:none;display:grid!important;place-items:center;width:30px!important;height:24px!important;border-radius:2px!important;
+  background:var(--mx-panel-2)!important;border:1px solid var(--mx-line)!important;color:var(--mx-ink)!important;
+  font-family:var(--mx-display)!important;font-weight:800!important;font-size:13px!important;
+}
+html #td-mobile-root .tdm-pitch-card .tdm-player b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--mx-body)!important;font-size:14px!important;font-weight:500!important;color:var(--mx-ink-2)!important;text-transform:none!important;letter-spacing:normal!important}
+html #td-mobile-root .tdm-pitch-card .tdm-kit-note{margin:var(--sp-2) 0 0!important;font-size:12px!important;color:var(--mx-faint)!important}
+
+@media(max-width:780px){
+  html #td-mobile-root .tdm-pitch-card .tdm-jersey{width:34px!important;height:34px!important;padding-top:6px!important}
+  html #td-mobile-root .tdm-pitch-card .tdm-jersey b{font-size:13px!important}
+  html #td-mobile-root .tdm-pitch-card .tdm-pitch-player strong{max-width:72px;font-size:10px!important;padding:1px 4px}
+  html #td-mobile-root .tdm-pitch-card .tdm-lineup-rows{grid-template-columns:1fr}
 }
 
 /* ---------- Motion ---------- */
