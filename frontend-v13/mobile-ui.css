@@ -806,113 +806,12 @@ html.td-mobile-ready body{background:#f4f7fb!important;color-scheme:light!import
 
 #td-mobile-root .tdm-live-model-note{padding:10px 12px;margin:8px 0;border:1px solid #cbd5e1;border-radius:9px;background:#f1f5f9;color:#334155;font-size:12px;line-height:1.5}#td-mobile-root .tdm-live-model-note.is-active{background:#e8f7f0;border-color:#99d6bb;color:#145c3b}#td-mobile-root .tdm-live-model-note strong{display:block;font-size:12px}#td-mobile-root .tdm-live-model-note p{margin:4px 0 0}#td-mobile-root .tdm-match-compact .tdm-live-model-note{margin:6px 12px;padding:6px 9px}
 
-/* Tiki-Data · Matchday editorial · v2026.10.28
-   Two parts:
-   1. MATCH CARD MODULE, carried over unchanged from the previous release so the
-      football match cards look exactly as before (light and dark).
-   2. MATCHDAY EDITORIAL page system for everything else.
-   Presentation only: no markup, data, endpoints or refresh logic change. */
-
 /* =====================================================================
-   1. MATCH CARD MODULE (unchanged)
-   ===================================================================== */
-html{
-  --t-canvas:#f5f7fb;--t-surface:#ffffff;--t-surface-2:#f2f5fa;--t-surface-3:#e9eef6;
-  --t-border:#e3e8f0;--t-border-strong:#cfd8e6;
-  --t-ink:#0f1729;--t-ink-2:#334155;--t-muted:#5f6b7f;--t-faint:#8a95a8;
-  --t-brand:#0057cc;--t-brand-hover:#0047a8;--t-brand-ink:#ffffff;--t-brand-soft:#e9f1ff;--t-brand-text:#0052c2;
-  --t-accent:#00a7c7;
-  --t-win:#e3f8ee;--t-win-ink:#05663f;--t-win-line:#9fdcbf;
-  --t-live:#d93a52;--t-live-soft:#fdecef;
-  --t-shadow-sm:0 1px 2px rgba(15,23,41,.04),0 1px 3px rgba(15,23,41,.04);
-  --t-shadow-md:0 4px 12px rgba(15,23,41,.06),0 1px 3px rgba(15,23,41,.05);
-  --t-shadow-lg:0 12px 32px rgba(15,23,41,.10);
-  --t-nav-glass:rgba(255,255,255,.86);
-  --t-radius:16px;--t-radius-sm:10px;
-  --t-font:"Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
-  color-scheme:light;
-}
-html[data-theme="dark"]{
-  --t-canvas:#0b1220;--t-surface:#111a2b;--t-surface-2:#172235;--t-surface-3:#1e2b42;
-  --t-border:#22304a;--t-border-strong:#2f3f5c;
-  --t-ink:#e8eef8;--t-ink-2:#c3cee0;--t-muted:#94a2b9;--t-faint:#6f7e97;
-  --t-brand:#3b82f6;--t-brand-hover:#5b98ff;--t-brand-ink:#ffffff;--t-brand-soft:#16264a;--t-brand-text:#7fb0ff;
-  --t-accent:#22d3ee;
-  --t-win:#0d3a2a;--t-win-ink:#5ee6a5;--t-win-line:#1d6b4b;
-  --t-live:#ff6b81;--t-live-soft:#3a1622;
-  --t-shadow-sm:0 1px 2px rgba(0,0,0,.3);
-  --t-shadow-md:0 4px 14px rgba(0,0,0,.35);
-  --t-shadow-lg:0 14px 36px rgba(0,0,0,.45);
-  --t-nav-glass:rgba(17,26,43,.86);
-  color-scheme:dark;
-}
-
-html #td-mobile-root{--td-brand:var(--t-brand);--td-border:var(--t-border);--td-canvas:var(--t-canvas);--td-muted:var(--t-muted);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
-html #td-mobile-root p{text-wrap:pretty}
-html #td-mobile-root :is(b,strong,.tdm-kpi b,.tdm-core-cell b,time){font-variant-numeric:tabular-nums}
-/* The page uses new typography; cards keep the type they always had. */
-html #td-mobile-root .tdm-card{font-family:var(--t-font);line-height:1.55;letter-spacing:normal;text-transform:none}
-
-/* ---------- Match cards ---------- */
-html #td-mobile-root .tdm-list{gap:clamp(10px,1.4vw,16px)!important}
-html #td-mobile-root .tdm-card{
-  background:var(--t-surface)!important;border:1px solid var(--t-border)!important;border-radius:var(--t-radius)!important;
-  box-shadow:var(--t-shadow-sm)!important;padding:16px 18px!important;color:var(--t-ink);
-  transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease;
-}
-html #td-mobile-root .tdm-card:hover{border-color:var(--t-border-strong)!important;box-shadow:var(--t-shadow-md)!important;transform:translateY(-2px)}
-html #td-mobile-root .tdm-card-top{border-bottom:0!important;padding-bottom:4px!important;color:var(--t-muted)!important;font-size:12px!important;font-weight:600!important}
-html #td-mobile-root .tdm-card-top b{color:var(--t-ink-2)!important;font-weight:700!important;display:inline-flex;align-items:center;gap:8px}
-html #td-mobile-root .tdm-card-top>span,html #td-mobile-root .tdm-card-top time{background:var(--t-surface-2);border-radius:999px;padding:3px 9px;font-size:11.5px;font-weight:650;color:var(--t-ink-2);white-space:nowrap}
-html #td-mobile-root .tdm-league-emblem{width:18px!important;height:18px!important;object-fit:contain}
-html #td-mobile-root .tdm-teams{margin:14px 0 14px!important}
-html #td-mobile-root .tdm-team strong{color:var(--t-ink)!important;font-weight:700!important;font-size:13.5px!important;letter-spacing:-.005em}
-html #td-mobile-root .tdm-team img{filter:drop-shadow(0 1px 1px rgba(0,0,0,.08))}
-html[data-theme="dark"] #td-mobile-root :is(.tdm-team img,.tdm-league-emblem,.tdm-audit-league-logo,.tdm-chip img){background:transparent;filter:drop-shadow(0 0 1px rgba(255,255,255,.35))}
-
-/* 1X2 strip as a segmented control */
-html #td-mobile-root .tdm-core-prob{background:var(--t-surface-2)!important;border:1px solid var(--t-border);border-radius:12px!important;padding:4px!important;gap:4px!important}
-html #td-mobile-root .tdm-core-cell{background:transparent!important;border-radius:9px!important;padding:7px 4px!important;outline:0!important;color:var(--t-ink-2)!important;transition:background .15s}
-html #td-mobile-root .tdm-core-cell small{color:var(--t-faint)!important;font-weight:700;font-size:10.5px}
-html #td-mobile-root .tdm-core-cell b{color:var(--t-ink)!important;font-weight:750!important}
-html #td-mobile-root .tdm-core-cell.winner{background:var(--t-win)!important;box-shadow:inset 0 0 0 1px var(--t-win-line)!important}
-html #td-mobile-root .tdm-core-cell.winner :is(b,small){color:var(--t-win-ink)!important}
-
-html #td-mobile-root .tdm-card-bottom{border-top:1px dashed var(--t-border)!important;padding-top:11px!important;color:var(--t-muted)!important;align-items:center}
-html #td-mobile-root .tdm-card-bottom b{color:var(--t-muted)!important;font-weight:600!important;font-size:11.5px!important}
-html #td-mobile-root .tdm-card-bottom small{color:var(--t-brand-text)!important;font-weight:700!important;font-size:12px!important}
-html #td-mobile-root .tdm-card:hover .tdm-card-bottom small{text-decoration:underline;text-underline-offset:3px}
-html #td-mobile-root .tdm-card :is(.tdm-prob,.tdm-bar,.tdm-team-form){background:var(--t-surface-2)!important;border-color:var(--t-border)!important;color:var(--t-ink-2)!important}
-html #td-mobile-root .tdm-card-evidence{background:var(--t-surface-2)!important;color:var(--t-ink-2)!important}
-html #td-mobile-root :is(.tdm-evidence-heading,.tdm-evidence-row span,.tdm-card-evidence>small){color:var(--t-muted)!important}
-html[data-theme="dark"] #td-mobile-root :is(h1,h2,h3,h4,strong,b,label,summary,th){color:var(--t-ink)}
-html[data-theme="dark"] #td-mobile-root :is(p,small,span,td,li,dd,dt){color:inherit}
-html[data-theme="dark"] #td-mobile-root .tdm-panel :is(p,span,small,li,td){color:var(--t-ink-2)}
-html[data-theme="dark"] #td-mobile-root :is(.tdm-match-hero,.tdm-scoreboard) :is(strong,b,h1,span,small,time){color:inherit}
-html #td-mobile-root .tdm-core-cell{border-color:transparent!important}
-@media(max-width:780px){
-  html #td-mobile-root .tdm-wrap{padding-inline:16px!important}
-  html #td-mobile-root{padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))!important}
-  html #td-mobile-root .tdm-card{padding:14px!important;border-radius:14px!important}
-  html #td-mobile-root .tdm-card:hover{transform:none}
-  html #td-mobile-root .tdm-card:active{transform:scale(.99)}
-  html #td-mobile-root .tdm-teams{grid-template-columns:minmax(0,1fr) minmax(150px,1.5fr) minmax(0,1fr)!important;gap:8px!important}
-  html #td-mobile-root .tdm-team img{width:40px!important;height:40px!important}
-  html #td-mobile-root .tdm-team strong{font-size:12.5px!important}
-  html #td-mobile-root .tdm-core-cell{padding:6px 2px!important}
-}
-@media(max-width:380px){
-  html #td-mobile-root .tdm-teams{grid-template-columns:minmax(0,1fr) minmax(128px,1.6fr) minmax(0,1fr)!important}
-}
-@media(prefers-reduced-motion:reduce){
-  html #td-mobile-root .tdm-card:hover{transform:none}
-}
-
-/* =====================================================================
-   MATCHDAY EDITORIAL · page system
-   Stadium-night base, programme-paper light mode, magazine typography,
-   floodlight "volt" accent and official-style league colours.
-   Nothing here selects .tdm-card or its children.
+   Tiki-Data · MATCHDAY EDITORIAL · v2026.10.28b
+   One design language for the whole site, match cards included.
+   Dark (default): stadium night with a floodlight "volt" accent.
+   Light: white page, black type, one electric blue.
+   Presentation only: no markup, data, endpoints or refresh logic change.
    ===================================================================== */
 
 /* ---------- Tokens ---------- */
@@ -936,16 +835,26 @@ html{
   --mx-live:#ff3d52;
   --mx-glow-a:rgba(212,255,58,.07);--mx-glow-b:rgba(60,120,255,.11);
   --mx-nav:rgba(6,8,13,.84);
+  --mx-grain:.35;
+  --mx-shadow:0 14px 34px rgba(0,0,0,.45);
+  /* Night panels (hero, match scoreboard, audit intro) stay dark in both themes */
+  --mx-hero-accent:#d4ff3a;--mx-hero-glow:rgba(212,255,58,.16);--mx-hero-glow-2:rgba(60,120,255,.20);
+  --td-brand:var(--mx-accent);--td-border:var(--mx-line);--td-canvas:var(--mx-bg);--td-muted:var(--mx-muted);
+  color-scheme:dark;
 }
 html[data-theme="light"]{
-  /* Matchday programme paper */
-  --mx-bg:#efeadf;--mx-bg-2:#e6e0d2;--mx-panel:#faf7f0;--mx-panel-2:#f2ede2;
-  --mx-line:rgba(10,12,18,.12);--mx-line-2:rgba(10,12,18,.26);
-  --mx-ink:#0a0c12;--mx-ink-2:#2b2e37;--mx-muted:#5c5f69;--mx-faint:#81838b;
-  --mx-accent:#2438e8;
-  --mx-live:#d81f37;
-  --mx-glow-a:rgba(36,56,232,.06);--mx-glow-b:rgba(212,255,58,.18);
-  --mx-nav:rgba(239,234,223,.88);
+  /* Matchday white: white page, black type, one electric blue */
+  --mx-bg:#ffffff;--mx-bg-2:#f5f6f8;--mx-panel:#ffffff;--mx-panel-2:#f2f4f7;
+  --mx-line:rgba(0,0,0,.10);--mx-line-2:rgba(0,0,0,.22);
+  --mx-ink:#000000;--mx-ink-2:#1d1d1f;--mx-muted:#52525b;--mx-faint:#6b6b73;
+  --mx-volt:#0047ff;--mx-volt-ink:#ffffff;--mx-accent:#0047ff;
+  --mx-live:#d1001f;
+  --mx-glow-a:transparent;--mx-glow-b:transparent;
+  --mx-nav:rgba(255,255,255,.9);
+  --mx-grain:0;
+  --mx-shadow:0 12px 28px rgba(0,0,0,.10);
+  --mx-hero-accent:#5b8cff;--mx-hero-glow:rgba(0,71,255,.28);--mx-hero-glow-2:rgba(0,71,255,.14);
+  color-scheme:light;
 }
 
 /* ---------- Base & atmosphere ---------- */
@@ -963,7 +872,7 @@ html #td-mobile-root{
 }
 /* Film grain over the whole page, under the content */
 html #td-mobile-root::before{
-  content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.35;mix-blend-mode:overlay;
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:var(--mx-grain);mix-blend-mode:overlay;
   background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 .55 0'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>");
 }
 html #td-mobile-root>.tdm-wrap{position:relative;z-index:1}
@@ -972,7 +881,7 @@ html #td-mobile-root :is(button,a,input,select,[role=button]):focus-visible{outl
 html[data-theme="light"] #td-mobile-root :is(button,a,input,select,[role=button]):focus-visible{outline-color:var(--mx-accent)!important}
 
 /* Shared type roles */
-html #td-mobile-root :is(.tdm-overview-eyebrow,.tdm-summary-eyebrow,.tdm-kicker,.tdm-overview-hero .tdm-overview-eyebrow){
+html #td-mobile-root :is(.tdm-overview-eyebrow,.tdm-summary-eyebrow,.tdm-kicker){
   display:flex!important;align-items:center;gap:10px;font-family:var(--mx-cond)!important;font-size:13px!important;font-weight:700!important;
   letter-spacing:.2em!important;text-transform:uppercase;color:var(--mx-accent)!important;margin:0 0 var(--sp-3)!important;
 }
@@ -1054,8 +963,8 @@ html #td-mobile-root .tdm-overview-hero{
   position:relative;overflow:hidden;isolation:isolate;border-radius:var(--mx-r)!important;border:1px solid rgba(244,241,234,.12)!important;box-shadow:none!important;
   padding:clamp(28px,4.4vw,64px)!important;min-height:clamp(260px,30vw,380px)!important;
   background:
-    radial-gradient(60% 90% at 88% 0%,rgba(212,255,58,.16),transparent 60%),
-    radial-gradient(50% 80% at 0% 100%,rgba(60,120,255,.20),transparent 60%),
+    radial-gradient(60% 90% at 88% 0%,var(--mx-hero-glow),transparent 60%),
+    radial-gradient(50% 80% at 0% 100%,var(--mx-hero-glow-2),transparent 60%),
     repeating-linear-gradient(90deg,rgba(255,255,255,.022) 0 72px,transparent 72px 144px),
     linear-gradient(180deg,#0d1422,#070a11)!important;
   animation:mx-rise .7s .08s var(--mx-ease) both;
@@ -1070,12 +979,12 @@ html #td-mobile-root .tdm-overview-hero h2{
   font-family:var(--mx-display)!important;font-weight:900!important;text-transform:uppercase;font-size:clamp(36px,5.2vw,72px)!important;
   line-height:.92!important;letter-spacing:0!important;color:#f4f1ea!important;margin:var(--sp-2) 0 var(--sp-4)!important;max-width:14ch;
 }
-html #td-mobile-root .tdm-overview-hero h2 em{font-style:italic!important;color:#d4ff3a!important}
+html #td-mobile-root .tdm-overview-hero h2 em{font-style:italic!important;color:var(--mx-hero-accent)!important}
 html #td-mobile-root .tdm-overview-hero p{font-size:clamp(15px,1.3vw,17px)!important;color:#cdc8bc!important;max-width:46ch;line-height:1.6!important}
-html #td-mobile-root .tdm-overview-hero .tdm-overview-eyebrow{color:#d4ff3a!important}
+html #td-mobile-root .tdm-overview-hero .tdm-overview-eyebrow{color:var(--mx-hero-accent)!important}
 html #td-mobile-root .tdm-overview-actions{gap:var(--sp-3)!important;margin-top:var(--sp-6)!important}
 html #td-mobile-root .tdm-overview-orbit{width:clamp(150px,16vw,210px)!important;height:clamp(150px,16vw,210px)!important;color:#f4f1ea!important}
-html #td-mobile-root .tdm-overview-ring{inset:0!important;width:100%!important;height:100%!important;transform:none!important;border:2px solid rgba(212,255,58,.55)!important;box-shadow:0 0 0 14px rgba(212,255,58,.06),0 0 60px rgba(212,255,58,.12)!important;color:transparent!important;font-size:0!important}
+html #td-mobile-root .tdm-overview-ring{inset:0!important;width:100%!important;height:100%!important;transform:none!important;border:2px solid color-mix(in srgb,var(--mx-hero-accent) 55%,transparent)!important;box-shadow:0 0 0 14px color-mix(in srgb,var(--mx-hero-accent) 6%,transparent),0 0 60px color-mix(in srgb,var(--mx-hero-accent) 12%,transparent)!important;color:transparent!important;font-size:0!important}
 html #td-mobile-root .tdm-overview-orbit :is(strong,small){background:transparent!important;color:#f4f1ea!important;font-family:var(--mx-display)!important;letter-spacing:.12em!important}
 html #td-mobile-root .tdm-overview-orbit strong{font-size:22px!important;font-weight:900!important}
 html #td-mobile-root .tdm-overview-orbit small{font-family:var(--mx-cond)!important;font-size:10px!important;color:#cdc8bc!important}
@@ -1087,7 +996,7 @@ html #td-mobile-root .tdm-accent-btn{
   font-family:var(--mx-cond)!important;font-size:16px!important;font-weight:700!important;letter-spacing:.1em!important;text-transform:uppercase;
   transition:transform .15s var(--mx-ease),box-shadow .2s!important;
 }
-html #td-mobile-root .tdm-accent-btn:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(212,255,58,.28)!important;background:var(--mx-volt)!important}
+html #td-mobile-root .tdm-accent-btn:hover{transform:translateY(-2px);box-shadow:0 10px 28px color-mix(in srgb,var(--mx-hero-accent) 28%,transparent)!important;background:var(--mx-volt)!important}
 html #td-mobile-root .tdm-overview-secondary{
   display:inline-flex!important;align-items:center;justify-content:center;gap:var(--sp-2);min-height:48px;padding:0 var(--sp-5)!important;
   background:transparent!important;color:#f4f1ea!important;border:1px solid rgba(244,241,234,.35)!important;border-radius:2px!important;
@@ -1234,11 +1143,11 @@ html #td-mobile-root .gsi-material-button :is(span,div){color:#1f1f1f!important}
 html #td-mobile-root .tdm-audit-intro{
   --mx-ink:#f4f1ea;--mx-ink-2:#cdc8bc;--mx-muted:#959aa6;
   border-radius:var(--mx-r)!important;border:1px solid rgba(244,241,234,.12)!important;color:#cdc8bc!important;
-  background:radial-gradient(60% 90% at 90% 0%,rgba(212,255,58,.14),transparent 60%),repeating-linear-gradient(90deg,rgba(255,255,255,.022) 0 72px,transparent 72px 144px),linear-gradient(180deg,#0d1422,#070a11)!important;
+  background:radial-gradient(60% 90% at 90% 0%,color-mix(in srgb,var(--mx-hero-accent) 14%,transparent),transparent 60%),repeating-linear-gradient(90deg,rgba(255,255,255,.022) 0 72px,transparent 72px 144px),linear-gradient(180deg,#0d1422,#070a11)!important;
 }
 html #td-mobile-root .tdm-audit-intro :is(h2,h3){font-family:var(--mx-display)!important;font-weight:900!important;text-transform:uppercase;color:#f4f1ea!important;font-size:clamp(32px,4.4vw,60px)!important;line-height:.95!important}
 html #td-mobile-root .tdm-audit-intro :is(p,small,span){color:#cdc8bc!important}
-html #td-mobile-root .tdm-audit-intro a{color:#d4ff3a!important}
+html #td-mobile-root .tdm-audit-intro a{color:var(--mx-hero-accent)!important}
 html #td-mobile-root .tdm-audit-pill{border-radius:2px!important;font-family:var(--mx-cond)!important;letter-spacing:.08em;text-transform:uppercase}
 html #td-mobile-root .tdm-audit-pill.hit{background:rgba(62,224,138,.14)!important;color:#3ee08a!important}
 html #td-mobile-root .tdm-audit-pill.miss{background:color-mix(in srgb,var(--mx-live) 14%,transparent)!important;color:var(--mx-live)!important}
@@ -1252,16 +1161,36 @@ html #td-mobile-root .tdm-match-breadcrumb button{color:var(--mx-ink-2)!importan
 html #td-mobile-root .tdm-match-breadcrumb strong{color:var(--mx-accent)!important}
 html #td-mobile-root :is(.tdm-match-hero,.tdm-scoreboard){
   border-radius:var(--mx-r)!important;border:1px solid rgba(244,241,234,.12)!important;box-shadow:none!important;
-  background:radial-gradient(70% 100% at 50% 0%,rgba(212,255,58,.12),transparent 60%),repeating-linear-gradient(90deg,rgba(255,255,255,.022) 0 72px,transparent 72px 144px),linear-gradient(180deg,#0d1422,#070a11)!important;
+  background:radial-gradient(70% 100% at 50% 0%,color-mix(in srgb,var(--mx-hero-accent) 12%,transparent),transparent 60%),repeating-linear-gradient(90deg,rgba(255,255,255,.022) 0 72px,transparent 72px 144px),linear-gradient(180deg,#0d1422,#070a11)!important;
 }
 html #td-mobile-root .tdm-match-meta{font-family:var(--mx-cond)!important;letter-spacing:.1em!important;text-transform:uppercase}
 html #td-mobile-root .tdm-match-meta>span{border-radius:2px!important}
 html #td-mobile-root .tdm-match-team h1{font-family:var(--mx-display)!important;font-weight:900!important;text-transform:uppercase;font-size:clamp(26px,3.4vw,48px)!important;line-height:.95!important;letter-spacing:0!important}
-html #td-mobile-root .tdm-match-center .tdm-versus{font-family:var(--mx-display)!important;font-weight:900!important;font-style:italic;color:#d4ff3a!important;font-size:clamp(40px,6vw,84px)!important;letter-spacing:0!important}
-html #td-mobile-root .tdm-match-state{border-radius:2px!important;font-family:var(--mx-cond)!important;letter-spacing:.14em!important;color:#d4ff3a!important;background:rgba(212,255,58,.1)!important}
+html #td-mobile-root .tdm-match-center .tdm-versus{font-family:var(--mx-display)!important;font-weight:900!important;font-style:italic;color:var(--mx-hero-accent)!important;font-size:clamp(40px,6vw,84px)!important;letter-spacing:0!important}
+html #td-mobile-root .tdm-match-state{border-radius:2px!important;font-family:var(--mx-cond)!important;letter-spacing:.14em!important;color:var(--mx-hero-accent)!important;background:color-mix(in srgb,var(--mx-hero-accent) 10%,transparent)!important}
 html #td-mobile-root .tdm-detail-prob-cell{border-radius:2px!important;background:rgba(255,255,255,.04)!important;border-color:rgba(244,241,234,.14)!important}
 html #td-mobile-root .tdm-detail-prob-cell strong{font-family:var(--mx-display)!important;font-weight:800!important;font-size:clamp(24px,2.6vw,36px)!important}
 html #td-mobile-root .tdm-matchcenter-tablink{background:transparent!important;border:1px solid var(--mx-line-2)!important;color:var(--mx-ink)!important;border-radius:2px!important;font-family:var(--mx-cond)!important;letter-spacing:.08em;text-transform:uppercase}
+
+/* Match page: probability readout, meter, toolbar, section headings */
+html #td-mobile-root .tdm-match-odds-labels{font-family:var(--mx-cond)!important;font-size:12px!important;letter-spacing:.1em;text-transform:uppercase;color:#cdc8bc!important}
+html #td-mobile-root .tdm-match-odds-labels span,html #td-mobile-root .tdm-match-odds-labels span:last-child{color:#cdc8bc!important}
+html #td-mobile-root .tdm-match-odds-labels b{font-family:var(--mx-display)!important;font-weight:800!important;font-size:clamp(20px,2.4vw,28px)!important;letter-spacing:.01em;color:#f4f1ea!important}
+html #td-mobile-root .tdm-match-odds-labels span:last-child b{color:var(--mx-hero-accent)!important}
+html #td-mobile-root .tdm-match-prob-meter{height:4px!important;border-radius:0!important;background:rgba(244,241,234,.12)!important;gap:2px}
+html #td-mobile-root .tdm-match-prob-meter span:nth-child(1){background:#f4f1ea!important}
+html #td-mobile-root .tdm-match-prob-meter span:nth-child(2){background:rgba(244,241,234,.38)!important}
+html #td-mobile-root .tdm-match-prob-meter span:nth-child(3){background:var(--mx-hero-accent)!important}
+html #td-mobile-root .tdm-match-toolbar{background:transparent!important;border-top:1px solid rgba(244,241,234,.12);border-radius:0!important;padding:var(--sp-3) 0 0!important;font-family:var(--mx-cond)!important;font-size:12px!important;letter-spacing:.1em;text-transform:uppercase;color:#cdc8bc!important}
+html #td-mobile-root .tdm-match-toolbar button{min-height:40px;padding:0 var(--sp-4)!important;background:transparent!important;border:1px solid rgba(244,241,234,.3)!important;border-radius:2px!important;color:#f4f1ea!important;font-family:var(--mx-cond)!important;font-size:13px!important;font-weight:700!important;letter-spacing:.1em;text-transform:uppercase}
+html #td-mobile-root .tdm-match-toolbar button:hover{border-color:var(--mx-hero-accent)!important;color:var(--mx-hero-accent)!important;background:transparent!important}
+html #td-mobile-root .tdm-match-caption{font-size:13px!important;line-height:1.55!important;color:var(--mx-muted)!important;margin:var(--sp-3) 0 var(--sp-5)!important}
+html #td-mobile-root .tdm-detail-prob-empty{font-family:var(--mx-cond)!important;letter-spacing:.06em;color:#cdc8bc!important}
+html #td-mobile-root .tdm-tactical-heading{border-left:4px solid var(--mx-volt)!important;padding-left:var(--sp-4)!important;margin:var(--sp-2) 0 var(--sp-4)!important}
+html[data-theme="light"] #td-mobile-root .tdm-tactical-heading{border-left-color:var(--mx-accent)!important}
+html #td-mobile-root .tdm-tactical-heading h2,html #td-mobile-root .tdm-matchcenter-section-title h3{font-family:var(--mx-display)!important;font-weight:900!important;text-transform:uppercase;font-size:clamp(24px,3vw,36px)!important;line-height:1!important;letter-spacing:.005em!important;color:var(--mx-ink)!important}
+html #td-mobile-root .tdm-tactical-heading p{font-family:var(--mx-cond)!important;font-size:13px!important;letter-spacing:.1em;text-transform:uppercase;color:var(--mx-muted)!important;margin-top:var(--sp-1)!important}
+html #td-mobile-root .tdm-tactical-tag{border-radius:2px!important;font-family:var(--mx-cond)!important;font-size:12px!important;font-weight:700!important;letter-spacing:.1em;text-transform:uppercase;border:1px solid var(--mx-line-2)!important;background:transparent!important;color:var(--mx-ink-2)!important}
 
 /* ---------- Feedback: empty, error, loading, pressed ---------- */
 html #td-mobile-root .tdm-empty{
@@ -1302,7 +1231,120 @@ html #td-mobile-root .tdm-site-footer nav{display:flex;flex-wrap:wrap;gap:var(--
 html #td-mobile-root .tdm-site-footer a{display:inline-flex;align-items:center;min-height:44px;color:var(--mx-ink-2)!important;font-weight:600}
 html #td-mobile-root .tdm-site-footer a:hover{color:var(--mx-accent)!important}
 
+/* ---------- Match cards ---------- */
+html #td-mobile-root .tdm-list{gap:var(--sp-4)!important}
+html #td-mobile-root .tdm-card{--lg:var(--mx-line-2);
+  position:relative;display:block;padding:var(--sp-4) 18px!important;
+  background:var(--mx-panel)!important;color:var(--mx-ink)!important;font-family:var(--mx-body);line-height:1.4;
+  border:1px solid var(--mx-line)!important;border-top:3px solid var(--lg)!important;border-radius:var(--mx-r)!important;box-shadow:none!important;
+  transition:transform .18s var(--mx-ease),box-shadow .18s,border-color .18s!important;cursor:pointer;
+}
+html #td-mobile-root .tdm-card:hover{transform:translateY(-3px);box-shadow:var(--mx-shadow)!important;border-color:var(--mx-line-2)!important;border-top-color:var(--lg)!important}
+/* League colour bar, keyed off the league emblem's Sportmonks id */
+html #td-mobile-root .tdm-card:has(.tdm-league-emblem[src$="/8.png"]){--lg:var(--lg-epl)}
+html #td-mobile-root .tdm-card:has(.tdm-league-emblem[src$="/564.png"]){--lg:var(--lg-laliga)}
+html #td-mobile-root .tdm-card:has(.tdm-league-emblem[src$="/82.png"]){--lg:var(--lg-bundesliga)}
+html #td-mobile-root .tdm-card:has(.tdm-league-emblem[src$="/384.png"]){--lg:var(--lg-seriea)}
+html #td-mobile-root .tdm-card:has(.tdm-league-emblem[src$="/301.png"]){--lg:var(--lg-ligue1)}
+html #td-mobile-root .tdm-card:has(.tdm-league-emblem[src$="/2.png"]){--lg:var(--lg-ucl)}
+html #td-mobile-root .tdm-card:has(.tdm-league-emblem[src$="/5.png"]){--lg:var(--lg-uel)}
+html #td-mobile-root .tdm-card:has(.tdm-league-emblem[src$="/2286.png"]){--lg:var(--lg-uecl)}
+html #td-mobile-root .tdm-card:has(.tdm-league-emblem[src$="/325.png"]){--lg:var(--lg-greece)}
+html #td-mobile-root .tdm-card:has(.tdm-league-emblem[src$="/253.png"]){--lg:var(--lg-cyprus)}
+
+/* Top row: league and kick-off */
+html #td-mobile-root .tdm-card-top{
+  display:flex!important;align-items:center;justify-content:space-between;gap:var(--sp-3);padding:0 0 var(--sp-3)!important;margin:0!important;border:0!important;
+  font-family:var(--mx-cond)!important;font-size:13px!important;font-weight:600!important;letter-spacing:.08em!important;text-transform:uppercase;color:var(--mx-muted)!important;
+}
+html #td-mobile-root .tdm-card-top b,html #td-mobile-root .tdm-league-name{
+  display:inline-flex!important;align-items:center;gap:var(--sp-2);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-family:var(--mx-cond)!important;font-size:13px!important;font-weight:700!important;letter-spacing:.1em!important;color:var(--mx-ink)!important;
+}
+html #td-mobile-root .tdm-league-emblem{width:18px!important;height:18px!important;object-fit:contain;flex:none}
+html[data-theme="dark"] #td-mobile-root :is(.tdm-league-emblem,.tdm-card .tdm-team img){filter:drop-shadow(0 0 1px rgba(255,255,255,.4))}
+html #td-mobile-root .tdm-card-top>span,html #td-mobile-root .tdm-card-top time{
+  flex:none;background:transparent!important;border:1px solid var(--mx-line-2)!important;border-radius:2px!important;padding:3px 8px!important;
+  font-family:var(--mx-cond)!important;font-size:12px!important;font-weight:600!important;letter-spacing:.06em!important;color:var(--mx-ink-2)!important;white-space:nowrap;
+}
+html #td-mobile-root .tdm-card-top>span:has(.tdm-live){border:0!important;padding:0!important}
+html #td-mobile-root .tdm-live{
+  display:inline-flex;align-items:center;gap:6px;padding:4px 9px!important;border-radius:2px!important;border:0!important;
+  background:#d1001f!important;color:#fff!important;font-family:var(--mx-cond)!important;font-size:12px!important;font-weight:700!important;letter-spacing:.1em!important;
+  box-shadow:0 0 0 0 color-mix(in srgb,var(--mx-live) 55%,transparent);animation:mx-live 1.8s ease-out infinite;
+}
+
+/* Teams */
+html #td-mobile-root .tdm-teams{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(172px,1.35fr) minmax(0,1fr)!important;gap:var(--sp-3)!important;align-items:center;margin:var(--sp-2) 0 var(--sp-4)!important}
+html #td-mobile-root .tdm-card .tdm-team{display:flex!important;flex-direction:column;align-items:center;gap:var(--sp-2);min-width:0;text-align:center}
+html #td-mobile-root .tdm-card .tdm-team img{width:48px!important;height:48px!important;object-fit:contain}
+html #td-mobile-root .tdm-card .tdm-team strong{
+  font-family:var(--mx-display)!important;font-weight:800!important;font-size:18px!important;line-height:1.05!important;letter-spacing:.01em!important;
+  text-transform:uppercase;color:var(--mx-ink)!important;overflow-wrap:normal!important;word-break:normal!important;
+}
+html #td-mobile-root .tdm-centre{display:flex!important;flex-direction:column;align-items:stretch;gap:var(--sp-2);min-width:0}
+
+/* 1X2 strip: hairline scoreboard, favourite filled */
+html #td-mobile-root .tdm-core-prob{
+  display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:0!important;padding:0!important;
+  background:transparent!important;border:1px solid var(--mx-line-2)!important;border-radius:2px!important;overflow:hidden;box-shadow:none!important;
+}
+html #td-mobile-root .tdm-core-cell{
+  display:flex!important;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-width:0;padding:var(--sp-2) 2px!important;
+  background:transparent!important;border:0!important;border-left:1px solid var(--mx-line)!important;border-radius:0!important;outline:0!important;box-shadow:none!important;
+}
+html #td-mobile-root .tdm-core-cell:first-child{border-left:0!important}
+html #td-mobile-root .tdm-core-cell small{font-family:var(--mx-cond)!important;font-size:11px!important;font-weight:700!important;letter-spacing:.14em!important;color:var(--mx-muted)!important}
+html #td-mobile-root .tdm-core-cell b{font-family:var(--mx-display)!important;font-size:22px!important;font-weight:800!important;line-height:1!important;letter-spacing:.01em!important;color:var(--mx-ink)!important;font-variant-numeric:tabular-nums}
+html #td-mobile-root .tdm-core-cell.winner{background:var(--mx-volt)!important}
+html #td-mobile-root .tdm-core-cell.winner :is(b,small){color:var(--mx-volt-ink)!important}
+html #td-mobile-root .tdm-live-score{display:block;text-align:center;font-family:var(--mx-display)!important;font-size:30px!important;font-weight:900!important;line-height:1!important;letter-spacing:.04em!important;color:var(--mx-ink)!important;font-variant-numeric:tabular-nums}
+
+/* Live-stats note and evidence blocks */
+html #td-mobile-root .tdm-live-model-note{
+  margin:0 0 var(--sp-3)!important;padding:var(--sp-2) var(--sp-3)!important;border-radius:2px!important;text-align:center;
+  background:color-mix(in srgb,var(--mx-volt) 10%,transparent)!important;border:1px solid color-mix(in srgb,var(--mx-volt) 45%,transparent)!important;
+  color:var(--mx-volt)!important;font-family:var(--mx-cond)!important;font-size:12px!important;font-weight:700!important;letter-spacing:.1em!important;text-transform:uppercase;
+}
+html #td-mobile-root .tdm-live-model-note:not(.is-active){background:transparent!important;border-color:var(--mx-line-2)!important;color:var(--mx-muted)!important}
+html #td-mobile-root .tdm-live-model-note *{color:inherit!important;font:inherit!important;letter-spacing:inherit!important}
+html #td-mobile-root .tdm-card-evidence{margin:0 0 var(--sp-3)!important;padding:var(--sp-3) var(--sp-4)!important;background:var(--mx-panel-2)!important;border:1px solid var(--mx-line)!important;border-radius:2px!important;color:var(--mx-ink-2)!important}
+html #td-mobile-root .tdm-evidence-heading{font-family:var(--mx-cond)!important;font-size:12px!important;font-weight:700!important;letter-spacing:.14em!important;text-transform:uppercase;color:var(--mx-muted)!important}
+html #td-mobile-root .tdm-evidence-row b{font-family:var(--mx-display)!important;font-size:20px!important;font-weight:800!important;color:var(--mx-ink)!important}
+html #td-mobile-root :is(.tdm-evidence-row span,.tdm-card-evidence>small,.tdm-evidence-vs){color:var(--mx-muted)!important;font-family:var(--mx-cond)}
+
+/* Card notices (e.g. "not enough verified data") and quiet empty states */
+html #td-mobile-root .tdm-older-estimate{
+  display:block!important;width:auto!important;max-width:none!important;margin:0 0 var(--sp-3)!important;padding:var(--sp-2) var(--sp-3)!important;text-align:center;
+  background:var(--mx-panel-2)!important;border:1px solid var(--mx-line-2)!important;border-radius:2px!important;color:var(--mx-ink-2)!important;
+  font-family:var(--mx-cond)!important;font-size:12px!important;font-weight:600!important;letter-spacing:.08em!important;text-transform:uppercase;line-height:1.4!important;
+}
+html #td-mobile-root .tdm-quiet{background:var(--mx-panel-2)!important;border:1px solid var(--mx-line)!important;border-radius:2px!important;color:var(--mx-muted)!important}
+html #td-mobile-root .tdm-quiet *{color:inherit!important}
+
+/* Footer row */
+html #td-mobile-root .tdm-card-bottom{
+  display:flex!important;align-items:center;justify-content:space-between;gap:var(--sp-3);padding:var(--sp-3) 0 0!important;margin:0!important;
+  border:0!important;border-top:1px solid var(--mx-line)!important;
+}
+html #td-mobile-root .tdm-card-bottom b{font-family:var(--mx-cond)!important;font-size:12px!important;font-weight:600!important;letter-spacing:.08em!important;text-transform:uppercase;color:var(--mx-muted)!important;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+html #td-mobile-root .tdm-card-bottom small{
+  flex:none;max-width:none!important;font-family:var(--mx-cond)!important;font-size:13px!important;font-weight:700!important;letter-spacing:.1em!important;text-transform:uppercase;
+  color:var(--mx-accent)!important;border-bottom:2px solid currentColor;padding-bottom:1px;white-space:nowrap;
+}
+html #td-mobile-root .tdm-card:hover .tdm-card-bottom small{color:var(--mx-ink)!important}
+
+/* Old app markup carries hard-coded light-theme text colours; neutralise them in dark */
+html[data-theme="dark"] #td-mobile-root :is(h1,h2,h3,h4,strong,b,label,summary,th){color:var(--mx-ink)}
+html[data-theme="dark"] #td-mobile-root :is(p,small,span,td,li,dd,dt){color:inherit}
+html[data-theme="dark"] #td-mobile-root :is(.tdm-match-hero,.tdm-scoreboard) :is(strong,b,h1,span,small,time){color:inherit}
+html #td-mobile-root :is(b,strong,time){font-variant-numeric:tabular-nums}
+html #td-mobile-root p{text-wrap:pretty}
+
 /* ---------- Motion ---------- */
+/* Entrance animations run once, before theme.js marks the page as booted */
+html.td-booted #td-mobile-root :is(.tdm-overview-header,.tdm-overview-hero,.tdm-kpis,.tdm-audit-kpis){animation:none!important}
+@keyframes mx-live{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--mx-live) 55%,transparent)}70%,100%{box-shadow:0 0 0 8px transparent}}
 @keyframes mx-rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 @keyframes mx-pulse{0%,100%{opacity:1}50%{opacity:.35}}
 @keyframes mx-spin{to{transform:rotate(360deg)}}
@@ -1327,6 +1369,18 @@ html #td-mobile-root .tdm-site-footer a:hover{color:var(--mx-accent)!important}
   html #td-mobile-root .tdm-overview-disclosure{display:block!important;padding:var(--sp-5)!important}
   /* Team names: shrink to fit rather than breaking mid-word */
   html #td-mobile-root .tdm-match-team h1{font-size:clamp(18px,5.4vw,26px)!important;overflow-wrap:normal!important;word-break:normal!important;hyphens:manual}
+  /* Cards */
+  html #td-mobile-root .tdm-card{padding:14px!important}
+  html #td-mobile-root .tdm-card:hover{transform:none}
+  html #td-mobile-root .tdm-teams{grid-template-columns:minmax(0,1fr) minmax(164px,1.9fr) minmax(0,1fr)!important;gap:6px!important}
+  html #td-mobile-root .tdm-card .tdm-team img{width:40px!important;height:40px!important}
+  html #td-mobile-root .tdm-card .tdm-team strong{font-size:15px!important}
+  html #td-mobile-root .tdm-core-cell b{font-size:clamp(15px,4.4vw,18px)!important;letter-spacing:0!important}
+  html #td-mobile-root .tdm-live-score{font-size:26px!important}
+}
+@media(max-width:360px){
+  html #td-mobile-root .tdm-teams{grid-template-columns:minmax(0,1fr) minmax(128px,1.7fr) minmax(0,1fr)!important}
+  html #td-mobile-root .tdm-card .tdm-team strong{font-size:13px!important}
 }
 @media(prefers-reduced-motion:reduce){
   html #td-mobile-root *,html #td-mobile-root *::before,html #td-mobile-root *::after{animation:none!important;transition:none!important}

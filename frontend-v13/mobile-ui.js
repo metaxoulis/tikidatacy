@@ -14,7 +14,7 @@
   function apply(theme) {
     root.setAttribute('data-theme', theme);
     var meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', theme === 'dark' ? '#06080d' : '#efeadf');
+    if (meta) meta.setAttribute('content', theme === 'dark' ? '#06080d' : '#ffffff');
     var btn = document.querySelector('.td-theme-toggle');
     if (btn) {
       btn.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
@@ -51,7 +51,7 @@
 
   // Loading feedback: mobile-ui.js renders "—" KPIs and a "Φόρτωση…/Loading…" message
   // while data is in flight; tag them so the stylesheet can show skeletons instead.
-  var LOADING = /(Φόρτωση|Loading)/i;
+  var LOADING = /(\u03a6\u03cc\u03c1\u03c4\u03c9\u03c3\u03b7|Loading)/i;
   function markLoading() {
     var r = document.getElementById('td-mobile-root');
     if (!r) return;
@@ -61,10 +61,38 @@
     for (var j = 0; j < empties.length; j++) empties[j].classList.toggle('td-loading', LOADING.test(empties[j].textContent));
   }
 
+  // Greek strings inside an English page: mark them lang="el" so uppercase headings drop
+  // their accents (Greek typesetting) and screen readers use Greek pronunciation.
+  var GREEK = /[\u0370-\u03ff\u1f00-\u1fff]/;
+  function markGreek() {
+    var r = document.getElementById('td-mobile-root');
+    if (!r || (document.documentElement.lang || '').indexOf('el') === 0) return;
+    var all = r.getElementsByTagName('*');
+    for (var i = 0; i < all.length; i++) {
+      var el = all[i];
+      if (el.hasAttribute('lang')) continue;
+      for (var n = el.firstChild; n; n = n.nextSibling) {
+        if (n.nodeType === 3 && GREEK.test(n.nodeValue)) { el.setAttribute('lang', 'el'); break; }
+      }
+    }
+  }
+
+  var queued = false;
+  function refresh() {
+    if (queued) return;
+    queued = true;
+    // A timer, not requestAnimationFrame: rAF is paused in background tabs.
+    setTimeout(function () { queued = false; mount(); markLoading(); markGreek(); }, 30);
+  }
+
   function start() {
+    // Entrance animations are for the first paint only; mobile-ui.js re-renders on every
+    // live refresh and would otherwise replay them (content blinking out and back in).
+    setTimeout(function () { root.classList.add('td-booted'); }, 1400);
     mount();
     markLoading();
-    new MutationObserver(function () { mount(); markLoading(); }).observe(document.body, { childList: true, subtree: true, characterData: true });
+    markGreek();
+    new MutationObserver(refresh).observe(document.body, { childList: true, subtree: true, characterData: true });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
