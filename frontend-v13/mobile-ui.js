@@ -147,11 +147,52 @@
     if (leaguesOpen && !e.target.closest('.td-filterbar')) setLeaguesOpen(false);
   });
 
+  // Match page: read the numbers the app rendered to draw head-to-head bars for live stats,
+  // flag the favourite 1X2 tile, and add a bar to percentage rows in goal scenarios.
+  function num(el) {
+    var v = parseFloat(String((el && el.textContent) || '').replace(',', '.').replace(/[^0-9.\-]/g, ''));
+    return isFinite(v) ? v : null;
+  }
+  function enhanceMatch() {
+    var r = document.getElementById('td-mobile-root');
+    if (!r || !r.querySelector('.tdm-match-content')) return;
+    var rows = r.querySelectorAll('.tdm-stat-grid-row:not(.tdm-stat-grid-head)');
+    for (var i = 0; i < rows.length; i++) {
+      var b = rows[i].querySelectorAll('b');
+      if (b.length < 2) continue;
+      var h = num(b[0]), a = num(b[1]);
+      if (h === null || a === null) continue;
+      var total = h + a;
+      rows[i].style.setProperty('--h', total ? (h / total).toFixed(3) : '0');
+      rows[i].style.setProperty('--a', total ? (a / total).toFixed(3) : '0');
+      rows[i].classList.add('td-h2h');
+      b[0].classList.toggle('td-lead', h > a);
+      b[1].classList.toggle('td-lead', a > h);
+    }
+    var groups = r.querySelectorAll('.tdm-probs');
+    for (var g = 0; g < groups.length; g++) {
+      var tiles = groups[g].querySelectorAll('.tdm-prob'), best = null, top = -1;
+      for (var k = 0; k < tiles.length; k++) {
+        var v = num(tiles[k].querySelector('b'));
+        tiles[k].classList.remove('td-fav');
+        if (v !== null && v > top) { top = v; best = tiles[k]; }
+      }
+      if (best) best.classList.add('td-fav');
+    }
+    var scen = r.querySelectorAll('.tdm-large-stats .tdm-row');
+    for (var s = 0; s < scen.length; s++) {
+      var val = scen[s].querySelector('b'), p = val && /%/.test(val.textContent) ? num(val) : null;
+      scen[s].classList.toggle('td-pbar', p !== null);
+      if (p !== null) scen[s].style.setProperty('--p', (Math.max(0, Math.min(100, p)) / 100).toFixed(3));
+    }
+  }
+
   var queued = false;
   function refresh() {
-    // Synchronous: MutationObserver callbacks run before paint, so the filter console is in
-    // place before the re-rendered page is drawn (no flash of the old layout).
+    // Synchronous: MutationObserver callbacks run before paint, so the filter console and
+    // match bars are in place before the re-rendered page is drawn (no flash).
     enhanceFilters();
+    enhanceMatch();
     if (queued) return;
     queued = true;
     // A timer, not requestAnimationFrame: rAF is paused in background tabs.
@@ -163,6 +204,7 @@
     // live refresh and would otherwise replay them (content blinking out and back in).
     setTimeout(function () { root.classList.add('td-booted'); }, 1400);
     enhanceFilters();
+    enhanceMatch();
     mount();
     markLoading();
     markGreek();
@@ -184,7 +226,26 @@ if(authText[authResult])accountError=authText[authResult];
 if(authResult&&authText[authResult]&&state.view==='home')state.view='account';
 const uefaStageById=new Map();
 const stageLabel=m=>Number.isSafeInteger(m?.stage_id)?uefaStageById.get(m.stage_id)||null:null;
-const SITE_FOOTER="<footer class=\"tdm-site-footer\" aria-label=\"Σχετικά και πολιτικές\"><span>© 2026 Tiki-Data · Στατιστικές εκτιμήσεις, όχι στοιχηματικές αποδόσεις</span><nav aria-label=\"Πληροφορίες\"><a href=\"/transparency\">Διαφάνεια</a><a href=\"/about\">Σχετικά</a><a href=\"/privacy\">Απόρρητο</a><a href=\"/terms\">Όροι</a><a href=\"/cookies\">Cookies</a><a href=\"/contact\">Επικοινωνία</a></nav></footer>";
+// Site footer. Built at render time (not at load) so it follows the active language:
+// locale.js sets window.__tdLocale after this file has loaded.
+const siteFooter=()=>{
+ const en=window.__tdLocale==='en';
+ const t=(el,eng)=>en?eng:el;
+ const col=(head,links)=>'<div class="tdm-footer-col"><h4>'+head+'</h4>'+links.map(([href,label])=>'<a href="'+href+'">'+label+'</a>').join('')+'</div>';
+ return '<footer class="tdm-site-footer tdm-footer-pro" aria-label="'+t('Σχετικά και πολιτικές','About and policies')+'">'+
+  '<div class="tdm-footer-brand"><a href="/" class="tdm-footer-logo" aria-label="Tiki-Data"></a>'+
+  '<p>'+t('Ποδοσφαιρικά δεδομένα: πραγματικοί αγώνες, live στατιστικά και διαφανείς εκτιμήσεις 1Χ2.','Football intelligence: real fixtures, live statistics and transparent 1X2 estimates.')+'</p></div>'+
+  '<nav class="tdm-footer-cols" aria-label="'+t('Πληροφορίες','Information')+'">'+
+  col(t('Πλατφόρμα','Platform'),[['/',t('Αρχική','Home')],['/predictions',t('Αγώνες','Matches')],['/predictions?filter=live','Live'],['/transparency',t('Διαφάνεια','Transparency')]])+
+  col(t('Διοργανώσεις','Competitions'),UEFA_FILTERS.map(([key,label])=>['/predictions?league='+key,label]))+
+  col(t('Εταιρεία','Company'),[['/about',t('Σχετικά','About')],['/contact',t('Επικοινωνία','Contact')]])+
+  col(t('Νομικά','Legal'),[['/privacy',t('Απόρρητο','Privacy')],['/terms',t('Όροι','Terms')],['/cookies','Cookies']])+
+  '</nav>'+
+  '<div class="tdm-footer-bottom"><span>© 2026 Tiki-Data</span><span>'+t('Στατιστικές εκτιμήσεις, όχι στοιχηματικές αποδόσεις.','Statistical estimates, not betting odds.')+'</span></div>'+
+  '</footer>';
+};
+// Templates concatenate SITE_FOOTER as a string; toString() renders it in the current language.
+const SITE_FOOTER={toString:siteFooter};
 
 let auditArchive={matches:[]},auditLoading=true,auditError='';
 let auditLoaded=false,auditPromise=null;
@@ -337,7 +398,6 @@ function home(){
   '<p class="tdm-home-stats">'+stat(state.matches.length,t('αγώνες','matches'))+stat(liveNow.length,'live','live')+stat(state.matches.filter(m=>!!pr(m)).length,t('με εκτίμηση 1Χ2','with 1X2 forecast'))+'</p>'+
   '<div class="tdm-home-actions"><button class="tdm-accent-btn" data-view="matches">'+t('Όλοι οι αγώνες','All matches')+' <span aria-hidden="true">→</span></button>'+
   (liveNow.length?'<a href="/predictions?filter=live" class="tdm-overview-secondary"><span aria-hidden="true">●</span> '+t('Live τώρα','Live now')+' ('+liveNow.length+')</a>':'')+'</div>'+
-  '<nav class="tdm-home-leagues" aria-label="'+t('Ευρωπαϊκές διοργανώσεις','European competitions')+'">'+UEFA_FILTERS.map(([key,label,short])=>'<a href="/predictions?league='+key+'" data-lg="'+key+'"><b>'+short+'</b><span>'+label+'</span></a>').join('')+'</nav>'+
   liveUpdateLabel()+'</section>'+
   (liveNow.length?title(t('Live τώρα','Live now'),t('Όλοι','View all'),'matches')+list(liveNow.slice(0,4)):'')+
   title(todays.length?t('Σήμερα','Today'):t('Επόμενοι αγώνες','Next up'),t('Πλήρες πρόγραμμα','Full schedule'),'matches')+
