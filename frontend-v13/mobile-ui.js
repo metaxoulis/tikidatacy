@@ -212,6 +212,10 @@
     markLoading();
     markGreek();
     new MutationObserver(refresh).observe(document.body, { childList: true, subtree: true, characterData: true });
+    // Installable app: the service worker only provides an offline screen (no data caching).
+    if ('serviceWorker' in navigator && location.protocol === 'https:') {
+      navigator.serviceWorker.register('/sw.js').catch(function () {});
+    }
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
