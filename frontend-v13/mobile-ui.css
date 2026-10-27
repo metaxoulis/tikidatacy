@@ -1089,3 +1089,107 @@ html[data-theme="dark"] #td-mobile-root .gsi-material-button :is(span,div){color
   html #td-mobile-root *{transition:none!important}
   html #td-mobile-root .tdm-card:hover{transform:none}
 }
+
+/* =====================================================================
+   Design-system pass · v2026.10.27b
+   8px spacing grid, one radius scale, a 6-step type scale, 40-44px tap
+   targets and explicit loading / empty / pressed feedback.
+   Match cards (.tdm-card and everything inside) are intentionally untouched.
+   ===================================================================== */
+html{
+  --sp-1:4px;--sp-2:8px;--sp-3:12px;--sp-4:16px;--sp-5:24px;--sp-6:32px;--sp-7:48px;
+  --r-sm:8px;--r-md:12px;--r-lg:16px;--r-xl:24px;--r-pill:999px;
+  --fs-xs:12px;--fs-sm:13px;--fs-md:14px;--fs-lg:16px;--fs-xl:20px;--fs-2xl:24px;
+  --ease:cubic-bezier(.2,.7,.2,1);
+}
+
+/* overflow-x:hidden on html/body makes body a scroll container, which silently
+   breaks position:sticky (header, search). clip hides sideways overflow without that. */
+html.td-mobile-ready,html.td-mobile-ready body{overflow-x:hidden;overflow-x:clip!important;overflow-y:visible!important}
+html.td-mobile-ready{overflow-y:auto!important}
+
+/* Page rhythm */
+html #td-mobile-root .tdm-overview-header{padding:var(--sp-6) 0 var(--sp-5)!important}
+html #td-mobile-root .tdm-overview-header p,html #td-mobile-root .tdm-lead{font-size:var(--fs-lg)!important;line-height:1.6!important;max-width:65ch;color:var(--t-muted)!important}
+html #td-mobile-root main>h1{font-size:clamp(30px,4.2vw,48px)!important;letter-spacing:-.035em!important;line-height:1.1!important;margin:var(--sp-3) 0 var(--sp-3)!important}
+html #td-mobile-root .tdm-kicker{font-size:var(--fs-xs)!important;font-weight:750!important}
+html #td-mobile-root .tdm-section{margin:var(--sp-6) 0 var(--sp-4)!important;align-items:center}
+html #td-mobile-root .tdm-section h2{font-size:var(--fs-xl)!important;line-height:1.25}
+html #td-mobile-root .tdm-summary-eyebrow{margin:var(--sp-6) 0 var(--sp-2)!important;font-size:var(--fs-xs)!important}
+
+/* Section links ("More", "See all"): real tap targets */
+html #td-mobile-root .tdm-link{display:inline-flex;align-items:center;gap:var(--sp-1);min-height:40px;padding:0 var(--sp-3)!important;margin-right:calc(var(--sp-3) * -1)!important;border-radius:var(--r-sm)!important;font-size:var(--fs-sm)!important}
+
+/* Hero */
+html #td-mobile-root .tdm-overview-hero{border-radius:var(--r-xl)!important;padding:var(--sp-6)!important;gap:var(--sp-5)!important}
+html #td-mobile-root .tdm-overview-hero h2{font-size:clamp(24px,2.6vw,32px)!important;margin:var(--sp-3) 0!important}
+html #td-mobile-root .tdm-overview-hero p{font-size:var(--fs-md)!important;line-height:1.65!important}
+html #td-mobile-root .tdm-overview-actions{gap:var(--sp-2)!important;margin-top:var(--sp-5)!important}
+html #td-mobile-root :is(.tdm-accent-btn,.tdm-overview-secondary){min-height:44px;display:inline-flex!important;align-items:center;justify-content:center;gap:var(--sp-2);padding:0 var(--sp-5)!important;border-radius:var(--r-md)!important;font-size:var(--fs-md)!important}
+
+/* KPI tiles */
+html #td-mobile-root .tdm-kpis{gap:var(--sp-3)!important;margin:var(--sp-2) 0 var(--sp-4)!important}
+html #td-mobile-root .tdm-kpi{padding:var(--sp-4) var(--sp-5)!important;border-radius:var(--r-lg)!important;display:flex;flex-direction:column;gap:var(--sp-1)}
+html #td-mobile-root .tdm-kpi b{font-size:clamp(24px,3vw,32px)!important;line-height:1.1}
+html #td-mobile-root .tdm-kpi span{font-size:var(--fs-xs)!important}
+html #td-mobile-root .tdm-live-status{border-radius:var(--r-pill)!important;padding:var(--sp-2) var(--sp-3)!important;font-size:var(--fs-xs)!important;margin:0 0 var(--sp-4)!important;align-items:center;gap:var(--sp-2)}
+
+/* Competition shortcuts */
+html #td-mobile-root .tdm-uefa-section{margin:var(--sp-5) 0 var(--sp-6)!important}
+html #td-mobile-root .tdm-uefa-links{gap:var(--sp-3)!important}
+html #td-mobile-root .tdm-uefa-links a{min-height:56px;display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3) var(--sp-4)!important;border-radius:var(--r-lg)!important;font-size:var(--fs-sm)!important}
+
+/* Filters: chips, day picker, tabs, search */
+html #td-mobile-root .tdm-chips{gap:var(--sp-2)!important;margin:0 0 var(--sp-2)!important;padding-block:2px}
+html #td-mobile-root :is(.tdm-chip,.tdm-tab){min-height:40px!important;padding:0 var(--sp-4)!important;font-size:var(--fs-sm)!important;display:inline-flex!important;align-items:center;gap:var(--sp-2)}
+html #td-mobile-root .tdm-day-chips{margin-bottom:var(--sp-3)!important}
+html #td-mobile-root .tdm-tabs{gap:var(--sp-2)!important;padding-bottom:var(--sp-3)!important;margin-bottom:var(--sp-4)!important}
+html #td-mobile-root .tdm-search{min-height:48px;padding:0 var(--sp-4)!important;gap:var(--sp-3);border-radius:var(--r-md)!important;margin:var(--sp-3) 0 var(--sp-5)!important}
+html #td-mobile-root .tdm-search input{font-size:var(--fs-lg)!important;min-height:44px}
+html #td-mobile-root .tdm-date-control :is(input,button){min-height:40px;border-radius:var(--r-sm)!important}
+
+/* Lists, panels, notes */
+html #td-mobile-root .tdm-list{gap:var(--sp-4)!important;margin-bottom:var(--sp-5)!important}
+html #td-mobile-root .tdm-panel{border-radius:var(--r-lg)!important;padding:var(--sp-4) var(--sp-5)!important}
+html #td-mobile-root .tdm-note{font-size:var(--fs-sm)!important;line-height:1.6;border-radius:var(--r-md)!important}
+html #td-mobile-root .tdm-overview-disclosure{border-radius:var(--r-lg)!important;padding:var(--sp-4) var(--sp-5)!important;margin:var(--sp-6) 0 var(--sp-7)!important;gap:var(--sp-4)!important}
+html #td-mobile-root .tdm-overview-disclosure a{min-height:40px;display:inline-flex;align-items:center}
+html #td-mobile-root .tdm-more{min-height:48px;border-radius:var(--r-md)!important;font-size:var(--fs-md)!important}
+
+/* Feedback: empty, error, loading */
+html #td-mobile-root .tdm-empty{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:var(--sp-3);text-align:center;padding:var(--sp-6) var(--sp-5)!important;border:1px dashed var(--t-border-strong)!important;border-radius:var(--r-lg)!important;font-size:var(--fs-md)!important;line-height:1.6}
+html #td-mobile-root .tdm-empty [data-retry]{min-height:40px;padding:0 var(--sp-4)!important;margin:0!important;background:var(--t-brand)!important;color:var(--t-brand-ink)!important;border-radius:var(--r-md)!important}
+html #td-mobile-root .tdm-empty.td-loading{position:relative;overflow:hidden;min-height:160px;border-style:solid!important;border-color:var(--t-border)!important;color:var(--t-faint)!important;background:var(--t-surface)!important}
+html #td-mobile-root .tdm-empty.td-loading::before{content:"";width:18px;height:18px;border-radius:50%;border:2px solid var(--t-border-strong);border-top-color:var(--t-brand);animation:td-spin .8s linear infinite}
+html #td-mobile-root :is(.tdm-empty.td-loading,.td-pending)::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,color-mix(in srgb,var(--t-ink) 6%,transparent) 50%,transparent 70%);background-size:200% 100%;animation:td-shimmer 1.4s var(--ease) infinite;pointer-events:none}
+html #td-mobile-root .td-pending{position:relative;display:inline-block;min-width:2.4ch;color:transparent!important;background:var(--t-surface-3);border-radius:var(--r-sm);overflow:hidden}
+@keyframes td-spin{to{transform:rotate(360deg)}}
+@keyframes td-shimmer{from{background-position:200% 0}to{background-position:-200% 0}}
+
+/* Pressed feedback on every control (cards keep their own hover) */
+html #td-mobile-root :is(.tdm-chip,.tdm-tab,.tdm-link,.tdm-accent-btn,.tdm-overview-secondary,.tdm-more,.tdm-uefa-links a,.td-theme-toggle,.tdm-bottom button):active{transform:scale(.97);transition:transform .08s}
+
+/* Footer: readable, tappable */
+html #td-mobile-root .tdm-site-footer{margin-top:var(--sp-7)!important;padding:var(--sp-5) 0 var(--sp-4)!important;font-size:var(--fs-sm)!important;gap:var(--sp-3)}
+html #td-mobile-root .tdm-site-footer a{display:inline-flex;align-items:center;min-height:40px;padding:0 var(--sp-1)}
+
+@media(min-width:781px){
+  html #td-mobile-root .tdm-section h2{font-size:var(--fs-2xl)!important}
+  html #td-mobile-root .tdm-top>.tdm-bottom button{min-height:40px!important;border-radius:var(--r-md)!important}
+}
+@media(max-width:780px){
+  html #td-mobile-root .tdm-overview-header{padding:var(--sp-4) 0!important}
+  html #td-mobile-root .tdm-overview-header p,html #td-mobile-root .tdm-lead{font-size:var(--fs-md)!important}
+  html #td-mobile-root .tdm-overview-hero{border-radius:var(--r-lg)!important;padding:var(--sp-5) var(--sp-4)!important}
+  html #td-mobile-root .tdm-section{margin:var(--sp-5) 0 var(--sp-3)!important}
+  html #td-mobile-root .tdm-kpis{gap:var(--sp-2)!important}
+  html #td-mobile-root .tdm-kpi{padding:var(--sp-3)!important;border-radius:var(--r-md)!important}
+  html #td-mobile-root .tdm-link{min-height:44px}
+  html #td-mobile-root :is(.tdm-chip,.tdm-tab){min-height:44px!important}
+  /* Search stays reachable while scrolling a long fixture list */
+  html #td-mobile-root .tdm-search{position:sticky;top:var(--sp-2);z-index:30;box-shadow:var(--t-shadow-md)!important}
+  html #td-mobile-root .tdm-site-footer a{min-height:44px}
+}
+@media(prefers-reduced-motion:reduce){
+  html #td-mobile-root :is(.tdm-empty.td-loading,.td-pending)::after,html #td-mobile-root .tdm-empty.td-loading::before{animation:none}
+}

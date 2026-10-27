@@ -49,9 +49,22 @@
     apply(current());
   }
 
+  // Loading feedback: mobile-ui.js renders "—" KPIs and a "Φόρτωση…/Loading…" message
+  // while data is in flight; tag them so the stylesheet can show skeletons instead.
+  var LOADING = /(Φόρτωση|Loading)/i;
+  function markLoading() {
+    var r = document.getElementById('td-mobile-root');
+    if (!r) return;
+    var kpis = r.querySelectorAll('.tdm-kpi b, .tdm-audit-kpis b');
+    for (var i = 0; i < kpis.length; i++) kpis[i].classList.toggle('td-pending', kpis[i].textContent.trim() === '—');
+    var empties = r.querySelectorAll('.tdm-empty');
+    for (var j = 0; j < empties.length; j++) empties[j].classList.toggle('td-loading', LOADING.test(empties[j].textContent));
+  }
+
   function start() {
     mount();
-    new MutationObserver(mount).observe(document.body, { childList: true, subtree: true });
+    markLoading();
+    new MutationObserver(function () { mount(); markLoading(); }).observe(document.body, { childList: true, subtree: true, characterData: true });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
