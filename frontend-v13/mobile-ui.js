@@ -77,8 +77,81 @@
     }
   }
 
+  // Filter console (Matches page). The three chip rows become one panel: the mode chips form a
+  // segmented switch and the league chips collapse behind a "Leagues" button. The app's own
+  // buttons are moved, not recreated, so mobile-ui.js's delegated click handler keeps working.
+  // The search field is never moved: the app re-focuses it after every keystroke.
+  var leaguesOpen = false;
+  var CHEVRON = '<svg class="td-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+  function setLeaguesOpen(open) {
+    leaguesOpen = open;
+    var bar = document.querySelector('#td-mobile-root .td-filterbar');
+    if (!bar) return;
+    bar.classList.toggle('is-open', open);
+    var t = bar.querySelector('.td-league-toggle');
+    if (t) t.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  function enhanceFilters() {
+    var main = document.querySelector('#td-mobile-root main');
+    var days = main && main.querySelector('.tdm-day-chips');
+    if (!days || main.querySelector('.td-filterbar')) return;
+    var modeBtn = main.querySelector('.tdm-chips [data-mode]');
+    var leagueBtn = main.querySelector('.tdm-chips [data-league]');
+    if (!modeBtn || !leagueBtn) return;
+    var modeRow = modeBtn.parentNode;
+    var leagueRow = leagueBtn.parentNode;
+
+    var bar = document.createElement('section');
+    bar.className = 'td-filterbar' + (leaguesOpen ? ' is-open' : '');
+    bar.setAttribute('aria-label', 'Filters');
+    main.insertBefore(bar, modeRow);
+
+    var top = document.createElement('div');
+    top.className = 'td-filterbar-top';
+    modeRow.classList.add('td-seg');
+    modeRow.setAttribute('role', 'group');
+    top.appendChild(modeRow);
+
+    var active = leagueRow.querySelector('[data-league].active') || leagueBtn;
+    var toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'td-league-toggle';
+    toggle.setAttribute('aria-controls', 'td-league-panel');
+    toggle.setAttribute('aria-expanded', leaguesOpen ? 'true' : 'false');
+    if (active.getAttribute('data-league') !== 'all') toggle.setAttribute('data-lg', active.getAttribute('data-league'));
+    var crest = active.querySelector('img');
+    if (crest) {
+      var img = document.createElement('img');
+      img.alt = '';
+      img.src = crest.getAttribute('src');
+      toggle.appendChild(img);
+    }
+    var label = document.createElement('span');
+    label.className = 'td-league-label';
+    label.textContent = active.textContent.trim();
+    toggle.appendChild(label);
+    toggle.insertAdjacentHTML('beforeend', CHEVRON);
+    toggle.addEventListener('click', function () { setLeaguesOpen(!leaguesOpen); });
+    top.appendChild(toggle);
+    bar.appendChild(top);
+
+    leagueRow.id = 'td-league-panel';
+    leagueRow.classList.add('td-league-panel');
+    // Picking a league closes the panel; the app then re-renders with the new filter.
+    leagueRow.addEventListener('click', function (e) { if (e.target.closest('[data-league]')) leaguesOpen = false; });
+    bar.appendChild(leagueRow);
+    bar.appendChild(days);
+  }
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && leaguesOpen) setLeaguesOpen(false); });
+  document.addEventListener('click', function (e) {
+    if (leaguesOpen && !e.target.closest('.td-filterbar')) setLeaguesOpen(false);
+  });
+
   var queued = false;
   function refresh() {
+    // Synchronous: MutationObserver callbacks run before paint, so the filter console is in
+    // place before the re-rendered page is drawn (no flash of the old layout).
+    enhanceFilters();
     if (queued) return;
     queued = true;
     // A timer, not requestAnimationFrame: rAF is paused in background tabs.
@@ -89,6 +162,7 @@
     // Entrance animations are for the first paint only; mobile-ui.js re-renders on every
     // live refresh and would otherwise replay them (content blinking out and back in).
     setTimeout(function () { root.classList.add('td-booted'); }, 1400);
+    enhanceFilters();
     mount();
     markLoading();
     markGreek();
