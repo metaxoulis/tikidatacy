@@ -1641,40 +1641,62 @@ html #td-mobile-root .tdm-footer-bottom{
   html #td-mobile-root .tdm-site-footer .tdm-footer-col a{min-height:44px!important}
 }
 
-/* ---------- Starting XI: tactical board ---------- */
-html{--mx-shirt:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M22 5 L11 9.5 L1.5 21 L10 30 L16 25.5 L16 60 L48 60 L48 25.5 L54 30 L62.5 21 L53 9.5 L42 5 C40 10.5 36.5 13.5 32 13.5 C27.5 13.5 24 10.5 22 5 Z'/%3E%3C/svg%3E")}
-
-/* Turf: night pitch, 12 mowing stripes, vignette, crisp lines */
+/* ---------- Starting XI: half-pitch tactical board ---------- */
+/* Each team gets its own half: halfway line on top, its goal at the bottom, keeper on the goal line.
+   Markings are two width-scaled SVGs (circles stay round at any height); side lines stretch in CSS.
+   SVG units: 728 wide = 680 pitch + 24 margin each side; halfway line 18 from the top, goal line 52 from the bottom. */
 html #td-mobile-root .tdm-pitch-card .tdm-pitch{
+  --tok:40px;--line:rgba(255,255,255,.42);
+  container-type:inline-size;position:relative;overflow:hidden;
+  aspect-ratio:728/720!important;min-height:0!important;max-height:none!important;
   border:0!important;border-radius:var(--mx-r)!important;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)!important;
-  background:repeating-linear-gradient(180deg,#134a33 0 calc(100% / 12),#17573c calc(100% / 12) calc(100% / 6))!important;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 728 112'%3E%3Cg stroke='%23fff' stroke-opacity='.42' stroke-width='2' fill='none'%3E%3Cpath d='M24 18H704'/%3E%3Ccircle cx='364' cy='18' r='91.5'/%3E%3C/g%3E%3Ccircle cx='364' cy='18' r='4' fill='%23fff' fill-opacity='.6'/%3E%3C/svg%3E") top center/100% auto no-repeat,
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 728 290'%3E%3Cdefs%3E%3Cpattern id='n' width='7' height='7' patternUnits='userSpaceOnUse'%3E%3Cpath d='M0 0L7 7M7 0L0 7' stroke='%23fff' stroke-opacity='.3' stroke-width='.9'/%3E%3C/pattern%3E%3C/defs%3E%3Crect y='238' width='728' height='52' fill='%23000' fill-opacity='.2'/%3E%3Crect x='327.4' y='238' width='73.2' height='24' fill='url(%23n)' stroke='%23fff' stroke-opacity='.75' stroke-width='2.5'/%3E%3Cg stroke='%23fff' stroke-opacity='.42' stroke-width='2' fill='none'%3E%3Cpath d='M24 238H704M162.5 238V73H565.5V238M272.4 238V183H455.6V238M290.9 73A91.5 91.5 0 0 1 437.1 73M24 228A10 10 0 0 1 34 238M694 238A10 10 0 0 1 704 228'/%3E%3C/g%3E%3Ccircle cx='364' cy='128' r='4' fill='%23fff' fill-opacity='.6'/%3E%3C/svg%3E") bottom center/100% auto no-repeat,
+    radial-gradient(130% 55% at 50% 0%,rgba(255,255,255,.07),transparent 70%),
+    repeating-linear-gradient(180deg,#11432e 0 10%,#144d35 10% 20%)!important;
 }
-html #td-mobile-root .tdm-pitch-card :is(.tdm-pitch-mid,.tdm-pitch-circle,.tdm-pitch-area){border-color:rgba(255,255,255,.3)!important}
-html #td-mobile-root .tdm-pitch-card .tdm-pitch-circle::after{content:"";position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:rgba(255,255,255,.5)}
-html #td-mobile-root .tdm-pitch-card .tdm-pitch-area::after{content:"";position:absolute;left:30%;right:30%;height:38%;border:1px solid rgba(255,255,255,.3)}
-html #td-mobile-root .tdm-pitch-card .tdm-pitch-area.top::after{top:-1px;border-top:0}
-html #td-mobile-root .tdm-pitch-card .tdm-pitch-area.bottom::after{bottom:-1px;border-bottom:0}
+html #td-mobile-root .tdm-pitch-card .tdm-pitch::before{
+  inset:2.4725cqw 3.2967cqw 7.1429cqw!important;border:0!important;
+  border-left:1.5px solid var(--line)!important;border-right:1.5px solid var(--line)!important;
+}
+html #td-mobile-root .tdm-pitch-card :is(.tdm-pitch-mid,.tdm-pitch-circle,.tdm-pitch-area){display:none!important}
 
-/* Shirt-shaped tokens: home off-white, away volt/blue; a verified kit colour wins */
-html #td-mobile-root .tdm-pitch-card .tdm-pitch-players{inset:6% 8px 10% 8px!important}
-html #td-mobile-root .tdm-pitch-card .tdm-pitch-player{gap:4px!important;filter:drop-shadow(0 4px 6px rgba(0,0,0,.45))}
+/* Outfield lines fill the half down to just above the penalty arc; the keeper row sits on the goal line */
+html #td-mobile-root .tdm-pitch-card .tdm-pitch-players{inset:calc(2.4725cqw + 14px) 2% calc(7.1429cqw + 29cqw) 2%!important;justify-content:space-between!important}
+html #td-mobile-root .tdm-pitch-card .tdm-pitch-row.gk-row{
+  position:absolute!important;left:0;right:0;bottom:calc(-29cqw - var(--tok) / 2)!important;min-height:0!important;justify-content:center!important;
+}
+
+/* Player tokens: kit-coloured disc, number, surname plate. Home off-white, away volt/blue; a verified kit colour wins */
+html #td-mobile-root .tdm-pitch-card .tdm-pitch-player{gap:5px!important;filter:none!important;text-shadow:none!important}
 html #td-mobile-root .tdm-pitch-card .tdm-jersey{
   --shirt:#f4f1ea;--shirt-ink:#0b0d12;
-  display:grid!important;place-items:center;width:42px!important;height:42px!important;padding-top:8px!important;
-  border:0!important;border-radius:0!important;box-shadow:none!important;background:var(--shirt)!important;
-  -webkit-mask:var(--mx-shirt) center/contain no-repeat;mask:var(--mx-shirt) center/contain no-repeat;
+  display:grid!important;place-items:center;width:var(--tok)!important;height:var(--tok)!important;padding:0!important;
+  border:0!important;border-radius:50%!important;clip-path:none!important;-webkit-mask:none!important;mask:none!important;
+  background:var(--shirt)!important;
+  box-shadow:inset 0 -3px 0 rgba(0,0,0,.14),0 0 0 2px rgba(4,12,8,.5),0 6px 14px rgba(0,0,0,.4)!important;
 }
 html #td-mobile-root .tdm-pitch-grid>.tdm-pitch-card:nth-child(2) .tdm-jersey{--shirt:var(--mx-volt);--shirt-ink:var(--mx-volt-ink)}
 html #td-mobile-root .tdm-pitch-card .tdm-jersey:not([style*="365a6b"]){--shirt:var(--kit);--shirt-ink:#ffffff}
 html #td-mobile-root .tdm-pitch-card .tdm-jersey b{
-  font-family:var(--mx-display)!important;font-weight:800!important;font-size:15px!important;line-height:1!important;letter-spacing:0!important;
+  font-family:var(--mx-display)!important;font-weight:800!important;font-size:16px!important;line-height:1!important;letter-spacing:0!important;
   color:var(--shirt-ink)!important;text-shadow:none!important;
 }
 html #td-mobile-root .tdm-pitch-card .tdm-jersey:not([style*="365a6b"]) b{text-shadow:0 0 2px rgba(0,0,0,.7)!important}
 html #td-mobile-root .tdm-pitch-card .tdm-pitch-player strong{
-  max-width:104px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:2px 6px;border-radius:2px;background:rgba(5,8,12,.62);
-  font-size:11px!important;letter-spacing:.05em!important;text-shadow:none!important;
+  max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:2px 6px;border-radius:3px;background:rgba(4,10,7,.68);
+  font-family:var(--mx-cond)!important;font-size:11px!important;font-weight:600!important;line-height:1.3!important;letter-spacing:.05em!important;color:#fff!important;text-shadow:none!important;
 }
+html #td-mobile-root .tdm-pitch-card .tdm-pitch-xg{font-family:var(--mx-cond);font-size:10px;font-weight:600;color:rgba(255,255,255,.78)}
+
+/* Goalkeeper: dark disc ringed in the team colour, centred on the goal line, name plate beside it */
+html #td-mobile-root .tdm-pitch-card .gk-row .tdm-pitch-player{position:relative;flex:0 0 var(--tok)!important;width:var(--tok);min-width:0!important}
+html #td-mobile-root .tdm-pitch-card .gk-row .tdm-jersey{background:#0a0f0c!important;box-shadow:0 0 0 2.5px var(--shirt),0 0 0 4.5px rgba(4,12,8,.5),0 6px 14px rgba(0,0,0,.45)!important}
+html #td-mobile-root .tdm-pitch-card .gk-row .tdm-jersey b{color:#fff!important;text-shadow:none!important}
+html #td-mobile-root .tdm-pitch-card .gk-row .tdm-pitch-player strong{position:absolute;left:calc(100% + 10px);top:50%;transform:translateY(-50%);max-width:none!important;overflow:visible!important}
+html #td-mobile-root .tdm-pitch-card .gk-row .tdm-pitch-player strong::before{content:"GK";margin-right:6px;color:#d4ff3a;font-weight:700}
+html #td-mobile-root .tdm-pitch-card .gk-row .tdm-pitch-xg{display:none}
 
 /* Card header: crest, team, formation */
 html #td-mobile-root .tdm-pitch-card .tdm-pitch-title{padding-bottom:var(--sp-3)!important;margin-bottom:var(--sp-4)!important;border-bottom:1px solid var(--mx-line)!important}
@@ -1703,10 +1725,9 @@ html #td-mobile-root .tdm-pitch-card .tdm-player b{min-width:0;overflow:hidden;t
 html #td-mobile-root .tdm-pitch-card .tdm-kit-note{margin:var(--sp-2) 0 0!important;font-size:12px!important;color:var(--mx-faint)!important}
 
 @media(max-width:780px){
-  html #td-mobile-root .tdm-pitch-card .tdm-pitch{aspect-ratio:1/1.42!important;min-height:480px!important;max-height:none!important}
-  html #td-mobile-root .tdm-pitch-card .tdm-jersey{width:34px!important;height:34px!important;padding-top:6px!important}
-  html #td-mobile-root .tdm-pitch-card .tdm-jersey b{font-size:13px!important}
-  html #td-mobile-root .tdm-pitch-card .tdm-pitch-player strong{max-width:72px;font-size:10px!important;padding:1px 4px}
+  html #td-mobile-root .tdm-pitch-card .tdm-pitch{--tok:34px;aspect-ratio:auto!important;height:clamp(430px,128vw,520px)!important}
+  html #td-mobile-root .tdm-pitch-card .tdm-jersey b{font-size:14px!important}
+  html #td-mobile-root .tdm-pitch-card .tdm-pitch-player strong{font-size:10px!important;padding:1px 4px}
   html #td-mobile-root .tdm-pitch-card .tdm-lineup-rows{grid-template-columns:1fr}
 }
 
