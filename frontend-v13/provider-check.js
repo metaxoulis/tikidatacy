@@ -20,7 +20,7 @@ function render(){
  for(const [key,fa] of [['sm',false],['fa',true]]){
   const feed=state[key],error=state[key+'Error'],matches=(feed?.matches||[]).filter(m=>chosen(m,fa));
   $('#'+key+'-time').textContent='Έλεγχος πηγής: '+time(feed?.updated_at)+(feed?.stale?' · παλαιότερη αποθηκευμένη απάντηση':'')+(error?' · η τελευταία ανανέωση απέτυχε':'');
-  $('#'+key+'-list').innerHTML=(feed?.error?'<p class="old">Η πηγή δεν ανανεώθηκε ('+E(feed.error)+').</p>':'')+(matches.length?matches.map(m=>card(m,fa)).join(''):'<p class="empty">'+(error&&!feed?'Προσωρινά μη διαθέσιμη πηγή.':'Δεν υπάρχουν αγώνες με αυτά τα φίλτρα στην απάντηση της πηγής.')+'</p>');
+  $('#'+key+'-list').innerHTML=(feed?.error?'<p class="old">Η πηγή δεν ανανεώθηκε ('+E(feed.error)+').</p>':'')+(matches.length?matches.map(m=>card(m,fa)).join(''):'<p class="empty">'+(!feed&&!error?'Φόρτωση πηγής…':error&&!feed?'Προσωρινά μη διαθέσιμη πηγή.':'Δεν υπάρχουν αγώνες με αυτά τα φίλτρα στην απάντηση της πηγής.')+'</p>');
  }
  const u=state.fa?.usage;$('#usage').textContent=u?'Δοκιμή Football-API: '+u.used.toLocaleString('el-GR')+' / '+u.trial_limit.toLocaleString('el-GR')+' κλήσεις σήμερα (ημέρα UTC). Όριο προγράμματος: '+u.plan_limit.toLocaleString('el-GR')+'.':'Αναμονή σύνδεσης Football-API…';
 }
