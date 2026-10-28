@@ -53,7 +53,7 @@ test('live data are calculated and cached by the backend, never in the mobile cl
  assert.match(worker,/async function smRebuildLiveSnapshot\(/);
  assert.match(worker,/ON CONFLICT\(cache_key\) DO UPDATE SET expires_at=excluded.expires_at/);
  assert.match(ui,/async function refreshLive\(/);
- assert.match(ui,/setInterval\(\(\)=>\{if\(!document.hidden\)void refreshLive\(\)\},20000\)/);
+ assert.match(ui,/setInterval\(\(\)=>\{if\(!document.hidden\)void refreshLive\(\)\},30000\)/);
  assert.match(ui,/liveMatches=snapshot.matches/);
  assert.match(ui,/snapshot\.refreshing\|\|snapshot\.stale\|\|snapshot\.pending/);
 });

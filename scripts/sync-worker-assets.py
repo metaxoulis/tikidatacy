@@ -11,7 +11,6 @@ assets = {
     'HTML_HOME': 'home-v23.html', 'HTML_PREDICTIONS': 'predictions.html',
     'JS_DATA': 'data.js', 'CSS_DATA': 'data.css', 'HTML_DATA': 'data.html',
     'MOBILE_UI_JS': 'mobile-ui.js', 'MOBILE_UI_CSS': 'mobile-ui.css',
-    'FA_TRIAL_HTML':'provider-check.html','FA_TRIAL_JS':'provider-check.js','FA_TRIAL_CSS':'provider-check.css',
     'BRAND': 'brand.svg', 'FAVICON': 'favicon-new.svg',
     **{'LEGAL_' + page.upper(): page + '.html' for page in ['about', 'privacy', 'terms', 'cookies', 'contact']},
 }
@@ -29,5 +28,10 @@ module = (ROOT / 'frontend/football-trial.mjs').read_text().replace('export ', '
 text, count = re.subn(r'/\* football-trial:start \*/.*?/\* football-trial:end \*/', lambda _: '/* football-trial:start */\n' + module + '\n/* football-trial:end */', text, flags=re.S)
 if count != 1:
     raise RuntimeError('Missing football-trial module markers')
+module = (ROOT / 'frontend/football-primary.mjs').read_text()
+module = re.sub(r'^import .*?;\n', '', module, flags=re.M).replace('export ', '')
+text, count = re.subn(r'/\* football-primary:start \*/.*?/\* football-primary:end \*/', lambda _: '/* football-primary:start */\n' + module + '\n/* football-primary:end */', text, flags=re.S)
+if count != 1:
+    raise RuntimeError('Missing football-primary markers')
 # Existing Worker uses CRLF. Preserve it to keep diffs focused on the changes.
 worker.write_bytes(text.replace('\r\n', '\n').replace('\n', '\r\n').encode())
