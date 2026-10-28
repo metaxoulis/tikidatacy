@@ -25,7 +25,7 @@ test('events retain chronology and side, and lineup roles preserve unknown data'
  assert.equal(l.home.players[0].substitute,true);assert.deepEqual(l.away.players,[]);
 });
 test('global cache lease shares concurrent visitors and never fetches during TTL',async()=>{
- const e=env();let calls=0;const get=async()=>{calls++;return Response.json({success:true,data:{match:[raw]}})};
+ const e=env();let calls=0;const get=async(url,options)=>{assert.equal(options.redirect,'manual');calls++;return Response.json({success:true,data:{match:[raw]}})};
  const normalize=d=>d.match.map(faTrialMatch),now=Date.parse('2026-10-28T19:00:00Z');
  await Promise.all(Array.from({length:20},()=>faTrialCached(e,'live','/matches/live.json',{},30000,normalize,get,now)));
  assert.equal(calls,1);const cached=await faTrialCached(e,'live','/matches/live.json',{},30000,normalize,get,now+1000);

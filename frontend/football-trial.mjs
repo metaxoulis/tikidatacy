@@ -50,7 +50,7 @@ export async function faTrialCached(env,key,path,params,ttl,normalize,fetcher=fe
  const old=await db.prepare('SELECT * FROM football_trial_cache WHERE cache_key=?1').bind(key).first();
  const cached=old?.payload_json?JSON.parse(old.payload_json):null;
  if(cached&&now-old.fetched_at<ttl)return {data:cached,fetched_at:old.fetched_at,stale:false};
- if(old?.retry_after>now||old?.lease_until>now)return {data:cached,fetched_at:old.fetched_at,stale:true,error:old.last_error||'refresh_in_progress'};
+ if(old?.retry_after>now||old?.lease_until>now)return {data:cached,fetched_at:old.fetched_at,stale:true,error:old.last_error?.split(':')[0]||'refresh_in_progress'};
  const lease=await db.prepare('INSERT INTO football_trial_cache(cache_key,lease_until,retry_after) VALUES(?1,?2,?3) ON CONFLICT(cache_key) DO UPDATE SET lease_until=excluded.lease_until,retry_after=excluded.retry_after WHERE football_trial_cache.lease_until<=?4 AND football_trial_cache.retry_after<=?4 RETURNING cache_key')
   .bind(key,now+45000,now+ttl,now).first();
  if(!lease)return {data:cached,fetched_at:old?.fetched_at||0,stale:true,error:'refresh_in_progress'};
@@ -62,7 +62,7 @@ export async function faTrialCached(env,key,path,params,ttl,normalize,fetcher=fe
   url.searchParams.set('key',String(env.FOOTBALL_API_KEY).trim());url.searchParams.set('secret',String(env.FOOTBALL_API_KEY_SECRET).trim());
   for(const [k,v] of Object.entries(params))url.searchParams.set(k,String(v));
   let response;const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
-  try{response=await fetcher(url.toString(),{redirect:'error',signal:controller.signal})}
+  try{response=await fetcher(url.toString(),{redirect:'manual',signal:controller.signal})}
   catch(cause){const error=Error('provider_network_error');error.networkHint=String(cause?.message||cause?.name||'unknown').replaceAll(String(env.FOOTBALL_API_KEY).trim(),'REDACTED').replaceAll(String(env.FOOTBALL_API_KEY_SECRET).trim(),'REDACTED').replace(/https?:\/\/\S+/g,'[url]').slice(0,180);throw error}
   finally{clearTimeout(timer)}
   if(!response.ok)throw Error(response.status===401?'provider_access_denied':'provider_http_error');
