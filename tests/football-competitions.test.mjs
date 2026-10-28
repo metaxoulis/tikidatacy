@@ -29,3 +29,18 @@ test('each side gets its own badge: stored badge first, archived identity second
  const stored=faTeamLogos(game,model,new Set([10,11]),key);
  assert.equal(stored.home,'/badges/10.png');assert.equal(stored.away,'/badges/11.png');
 });
+test('competition logos resolve by league key, or by name for cups without a known ID',async()=>{
+ const {faLeagueLogo,faLeagueLogoKey}=await import('../frontend/football-primary.mjs');
+ const stored=new Set(['ucl','fa167','name-england-fa-cup','name-cyprus-cyprus-cup']);
+ assert.equal(faLeagueLogo({league_key:'ucl',league:'UEFA UEFA Champions League',country:''},stored),'/league-logos/ucl.png');
+ assert.equal(faLeagueLogo({league_key:'fa167',league:'DFB Cup',country:'Germany'},stored),'/league-logos/fa167.png');
+ assert.equal(faLeagueLogoKey({league:'FA Cup',country:'England'}),'name-england-fa-cup');
+ assert.equal(faLeagueLogo({league_key:'fa999',league:'FA Cup',country:'England'},stored),'/league-logos/name-england-fa-cup.png');
+ assert.equal(faLeagueLogo({league_key:'fa998',league:'Cyprus Cup',country:'Cyprus'},stored),'/league-logos/name-cyprus-cyprus-cup.png');
+ assert.equal(faLeagueLogo({league_key:'fa997',league:'Coppa Italia',country:'Italy'},stored),null);
+});
+test('worker trains Greek Super League (Sportmonks 325) as greece and reads up to 40000 licensed rows',async()=>{
+ const fs=await import('node:fs');const w=fs.readFileSync(new URL('../frontend/worker.js',import.meta.url),'utf8');
+ assert.match(w,/325:'greece'/);assert.doesNotMatch(w,/271:'greece'/);
+ assert.match(w,/FROM sportmonks_training_results WHERE match_date <= date\('now','-3 day'\) ORDER BY match_date DESC LIMIT 40000/);
+});

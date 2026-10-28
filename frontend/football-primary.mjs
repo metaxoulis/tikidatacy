@@ -46,14 +46,31 @@ export function faTeamLogos(game,model,badges,nameKey){
  const pick=(id,name)=>badges?.has(id)?'/badges/'+id+'.png':legacy(name);
  return {home:pick(game.home_id,game.home),away:pick(game.away_id,game.away)};
 }
-let faBadgeCache={at:0,ids:new Set()};
+/* Competition logos (league_logos) are served from /league-logos/<key>.png; cups whose Football-API ID is
+   unknown are keyed by name, e.g. name-england-fa-cup. */
+export const faLeagueLogoKey=game=>'name-'+String((game.country||'')+' '+(game.league||'')).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+export function faLeagueLogo(game,leagues){
+ const key=leagues?.has(game.league_key)?game.league_key:leagues?.has(faLeagueLogoKey(game))?faLeagueLogoKey(game):null;
+ return key?'/league-logos/'+key+'.png':null;
+}
+let faBadgeCache={at:0,ids:new Set(),leagues:new Set()};
 async function faBadgeIds(env,now=Date.now()){
  if(now-faBadgeCache.at<600000)return faBadgeCache.ids;
- try{const r=await env.TIKI_DB.prepare('SELECT fa_team_id FROM team_badges').all();faBadgeCache={at:now,ids:new Set((r.results||[]).map(x=>x.fa_team_id))}}
- catch{faBadgeCache={at:now,ids:new Set()}}
+ try{const [t,l]=await Promise.all([env.TIKI_DB.prepare('SELECT fa_team_id FROM team_badges').all(),env.TIKI_DB.prepare('SELECT league_key FROM league_logos').all().catch(()=>({results:[]}))]);
+  faBadgeCache={at:now,ids:new Set((t.results||[]).map(x=>x.fa_team_id)),leagues:new Set((l.results||[]).map(x=>x.league_key))}}
+ catch{faBadgeCache={at:now,ids:new Set(),leagues:new Set()}}
  return faBadgeCache.ids;
 }
 const FA_BADGE_TYPES=new Set(['image/png','image/jpeg','image/webp']);
+export async function faLeagueLogoRoute(env,key){
+ const missing=()=>new Response('Not found',{status:404,headers:{'Cache-Control':'public, max-age=300'}});
+ if(!/^[a-z0-9][a-z0-9-]{1,79}$/.test(String(key))||!env.TIKI_DB)return missing();
+ try{const row=await env.TIKI_DB.prepare('SELECT image,content_type,image_sha256 FROM league_logos WHERE league_key=?1').bind(key).first();
+  if(!row?.image||!FA_BADGE_TYPES.has(row.content_type))return missing();
+  return new Response(new Uint8Array(row.image),{headers:{'Content-Type':row.content_type,'Cache-Control':'public, max-age=86400, stale-while-revalidate=604800',
+   'ETag':'"'+row.image_sha256+'"','X-Content-Type-Options':'nosniff'}});
+ }catch{return missing()}
+}
 export async function faBadgeRoute(env,id){
  const missing=()=>new Response('Not found',{status:404,headers:{'Cache-Control':'public, max-age=300'}});
  if(!/^[1-9]\d{0,9}$/.test(String(id))||!env.TIKI_DB)return missing();
@@ -112,7 +129,7 @@ export function faLivePredictor(game,model,fitted=null){
   warning:'Experimental conditional Poisson. Average-rate priors are not team-strength forecasts. HT uses 45 minutes; late play assumes at least one remaining minute. No live statistics or penalty-shootout forecast.'};
 }
 function faPrimaryForecast(game,model,badges){
- game={...game,logos:faTeamLogos(game,model,badges,fhName)};
+ game={...game,logos:faTeamLogos(game,model,badges,fhName),league_logo:faLeagueLogo(game,faBadgeCache.leagues)};
  const fallback=()=>({live_outlook:faLivePredictor(game,model),prematch_prediction:null});
  const legacy=model?faHistoricalIdentity(game,model,fhName):null;
  if(!legacy)return {...game,...fallback(),p1:null,px:null,p2:null,coverage:'unmatched_historical_identity',forecast_review:{status:'withheld',reasons:['unmatched_historical_identity']}};

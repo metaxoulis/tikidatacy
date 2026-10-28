@@ -317,7 +317,7 @@ const when=x=>{try{return new Date(x).toLocaleString(window.__tdLocale==='el'?'e
 const live=m=>['LIVE','1H','2H','1ST','2ND','HT','ET'].includes(String(m?.status||'').toUpperCase());
 const score=m=>Number.isInteger(m?.home_score)&&Number.isInteger(m?.away_score)?m.home_score+' : '+m.away_score:'VS';
 const pct=x=>typeof x==='number'&&Number.isFinite(x)?x.toLocaleString(window.__tdLocale==='el'?'el-GR':'en-GB',{maximumFractionDigits:1})+'%':'—';
-const trusted=x=>typeof x==='string'&&(/^https:\/\/(cdn\.sportmonks\.com|cdn\.football-api\.com|raw\.githubusercontent\.com|d2ol7oe51mr4n9\.cloudfront\.net)\//.test(x)||/^\/badges\/[1-9]\d{0,9}\.png$/.test(x));
+const trusted=x=>typeof x==='string'&&(/^https:\/\/(cdn\.sportmonks\.com|cdn\.football-api\.com|raw\.githubusercontent\.com|d2ol7oe51mr4n9\.cloudfront\.net)\//.test(x)||/^\/badges\/[1-9]\d{0,9}\.png$/.test(x)||/^\/league-logos\/[a-z0-9][a-z0-9-]{1,79}\.png$/.test(x));
 const badge=(name,url)=>trusted(url)?'<img src="'+E(url)+'" loading="lazy" alt="'+E(name)+'">':'<span class="tdm-team-avatar">'+E(String(name).slice(0,2).toUpperCase())+'</span>';
 const club=(n,l)=>'<div class="tdm-team">'+badge(n,l)+'<strong>'+E(n)+'</strong></div>';
 const UEFA_FILTERS=[['ucl','Champions League','UCL'],['uel','Europa League','UEL'],['uecl','Conference League','UECL']];
@@ -361,7 +361,7 @@ const olderEstimateTag=m=>{
   (scoreChanged?' · πριν την αλλαγή σκορ':'')+'</span>';
 };
 const calendarBadge=k=>{const d=new Date(k+'T12:00:00'),month=d.toLocaleDateString(window.__tdLocale==='el'?'el-GR':'en-GB',{month:'short'}).replace('.','');return '<span class="tdm-calendar-badge" aria-hidden="true"><small>'+E(month)+'</small><b>'+d.getDate()+'</b></span>'};
-const leagueBadge=k=>{const url=state.matches.find(m=>m.league_key===k&&trusted(m.league_logo))?.league_logo||({ucl:'https://cdn.sportmonks.com/images/soccer/leagues/2.png',uel:'https://cdn.sportmonks.com/images/soccer/leagues/5.png',uecl:'https://cdn.sportmonks.com/images/soccer/leagues/26/2286.png'})[k];return trusted(url)?'<img class="tdm-tab-league-logo" src="'+E(url)+'" alt="" loading="lazy">':'<svg class="tdm-tab-league-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 3h8v5a4 4 0 0 1-8 0V3ZM8 5H4v2a4 4 0 0 0 4 4m8-6h4v2a4 4 0 0 1-4 4M12 12v7m-4 2h8"/></svg>'};
+const leagueBadge=k=>{const url=state.matches.find(m=>m.league_key===k&&trusted(m.league_logo))?.league_logo||({ucl:'/league-logos/ucl.png',uel:'/league-logos/uel.png',uecl:'/league-logos/uecl.png'})[k];return trusted(url)?'<img class="tdm-tab-league-logo" src="'+E(url)+'" alt="" loading="lazy">':'<svg class="tdm-tab-league-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 3h8v5a4 4 0 0 1-8 0V3ZM8 5H4v2a4 4 0 0 0 4 4m8-6h4v2a4 4 0 0 1-4 4M12 12v7m-4 2h8"/></svg>'};
 const coveredLive=m=>live(m)&&Date.now()-Date.parse(state.liveUpdatedAt)<85000&&liveMatches.some(x=>String(x.id)===String(m.id)&&Number.isInteger(x.home_score)&&Number.isInteger(x.away_score)&&(Number.isInteger(x.minute)||x.status==='HT'));
 const matchesForFilters=()=>state.matches.filter(m=>(state.view==='live'?coveredLive(m):state.mode==='live'?coveredLive(m):state.mode==='favorites'?isFav(m.home)||isFav(m.away):true)&&(state.league==='all'||state.league===m.league_key)&&(!state.query||norm(m.home+' '+m.away+' '+m.league).includes(norm(state.query))));
 const availableDays=()=>[...new Set(matchesForFilters().map(m=>dayKey(m.date)))].filter(Boolean).sort();
