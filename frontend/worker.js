@@ -3701,7 +3701,10 @@ async function faTrialCached(env,key,path,params,ttl,normalize,fetcher=fetch,now
   const url=new URL('https://api.football-api.com'+path);
   url.searchParams.set('key',String(env.FOOTBALL_API_KEY).trim());url.searchParams.set('secret',String(env.FOOTBALL_API_KEY_SECRET).trim());
   for(const [k,v] of Object.entries(params))url.searchParams.set(k,String(v));
-  let response;try{response=await fetcher(url.toString(),{redirect:'error',signal:AbortSignal.timeout(12000)})}catch{throw Error('provider_network_error')}
+  let response;const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
+  try{response=await fetcher(url.toString(),{redirect:'error',signal:controller.signal})}
+  catch(cause){const error=Error('provider_network_error');error.networkHint=String(cause?.message||cause?.name||'unknown').replaceAll(String(env.FOOTBALL_API_KEY).trim(),'REDACTED').replaceAll(String(env.FOOTBALL_API_KEY_SECRET).trim(),'REDACTED').replace(/https?:\/\/\S+/g,'[url]').slice(0,180);throw error}
+  finally{clearTimeout(timer)}
   if(!response.ok)throw Error(response.status===401?'provider_access_denied':'provider_http_error');
   let raw;try{raw=await faTrialRead(response)}catch{throw Error('provider_invalid_response')}
   if(raw?.success!==true)throw Error('provider_request_rejected');
@@ -3713,7 +3716,7 @@ async function faTrialCached(env,key,path,params,ttl,normalize,fetcher=fetch,now
  }catch(e){
   const safe=new Set(['trial_daily_limit_reached','provider_network_error','provider_access_denied','provider_http_error','provider_invalid_response','provider_request_rejected']);
   const error=safe.has(e.message)?e.message:'trial_storage_error';
-  await db.prepare('UPDATE football_trial_cache SET lease_until=0,retry_after=?1,last_error=?2 WHERE cache_key=?3').bind(now+120000,error,key).run();
+  await db.prepare('UPDATE football_trial_cache SET lease_until=0,retry_after=?1,last_error=?2 WHERE cache_key=?3').bind(now+120000,error+(e.networkHint?': '+e.networkHint:''),key).run();
   return {data:cached,fetched_at:old?.fetched_at||0,stale:true,error};
  }
 }
