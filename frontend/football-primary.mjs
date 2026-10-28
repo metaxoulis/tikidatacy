@@ -159,13 +159,27 @@ export async function faPrimaryLive(req,env){
   return smResponse({...snapshot,mode:'primary',source:'football-api.com',processing:'football_api_score_minute_historical_model',matches,model_unavailable:!model,pending:!snapshot.updated_at,refreshing:false,match_statistics_available:false},snapshot.updated_at?200:503,15);
  }catch{return smResponse({source:'football-api.com',error:'football_api_live_unavailable',matches:[],stale:true,pending:true},503)}
 }
-export async function faPrimaryFocus(req,env){
+/* Prospective audit log, as before the migration: each published pre-match forecast more than two hours
+   before kickoff, once per model version and data cutoff (the table's UNIQUE key). */
+const faLogged=new Set();
+export function faForecastLogWrites(env,matches,model,now=Date.now()){
+ if(!env?.TIKI_DB||!model)return [];
+ if(faLogged.size>5000)faLogged.clear();
+ const stamp=new Date(now).toISOString();
+ return matches.filter(g=>g.status==='NS'&&g.model&&[g.p1,g.px,g.p2].every(Number.isFinite)&&Date.parse(g.date)>now+2*3600000&&!faLogged.has(g.id+'|'+model.cutoff))
+  .map(g=>{faLogged.add(g.id+'|'+model.cutoff);
+   return env.TIKI_DB.prepare("INSERT OR IGNORE INTO prospective_forecast_log (fixture_key,created_at,model_version,data_cutoff,source_sync_at,ph,pd,pa) VALUES (?1,datetime('now'),?2,?3,?4,?5,?6,?7)")
+    .bind(g.id+':'+g.date,model.model_version,model.cutoff,stamp,g.p1/100,g.px/100,g.p2/100)});
+}
+export async function faPrimaryFocus(req,env,ctx){
  try{const [schedule,snapshot,model,badges]=await Promise.all([faPrimaryScheduled(env),faPrimarySnapshot(req,env),tdPublishedModel(env),faBadgeIds(env)]);
   const map=new Map(schedule.games.map(g=>[g.id,g]));
   for(const game of snapshot.matches)map.set(game.id,game);
   const matches=[...map.values()].filter(g=>g.status==='NS'?Date.parse(g.date)>Date.now()-60000:faPrimaryLiveStatus.has(g.status)&&!g.source_stale).map(g=>faPrimaryForecast(g,model,badges)).sort((a,b)=>a.date.localeCompare(b.date));
   const future=matches.filter(g=>g.status==='NS'),featured=future.find(g=>g.model)||future[0]||matches[0]||null;
   const available=matches.filter(g=>g.model).length;
+  const logs=faForecastLogWrites(env,matches,model);
+  if(logs.length&&ctx?.waitUntil)ctx.waitUntil(env.TIKI_DB.batch(logs).catch(()=>{}));
   return smResponse({source:'football-api.com',processing:'football_api_primary',updated_at:new Date().toISOString(),matches,featured,upcoming:future.filter(g=>g!==featured).slice(0,6),
    range:Array.from({length:7},(_,i)=>smAddDay(new Date().toISOString().slice(0,10),i)),stale:false,partial:schedule.partial,
    coverage:{matches:matches.length,competitions:new Set(matches.map(g=>g.league_key)).size,with_prediction:available,without_prediction:matches.length-available,live_matches:snapshot.matches.filter(g=>faPrimaryLiveStatus.has(g.status)).length},
@@ -206,7 +220,9 @@ const faInt=v=>/^\d{1,14}$/.test(String(v))&&Number(v)>0?Number(v):null;
 export function faHistoryMatch(m){
  const id=faInt(m?.id),home=faInt(m?.home?.id),away=faInt(m?.away?.id),s=/^(\d{1,2})\s*-\s*(\d{1,2})$/.exec(String(m?.scores?.ft_score||''));
  if(!id||!home||!away||home===away||!s||m?.status!=='FINISHED'||!/^\d{4}-\d{2}-\d{2}$/.test(String(m?.date||'')))return null;
- return {id,date:m.date,competition_id:faInt(m.competition?.id),home_id:home,away_id:away,
+ const clock=/^\d{2}:\d{2}$/.test(String(m.scheduled||''))?m.scheduled:'00:00',fixture=faInt(m.fixture_id);
+ return {id,fixture_id:fixture,public_id:fixture?'football-api-fixture-'+fixture:'football-api-'+id,kickoff:m.date+'T'+clock+':00Z',
+  date:m.date,competition_id:faInt(m.competition?.id),home_id:home,away_id:away,
   home:String(m.home.name||'').slice(0,80),away:String(m.away.name||'').slice(0,80),home_score:Number(s[1]),away_score:Number(s[2])};
 }
 export function faResultRow(m,identity,observedAt){
@@ -219,6 +235,14 @@ export function faResultRow(m,identity,observedAt){
   home_team:m.home,away_team:m.away,home_team_id:h,away_team_id:a,home_score:m.home_score,away_score:m.away_score,
   fa_home_id:m.home_id,fa_away_id:m.away_id,observed_at:observedAt}};
 }
+/* Every finished match in the trained competitions, mapped or not, for the Transparency audit. */
+export function faAuditRow(m,badges){
+ const key=FA_TRAINING_LEAGUES[m?.competition_id];
+ if(!key||!m.home||!m.away)return null;
+ const logo=id=>badges?.has(id)?'/badges/'+id+'.png':null;
+ return {fixture_id:m.public_id,league_key:key,kickoff:m.kickoff,home:m.home,away:m.away,home_logo:logo(m.home_id),away_logo:logo(m.away_id),
+  status:'FT',home_score:m.home_score,away_score:m.away_score,source:'football-api'};
+}
 export async function faSyncResults(env,now=Date.now(),fetcher=fetch){
  if(!env?.TIKI_DB||!env?.FOOTBALL_TRIAL_DB)return {status:'unavailable'};
  const day=t=>new Date(t).toISOString().slice(0,10),to=day(now-86400000),floor=day(now-14*86400000);
@@ -227,6 +251,7 @@ export async function faSyncResults(env,now=Date.now(),fetcher=fetch){
  const from=[last?day(Date.parse(last+'T00:00:00Z')-2*86400000):'2026-10-26',floor].sort().at(-1);
  if(from>to)return {status:'up_to_date',from,to};
  const identity=new Map(((await env.TIKI_DB.prepare('SELECT fa_team_id,sportmonks_team_id FROM fa_team_identity').all()).results||[]).map(r=>[r.fa_team_id,r.sportmonks_team_id]));
+ const badges=await faBadgeIds(env,now),audit=[];
  const observed=new Date(now).toISOString(),rows=[],skipped={invalid:0,unmapped_team:0},unmapped=new Set();let pages=0,partial=false;
  for(let page=1;page<=12;page++){
   const r=await faTrialCached(env,'history-'+from+'-'+to+'-'+page,'/matches/history.json',
@@ -238,6 +263,7 @@ export async function faSyncResults(env,now=Date.now(),fetcher=fetch){
   if(!r.data)break;
   pages++;
   for(const m of r.data.matches){
+   const a=faAuditRow(m,badges);if(a)audit.push(a);
    const out=faResultRow(m,identity,observed);
    if(out.row)rows.push(out.row);else{skipped[out.skip]++;if(out.skip==='unmapped_team')for(const [id,n] of [[m.home_id,m.home],[m.away_id,m.away]])if(!identity.has(id))unmapped.add(n+' ('+id+')')}
   }
@@ -248,5 +274,9 @@ export async function faSyncResults(env,now=Date.now(),fetcher=fetch){
  const sql='INSERT INTO football_training_results('+cols.join(',')+') VALUES('+cols.map((_,i)=>'?'+(i+1)).join(',')+') ON CONFLICT(fa_match_id) DO UPDATE SET '+
   cols.slice(1).map(c=>c+'=excluded.'+c).join(',');
  for(let i=0;i<rows.length;i+=50)await env.TIKI_DB.batch(rows.slice(i,i+50).map(r=>env.TIKI_DB.prepare(sql).bind(...cols.map(c=>r[c]))));
- return {status:partial?'partial':'ok',from,to,pages,stored:rows.length,skipped,unmapped_teams:[...unmapped].slice(0,20)};
+ const acols=['fixture_id','league_key','kickoff','home','away','home_logo','away_logo','status','home_score','away_score','source'];
+ const asql='INSERT INTO audit_fixtures('+acols.join(',')+') VALUES('+acols.map((_,i)=>'?'+(i+1)).join(',')+') ON CONFLICT(fixture_id) DO UPDATE SET '+
+  acols.slice(1).map(c=>c+'=excluded.'+c).join(',');
+ for(let i=0;i<audit.length;i+=50)await env.TIKI_DB.batch(audit.slice(i,i+50).map(r=>env.TIKI_DB.prepare(asql).bind(...acols.map(c=>r[c]))));
+ return {status:partial?'partial':'ok',from,to,pages,stored:rows.length,audited:audit.length,skipped,unmapped_teams:[...unmapped].slice(0,20)};
 }
