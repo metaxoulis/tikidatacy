@@ -3766,12 +3766,25 @@ async function faTrialRoute(req,env){
 
 /* football-primary:start */
 /* Main provider adapter. Football-API and legacy Sportmonks IDs never share a namespace. */
-const FA_COMPETITIONS={1:'bundesliga',2:'epl',3:'laliga',4:'seriea',5:'ligue1',9:'greece',44:'cyprus',244:'ucl',245:'uel',446:'uecl'};
+/* Covered: top-5 leagues, Greek and Cypriot top flights, UEFA, and the domestic cups of those seven countries.
+   Cups with a known Football-API ID also have their schedule fetched; other cups are accepted by exact name
+   when they appear live, so lower divisions (National League, Coppa Italia Serie C...) stay out. */
+const FA_COMPETITIONS={1:'bundesliga',2:'epl',3:'laliga',4:'seriea',5:'ligue1',9:'greece',44:'cyprus',244:'ucl',245:'uel',446:'uecl',150:'fa150',167:'fa167',171:'fa171'};
+const FA_CUPS={
+ England:/^(?:FA Cup|EFL Cup|League Cup|Community Shield)$/i,
+ Spain:/^(?:Copa del Rey|Super ?Cup|Supercopa(?: de Espa(?:n|ñ)a)?)$/i,
+ Germany:/^(?:DFB Cup|DFB[ -]Pokal|Super ?Cup|DFL[ -]Supercup)$/i,
+ Italy:/^(?:Coppa Italia|Super ?Cup|Supercoppa(?: Italiana)?)$/i,
+ France:/^(?:Coupe de France|Super ?Cup|Troph(?:e|é)e des Champions)$/i,
+ Greece:/^(?:Cup|Greek Cup|Super ?Cup)$/i,
+ Cyprus:/^(?:Cup|Cyprus Cup|Super ?Cup)$/i};
+const faCoveredCompetition=row=>FA_COMPETITIONS[row?.competition_id]||
+ (row?.competition_id&&FA_CUPS[row.country]?.test(String(row.league||''))?'fa'+row.competition_id:null);
 const faPrimaryLiveStatus=new Set(['LIVE','1ST','2ND','HT','ET','BREAK','PEN_LIVE']);
 function faPrimaryGame(row){
  if(!row?.date||!Number.isFinite(Date.parse(row.date)))return null;
- let key=FA_COMPETITIONS[row.competition_id];
- if(!key){const country={Greece:'greece',Cyprus:'cyprus',England:'epl',Spain:'laliga',Germany:'bundesliga',Italy:'seriea',France:'ligue1'}[row.country];if(!country)return null;key='fa'+row.competition_id}
+ const key=faCoveredCompetition(row);
+ if(!key)return null;
  const clock=String(row.minute||''),min=/^(\d{1,3})(?:\+\d{1,2})?$/.exec(clock);
  const status=row.status==='FINISHED'?'FT':row.status==='HALF TIME BREAK'?'HT':row.status==='IN PLAY'?(Number(min?.[1])<=45?'1ST':'2ND'):row.status==='EXTRA TIME'?'ET':row.status==='PENALTY SHOOTOUT'?'PEN_LIVE':'NS';
  return {...row,id:row.fixture_id?'football-api-fixture-'+row.fixture_id:'football-api-'+row.match_id,
@@ -3782,13 +3795,39 @@ function faPrimaryFixture(raw){
  const row=faTrialMatch({...raw,scheduled:raw.time,status:'NS',fixture_id:raw.id});
  if(!row)return null;const game=faPrimaryGame(row);return game?{...game,match_id:null}:null;
 }
-function faHistoricalIdentity(game,model,nameKey){
+function faLegacyTeamId(name,model,nameKey){
  const aliases={'paok thessaloniki fc':'PAOK','aris thessaloniki fc':'Aris','ofi crete':'OFI','apoel nicosia':'APOEL'};
- const resolve=name=>{const canonical=aliases[String(name).toLowerCase()]||name,n=nameKey(canonical);
-  if(model?.team_identity?.ambiguous?.includes(n))return null;
-  const value=model?.team_identity?.aliases?.[n];return /^sportmonks:[1-9]\d*$/.test(value||'')?Number(value.split(':')[1]):null};
- const h=resolve(game.home),a=resolve(game.away);
+ const canonical=aliases[String(name).toLowerCase()]||name,n=nameKey(canonical);
+ if(model?.team_identity?.ambiguous?.includes(n))return null;
+ const value=model?.team_identity?.aliases?.[n];return /^sportmonks:[1-9]\d*$/.test(value||'')?Number(value.split(':')[1]):null;
+}
+function faHistoricalIdentity(game,model,nameKey){
+ const h=faLegacyTeamId(game.home,model,nameKey),a=faLegacyTeamId(game.away,model,nameKey);
  return h&&a&&h!==a?{...game,home_id:h,away_id:a}:null;
+}
+/* Badges stored in D1 (team_badges, keyed by Football-API team ID) are served from /badges/<id>.png.
+   Each side is resolved on its own; the archived Sportmonks CDN image is only a fallback. */
+function faTeamLogos(game,model,badges,nameKey){
+ const legacy=name=>{const id=model?faLegacyTeamId(name,model,nameKey):null;return id?'https://cdn.sportmonks.com/images/soccer/teams/'+(id%32)+'/'+id+'.png':null};
+ const pick=(id,name)=>badges?.has(id)?'/badges/'+id+'.png':legacy(name);
+ return {home:pick(game.home_id,game.home),away:pick(game.away_id,game.away)};
+}
+let faBadgeCache={at:0,ids:new Set()};
+async function faBadgeIds(env,now=Date.now()){
+ if(now-faBadgeCache.at<600000)return faBadgeCache.ids;
+ try{const r=await env.TIKI_DB.prepare('SELECT fa_team_id FROM team_badges').all();faBadgeCache={at:now,ids:new Set((r.results||[]).map(x=>x.fa_team_id))}}
+ catch{faBadgeCache={at:now,ids:new Set()}}
+ return faBadgeCache.ids;
+}
+const FA_BADGE_TYPES=new Set(['image/png','image/jpeg','image/webp']);
+async function faBadgeRoute(env,id){
+ const missing=()=>new Response('Not found',{status:404,headers:{'Cache-Control':'public, max-age=300'}});
+ if(!/^[1-9]\d{0,9}$/.test(String(id))||!env.TIKI_DB)return missing();
+ try{const row=await env.TIKI_DB.prepare('SELECT image,content_type,image_sha256 FROM team_badges WHERE fa_team_id=?1').bind(Number(id)).first();
+  if(!row?.image||!FA_BADGE_TYPES.has(row.content_type))return missing();
+  return new Response(new Uint8Array(row.image),{headers:{'Content-Type':row.content_type,'Cache-Control':'public, max-age=86400, stale-while-revalidate=604800',
+   'ETag':'"'+row.image_sha256+'"','X-Content-Type-Options':'nosniff'}});
+ }catch{return missing()}
 }
 async function faPrimaryScheduled(env){
  const start=new Date().toISOString().slice(0,10),end=smAddDay(start,6),games=[],failures=[];
@@ -3838,12 +3877,11 @@ function faLivePredictor(game,model,fitted=null){
   most_likely_final:{score:best.h+'-'+best.a,probability:pct(best.p)},
   warning:'Experimental conditional Poisson. Average-rate priors are not team-strength forecasts. HT uses 45 minutes; late play assumes at least one remaining minute. No live statistics or penalty-shootout forecast.'};
 }
-function faPrimaryForecast(game,model){
+function faPrimaryForecast(game,model,badges){
+ game={...game,logos:faTeamLogos(game,model,badges,fhName)};
  const fallback=()=>({live_outlook:faLivePredictor(game,model),prematch_prediction:null});
  const legacy=model?faHistoricalIdentity(game,model,fhName):null;
  if(!legacy)return {...game,...fallback(),p1:null,px:null,p2:null,coverage:'unmatched_historical_identity',forecast_review:{status:'withheld',reasons:['unmatched_historical_identity']}};
- const logo=id=>'https://cdn.sportmonks.com/images/soccer/teams/'+(id%32)+'/'+id+'.png';
- game={...game,logos:{home:logo(legacy.home_id),away:logo(legacy.away_id)}};
  const review=forecastIntegrity(legacy,model,fhTeamKey);
  const fitted=fhEstimate(legacy,model)||fhEstimate(legacy,model,{experimentalPreview:true});
  const usable=fitted?.tier==='team'&&fitted.team_samples.home>=3&&fitted.team_samples.away>=3;
@@ -3865,16 +3903,16 @@ async function faPrimarySnapshot(req,env){
  return {...data,matches:(data.matches||[]).map(faPrimaryGame).filter(Boolean)};
 }
 async function faPrimaryLive(req,env){
- try{const [snapshot,model]=await Promise.all([faPrimarySnapshot(req,env),tdPublishedModel(env)]);
-  const matches=snapshot.matches.filter(g=>faPrimaryLiveStatus.has(g.status)&&!g.source_stale&&Number.isInteger(g.home_score)&&Number.isInteger(g.away_score)&&(Number.isInteger(g.minute)||g.status==='HT')).map(g=>faPrimaryForecast(g,model));
+ try{const [snapshot,model,badges]=await Promise.all([faPrimarySnapshot(req,env),tdPublishedModel(env),faBadgeIds(env)]);
+  const matches=snapshot.matches.filter(g=>faPrimaryLiveStatus.has(g.status)&&!g.source_stale&&Number.isInteger(g.home_score)&&Number.isInteger(g.away_score)&&(Number.isInteger(g.minute)||g.status==='HT')).map(g=>faPrimaryForecast(g,model,badges));
   return smResponse({...snapshot,mode:'primary',source:'football-api.com',processing:'football_api_score_minute_historical_model',matches,model_unavailable:!model,pending:!snapshot.updated_at,refreshing:false,match_statistics_available:false},snapshot.updated_at?200:503,15);
  }catch{return smResponse({source:'football-api.com',error:'football_api_live_unavailable',matches:[],stale:true,pending:true},503)}
 }
 async function faPrimaryFocus(req,env){
- try{const [schedule,snapshot,model]=await Promise.all([faPrimaryScheduled(env),faPrimarySnapshot(req,env),tdPublishedModel(env)]);
+ try{const [schedule,snapshot,model,badges]=await Promise.all([faPrimaryScheduled(env),faPrimarySnapshot(req,env),tdPublishedModel(env),faBadgeIds(env)]);
   const map=new Map(schedule.games.map(g=>[g.id,g]));
   for(const game of snapshot.matches)map.set(game.id,game);
-  const matches=[...map.values()].filter(g=>g.status==='NS'?Date.parse(g.date)>Date.now()-60000:faPrimaryLiveStatus.has(g.status)&&!g.source_stale).map(g=>faPrimaryForecast(g,model)).sort((a,b)=>a.date.localeCompare(b.date));
+  const matches=[...map.values()].filter(g=>g.status==='NS'?Date.parse(g.date)>Date.now()-60000:faPrimaryLiveStatus.has(g.status)&&!g.source_stale).map(g=>faPrimaryForecast(g,model,badges)).sort((a,b)=>a.date.localeCompare(b.date));
   const future=matches.filter(g=>g.status==='NS'),featured=future.find(g=>g.model)||future[0]||matches[0]||null;
   const available=matches.filter(g=>g.model).length;
   return smResponse({source:'football-api.com',processing:'football_api_primary',updated_at:new Date().toISOString(),matches,featured,upcoming:future.filter(g=>g!==featured).slice(0,6),
@@ -3913,4 +3951,4 @@ async function faPrimaryDetail(req,env,publicId){
 /* football-primary:end */
 
 export default {async fetch(req,env,ctx){const u=new URL(req.url),path=u.pathname;if(path==='/provider-check'||path==='/provider-check/')return new Response(null,{status:302,headers:{Location:'/predictions?filter=live','Cache-Control':'no-store'}});if(path.startsWith('/api/football-trial/'))return smResponse({error:'trial_retired'},410);if(/^\/api\/match\/football-api(?:-fixture)?-[1-9]\d{0,13}$/.test(path))return faPrimaryDetail(req,env,path.split('/').at(-1));if(path==='/landing-football.webp')return new Response(Uint8Array.from(atob(TD_LANDING_ART),c=>c.charCodeAt(0)),{headers:{'Content-Type':'image/webp','Cache-Control':'public,max-age=86400'}});if(path==='/api/internal/train')return smResponse({status:'archived_model_retained',source:'football-api.com',note:'Provider migration: automatic Sportmonks ingestion disabled.'},200);if(path==='/api/model/statistics-status')return smResponse(await tdStatisticsStatus(env),200,60);if(path==='/api/model/training-status')return tdTrainingStatus(env);if(path==='/transparency'||path==='/transparency/')return asset(await seoPage(tdHtmlWithAdsenseVerification(HTML_PREDICTIONS,env),req,env,ctx,'transparency'),'text/html; charset=utf-8');if(path==='/api/transparency')return tdTransparency(req,env,ctx);if(path==='/transparency.xlsx')return new Response(Uint8Array.from(atob(TD_AUDIT_EXCEL),c=>c.charCodeAt(0)),{headers:{'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':'attachment; filename="Tiki-Data_Verification_18-10-2026.xlsx"','Cache-Control':'public, max-age=300'}});if(path==='/3287221.txt')return new Response('3287221',{headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'public, max-age=300'}});if(path==='/api/auth/session')return tdAuthSession(req,env);if(path==='/auth/google/start')return tdAuthStart(req,env);if(path==='/auth/google/callback')return tdAuthCallback(req,env);if(path==='/api/auth/preferences')return tdAuthPreferences(req,env);if(path==='/api/auth/logout')return tdAuthLogout(req,env);if(path==='/api/auth/delete')return tdAuthDeleteAccount(req,env);if(!['GET','HEAD'].includes(req.method))return new Response('Method Not Allowed',{status:405});if(path==='/'||path==='/index.html')return asset(await seoPage(tdHtmlWithAdsenseVerification(HTML_HOME,env),req,env,ctx,'home'),'text/html; charset=utf-8');if(path==='/predictions'||path==='/predictions/')return asset(await seoPage(tdHtmlWithAdsenseVerification(HTML_PREDICTIONS,env),req,env,ctx,'predictions'),'text/html; charset=utf-8');if(path==='/about'||path==='/about/')return asset(tdHtmlWithAdsenseVerification(u.searchParams.get('lang')==='el'?LEGAL_ABOUT:tdLegalEnglish('about'),env),'text/html; charset=utf-8');if(path==='/privacy'||path==='/privacy/')return asset(tdHtmlWithAdsenseVerification(u.searchParams.get('lang')==='el'?LEGAL_PRIVACY:tdLegalEnglish('privacy'),env),'text/html; charset=utf-8');if(path==='/terms'||path==='/terms/')return asset(tdHtmlWithAdsenseVerification(u.searchParams.get('lang')==='el'?LEGAL_TERMS:tdLegalEnglish('terms'),env),'text/html; charset=utf-8');if(path==='/cookies'||path==='/cookies/')return asset(tdHtmlWithAdsenseVerification(u.searchParams.get('lang')==='el'?LEGAL_COOKIES:tdLegalEnglish('cookies'),env),'text/html; charset=utf-8');if(path==='/contact'||path==='/contact/')return asset(tdHtmlWithAdsenseVerification(u.searchParams.get('lang')==='el'?LEGAL_CONTACT:tdLegalEnglish('contact'),env),'text/html; charset=utf-8');if(path==='/legal.css')return asset(LEGAL_CSS,'text/css; charset=utf-8');if(path==='/ads.txt'){const publisher=tdAdsensePublisherId(env);return publisher?asset('google.com, '+publisher+', DIRECT, f08c47fec0942fa0\n','text/plain; charset=utf-8'):new Response('Not Found',{status:404,headers:{'Cache-Control':'no-store'}});}
-if(path==='/robots.txt')return asset(ADSENSE_ROBOTS,'text/plain; charset=utf-8');if(path==='/google72d157a252fdd591.html')return new Response("google-site-verification: google72d157a252fdd591.html",{status:200,headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'public,max-age=3600','X-Content-Type-Options':'nosniff'}});if(path==='/sitemap.xml')return seoSitemap(req,env,ctx);if(path==='/og-image.jpg')return seoOgImage();if(path==='/data'||path==='/data/')return new Response(null,{status:302,headers:{Location:'/predictions','Cache-Control':'no-store'}});if(path==='/data.css')return asset(CSS_DATA,'text/css; charset=utf-8');if(path==='/data.js')return asset(JS_DATA,'application/javascript; charset=utf-8');if(path==='/home-v23.css')return asset(HOME_V23_CSS,'text/css; charset=utf-8');if(path==='/home-v23.js')return asset(HOME_V23_JS,'application/javascript; charset=utf-8');if(path==='/styles.css')return asset(CSS,'text/css; charset=utf-8');if(path==='/logos.js')return asset(LOGOS,'application/javascript; charset=utf-8');if(path==='/home.js')return asset(HOME,'application/javascript; charset=utf-8');if(path==='/app.js')return asset(JS,'application/javascript; charset=utf-8');if(path==='/mobile-ui.js'){const response=asset(MOBILE_UI_JS,'application/javascript; charset=utf-8');response.headers.set('Cache-Control','no-cache, must-revalidate');return response;}if(path==='/locale.js')return asset(LOCALE_JS,'application/javascript; charset=utf-8');if(path==='/mobile-ui.css')return asset(MOBILE_UI_CSS,'text/css; charset=utf-8');if(path==='/stadium.svg')return asset(STADIUM,'image/svg+xml');/* pwa-routes:start */if(path==='/manifest.webmanifest')return asset(PWA_MANIFEST,'application/manifest+json');if(path==='/sw.js')return pwaWorker();if(Object.prototype.hasOwnProperty.call(PWA_ICONS,path))return pwaIcon(path);/* pwa-routes:end */if(path==='/brand.svg')return asset(BRAND,'image/svg+xml');if(path==='/favicon.svg')return asset(FAVICON,'image/svg+xml');if(path.startsWith('/api/allsports/')||path.startsWith('/api/sport/')||path==='/api/home-v23'||path==='/api/fixtures'||path.startsWith('/api/logo/team/'))return new Response(JSON.stringify({error:'retired_api'}),{status:410,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});if(path.startsWith('/api/sportmonks/')||path==='/api/history/fixtures'||path==='/api/history/odds/summary')return smResponse({error:'provider_migrated',source:'football-api.com'},410);if(path==='/api/sportmonks/health')return smCheckAccess(req,env);if(path==='/api/sportmonks/stage')return smStage(req,env);if(path==='/api/home-focus')return tdProviderFocus(req,env,ctx);if(path==='/api/uefa/evidence-status')return tdUefaEvidenceStatus(env);if(path==='/api/uefa/stages')return smResponse({source:'football-api.com',leagues:[]},200,3600);if(path==='/api/live')return tdProviderLive(req,env,ctx);if(/^\/api\/match\/sportmonks-[1-9]\d{0,13}$/.test(path))return smResponse({error:'provider_migrated'},410);if(path==='/api/model/backtest')return tdBacktestResponse(req,env,ctx);if(path==='/api/model/sync-status')return tdSyncStatus(req,env);if(path==='/api/history/fixtures')return smHistoryFixturesRoute(req,env,ctx);if(path==='/api/history/odds/summary')return smHistoryOddsRoute(req,env,ctx);return new Response('Not Found',{status:404})}};
+if(path.startsWith('/badges/')&&path.endsWith('.png'))return faBadgeRoute(env,path.slice(8,-4));if(path==='/robots.txt')return asset(ADSENSE_ROBOTS,'text/plain; charset=utf-8');if(path==='/google72d157a252fdd591.html')return new Response("google-site-verification: google72d157a252fdd591.html",{status:200,headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'public,max-age=3600','X-Content-Type-Options':'nosniff'}});if(path==='/sitemap.xml')return seoSitemap(req,env,ctx);if(path==='/og-image.jpg')return seoOgImage();if(path==='/data'||path==='/data/')return new Response(null,{status:302,headers:{Location:'/predictions','Cache-Control':'no-store'}});if(path==='/data.css')return asset(CSS_DATA,'text/css; charset=utf-8');if(path==='/data.js')return asset(JS_DATA,'application/javascript; charset=utf-8');if(path==='/home-v23.css')return asset(HOME_V23_CSS,'text/css; charset=utf-8');if(path==='/home-v23.js')return asset(HOME_V23_JS,'application/javascript; charset=utf-8');if(path==='/styles.css')return asset(CSS,'text/css; charset=utf-8');if(path==='/logos.js')return asset(LOGOS,'application/javascript; charset=utf-8');if(path==='/home.js')return asset(HOME,'application/javascript; charset=utf-8');if(path==='/app.js')return asset(JS,'application/javascript; charset=utf-8');if(path==='/mobile-ui.js'){const response=asset(MOBILE_UI_JS,'application/javascript; charset=utf-8');response.headers.set('Cache-Control','no-cache, must-revalidate');return response;}if(path==='/locale.js')return asset(LOCALE_JS,'application/javascript; charset=utf-8');if(path==='/mobile-ui.css')return asset(MOBILE_UI_CSS,'text/css; charset=utf-8');if(path==='/stadium.svg')return asset(STADIUM,'image/svg+xml');/* pwa-routes:start */if(path==='/manifest.webmanifest')return asset(PWA_MANIFEST,'application/manifest+json');if(path==='/sw.js')return pwaWorker();if(Object.prototype.hasOwnProperty.call(PWA_ICONS,path))return pwaIcon(path);/* pwa-routes:end */if(path==='/brand.svg')return asset(BRAND,'image/svg+xml');if(path==='/favicon.svg')return asset(FAVICON,'image/svg+xml');if(path.startsWith('/api/allsports/')||path.startsWith('/api/sport/')||path==='/api/home-v23'||path==='/api/fixtures'||path.startsWith('/api/logo/team/'))return new Response(JSON.stringify({error:'retired_api'}),{status:410,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});if(path.startsWith('/api/sportmonks/')||path==='/api/history/fixtures'||path==='/api/history/odds/summary')return smResponse({error:'provider_migrated',source:'football-api.com'},410);if(path==='/api/sportmonks/health')return smCheckAccess(req,env);if(path==='/api/sportmonks/stage')return smStage(req,env);if(path==='/api/home-focus')return tdProviderFocus(req,env,ctx);if(path==='/api/uefa/evidence-status')return tdUefaEvidenceStatus(env);if(path==='/api/uefa/stages')return smResponse({source:'football-api.com',leagues:[]},200,3600);if(path==='/api/live')return tdProviderLive(req,env,ctx);if(/^\/api\/match\/sportmonks-[1-9]\d{0,13}$/.test(path))return smResponse({error:'provider_migrated'},410);if(path==='/api/model/backtest')return tdBacktestResponse(req,env,ctx);if(path==='/api/model/sync-status')return tdSyncStatus(req,env);if(path==='/api/history/fixtures')return smHistoryFixturesRoute(req,env,ctx);if(path==='/api/history/odds/summary')return smHistoryOddsRoute(req,env,ctx);return new Response('Not Found',{status:404})}};
