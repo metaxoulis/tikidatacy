@@ -198,3 +198,55 @@ export async function faPrimaryDetail(req,env,publicId){
    updated_at:new Date().toISOString(),news:[],disclosures:{lineups:'Παίκτες από Football-API. Δεν παρέχονται επιβεβαιωμένες θέσεις ή σχηματισμός.',xg:'Δεν υπάρχει πρόσβαση σε στατιστικά ή xG με το τρέχον πακέτο.'}},200,30);
  }catch{return smResponse({error:'football_api_details_unavailable'},503)}
 }
+/* Finished results for model training (/matches/history.json, 90-minute ft_score). Football-API team IDs are
+   translated to the model's archived Sportmonks identities through fa_team_identity; a match with an unmapped
+   side is skipped and counted, never guessed. Runs inside the scheduled training job. */
+export const FA_TRAINING_LEAGUES={1:'bundesliga',2:'epl',3:'laliga',4:'seriea',5:'ligue1',9:'greece',44:'cyprus',244:'ucl',245:'uel',446:'uecl'};
+const faInt=v=>/^\d{1,14}$/.test(String(v))&&Number(v)>0?Number(v):null;
+export function faHistoryMatch(m){
+ const id=faInt(m?.id),home=faInt(m?.home?.id),away=faInt(m?.away?.id),s=/^(\d{1,2})\s*-\s*(\d{1,2})$/.exec(String(m?.scores?.ft_score||''));
+ if(!id||!home||!away||home===away||!s||m?.status!=='FINISHED'||!/^\d{4}-\d{2}-\d{2}$/.test(String(m?.date||'')))return null;
+ return {id,date:m.date,competition_id:faInt(m.competition?.id),home_id:home,away_id:away,
+  home:String(m.home.name||'').slice(0,80),away:String(m.away.name||'').slice(0,80),home_score:Number(s[1]),away_score:Number(s[2])};
+}
+export function faResultRow(m,identity,observedAt){
+ const key=FA_TRAINING_LEAGUES[m?.competition_id];
+ if(!key||m.home_score>15||m.away_score>15||!m.home||!m.away)return {skip:'invalid'};
+ const h=identity.get(m.home_id),a=identity.get(m.away_id);
+ if(!h||!a||h===a)return {skip:'unmapped_team'};
+ const y=Number(m.date.slice(0,4))-(Number(m.date.slice(5,7))<7?1:0);
+ return {row:{fa_match_id:m.id,dataset_slug:key+'-'+y+'-'+String((y+1)%100).padStart(2,'0'),league_key:key,match_date:m.date,
+  home_team:m.home,away_team:m.away,home_team_id:h,away_team_id:a,home_score:m.home_score,away_score:m.away_score,
+  fa_home_id:m.home_id,fa_away_id:m.away_id,observed_at:observedAt}};
+}
+export async function faSyncResults(env,now=Date.now(),fetcher=fetch){
+ if(!env?.TIKI_DB||!env?.FOOTBALL_TRIAL_DB)return {status:'unavailable'};
+ const day=t=>new Date(t).toISOString().slice(0,10),to=day(now-86400000),floor=day(now-14*86400000);
+ const last=(await env.TIKI_DB.prepare('SELECT max(match_date) d FROM football_training_results').first())?.d;
+ // Two days of overlap catch late corrections; never further back than 14 days, never before the archive ends.
+ const from=[last?day(Date.parse(last+'T00:00:00Z')-2*86400000):'2026-10-26',floor].sort().at(-1);
+ if(from>to)return {status:'up_to_date',from,to};
+ const identity=new Map(((await env.TIKI_DB.prepare('SELECT fa_team_id,sportmonks_team_id FROM fa_team_identity').all()).results||[]).map(r=>[r.fa_team_id,r.sportmonks_team_id]));
+ const observed=new Date(now).toISOString(),rows=[],skipped={invalid:0,unmapped_team:0},unmapped=new Set();let pages=0,partial=false;
+ for(let page=1;page<=12;page++){
+  const r=await faTrialCached(env,'history-'+from+'-'+to+'-'+page,'/matches/history.json',
+   {competition_id:Object.keys(FA_TRAINING_LEAGUES).join(','),from,to,page},6*3600000,d=>{
+    if(!Array.isArray(d?.match))throw Error('provider_invalid_response');
+    return {matches:d.match.map(faHistoryMatch).filter(Boolean),received:d.match.length,next:!!d.next_page};
+   },fetcher,now);
+  if(r.error)partial=true;
+  if(!r.data)break;
+  pages++;
+  for(const m of r.data.matches){
+   const out=faResultRow(m,identity,observed);
+   if(out.row)rows.push(out.row);else{skipped[out.skip]++;if(out.skip==='unmapped_team')for(const [id,n] of [[m.home_id,m.home],[m.away_id,m.away]])if(!identity.has(id))unmapped.add(n+' ('+id+')')}
+  }
+  if(!r.data.next||r.data.received<30)break;
+  if(page===12)partial=true;
+ }
+ const cols=['fa_match_id','dataset_slug','league_key','match_date','home_team','away_team','home_team_id','away_team_id','home_score','away_score','fa_home_id','fa_away_id','observed_at'];
+ const sql='INSERT INTO football_training_results('+cols.join(',')+') VALUES('+cols.map((_,i)=>'?'+(i+1)).join(',')+') ON CONFLICT(fa_match_id) DO UPDATE SET '+
+  cols.slice(1).map(c=>c+'=excluded.'+c).join(',');
+ for(let i=0;i<rows.length;i+=50)await env.TIKI_DB.batch(rows.slice(i,i+50).map(r=>env.TIKI_DB.prepare(sql).bind(...cols.map(c=>r[c]))));
+ return {status:partial?'partial':'ok',from,to,pages,stored:rows.length,skipped,unmapped_teams:[...unmapped].slice(0,20)};
+}
