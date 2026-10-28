@@ -190,6 +190,32 @@
     }
   }
 
+  // Keep the tab title in step with in-app navigation (the server sets the same titles on load).
+  var TITLES = {
+    home: ['Football predictions & live 1X2 probabilities', 'Ποδοσφαιρικά προγνωστικά & πιθανότητες 1Χ2'],
+    matches: ['Football fixtures & 1X2 predictions today', 'Πρόγραμμα αγώνων & προγνωστικά 1Χ2 σήμερα'],
+    live: ['Live football scores & in-play probabilities', 'Live ποδόσφαιρο: σκορ & πιθανότητες σε πραγματικό χρόνο'],
+    transparency: ['Prediction accuracy & transparency report', 'Ακρίβεια προβλέψεων & διαφάνεια']
+  };
+  function updateTitle() {
+    var r = document.getElementById('td-mobile-root');
+    if (!r) return;
+    var el = window.__tdLocale === 'el', title = null;
+    var teams = r.querySelectorAll('.tdm-match-team h1');
+    if (teams.length === 2) {
+      var a = teams[0].textContent.trim(), b = teams[1].textContent.trim();
+      if (a && b) title = el ? 'Προγνωστικό ' + a + ' - ' + b : a + ' vs ' + b + ' prediction';
+    } else {
+      var p = location.pathname, q = new URLSearchParams(location.search);
+      var key = p.indexOf('/transparency') === 0 ? 'transparency' : p.indexOf('/predictions') === 0 ? (q.get('filter') === 'live' ? 'live' : 'matches') : p === '/' ? 'home' : null;
+      if (key && !q.get('league')) title = TITLES[key][el ? 1 : 0];
+    }
+    if (title) {
+      title += ' | Tiki-Data';
+      if (document.title !== title) document.title = title;
+    }
+  }
+
   var queued = false;
   function refresh() {
     // Synchronous: MutationObserver callbacks run before paint, so the filter console and
@@ -199,7 +225,7 @@
     if (queued) return;
     queued = true;
     // A timer, not requestAnimationFrame: rAF is paused in background tabs.
-    setTimeout(function () { queued = false; mount(); markLoading(); markGreek(); }, 30);
+    setTimeout(function () { queued = false; mount(); markLoading(); markGreek(); updateTitle(); }, 30);
   }
 
   function start() {
