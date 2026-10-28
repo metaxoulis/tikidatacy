@@ -3655,7 +3655,7 @@ function faTrialMatch(m){
  const clock=/^\d{2}:\d{2}(?::\d{2})?$/.test(String(m.scheduled||''))?m.scheduled:null;
  let date=clock?faStamp(day+'T'+clock):null;
  if(date&&faStamp(m.added)&&Date.parse(date)<Date.parse(faStamp(m.added))-12*3600000)date=new Date(Date.parse(date)+86400000).toISOString();
- const logo=(v,tid)=>typeof v==='string'&&/^https:\/\/cdn\.football-api\.com\//.test(v)?v:'https://cdn.football-api.com/teams/'+tid+'.png';
+ const logo=v=>typeof v==='string'&&/^https:\/\/cdn\.football-api\.com\/[^?]+$/.test(v)?v:null;
  return {id:'football-api-'+id,match_id:id,fixture_id:faId(m.fixture_id),home:h,away:a,date,
   home_id:faId(m.home.id),away_id:faId(m.away.id),league:faText(m.competition?.name),
   country:faText(m.country?.name),competition_id:faId(m.competition?.id),
@@ -3813,6 +3813,8 @@ async function faPrimaryScheduled(env){
 function faPrimaryForecast(game,model){
  const legacy=model?faHistoricalIdentity(game,model,fhName):null;
  if(!legacy)return {...game,p1:null,px:null,p2:null,coverage:'unmatched_historical_identity',forecast_review:{status:'withheld',reasons:['unmatched_historical_identity']}};
+ const logo=id=>'https://cdn.sportmonks.com/images/soccer/teams/'+(id%32)+'/'+id+'.png';
+ game={...game,logos:{home:logo(legacy.home_id),away:logo(legacy.away_id)}};
  const review=forecastIntegrity(legacy,model,fhTeamKey);
  const fitted=fhEstimate(legacy,model)||fhEstimate(legacy,model,{experimentalPreview:true});
  const usable=fitted?.tier==='team'&&fitted.team_samples.home>=3&&fitted.team_samples.away>=3;

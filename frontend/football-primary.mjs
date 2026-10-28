@@ -47,6 +47,8 @@ async function faPrimaryScheduled(env){
 function faPrimaryForecast(game,model){
  const legacy=model?faHistoricalIdentity(game,model,fhName):null;
  if(!legacy)return {...game,p1:null,px:null,p2:null,coverage:'unmatched_historical_identity',forecast_review:{status:'withheld',reasons:['unmatched_historical_identity']}};
+ const logo=id=>'https://cdn.sportmonks.com/images/soccer/teams/'+(id%32)+'/'+id+'.png';
+ game={...game,logos:{home:logo(legacy.home_id),away:logo(legacy.away_id)}};
  const review=forecastIntegrity(legacy,model,fhTeamKey);
  const fitted=fhEstimate(legacy,model)||fhEstimate(legacy,model,{experimentalPreview:true});
  const usable=fitted?.tier==='team'&&fitted.team_samples.home>=3&&fitted.team_samples.away>=3;
