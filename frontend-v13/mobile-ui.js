@@ -317,7 +317,7 @@ const when=x=>{try{return new Date(x).toLocaleString(window.__tdLocale==='el'?'e
 const live=m=>['LIVE','1H','2H','1ST','2ND','HT','ET'].includes(String(m?.status||'').toUpperCase());
 const score=m=>Number.isInteger(m?.home_score)&&Number.isInteger(m?.away_score)?m.home_score+' : '+m.away_score:'VS';
 const pct=x=>typeof x==='number'&&Number.isFinite(x)?x.toLocaleString(window.__tdLocale==='el'?'el-GR':'en-GB',{maximumFractionDigits:1})+'%':'—';
-const trusted=x=>typeof x==='string'&&/^https:\/\/(cdn\.sportmonks\.com|cdn\.football-api\.com|raw\.githubusercontent\.com|d2ol7oe51mr4n9\.cloudfront\.net)\//.test(x);
+const trusted=x=>typeof x==='string'&&(/^https:\/\/(cdn\.sportmonks\.com|cdn\.football-api\.com|raw\.githubusercontent\.com|d2ol7oe51mr4n9\.cloudfront\.net)\//.test(x)||/^\/badges\/[1-9]\d{0,9}\.png$/.test(x));
 const badge=(name,url)=>trusted(url)?'<img src="'+E(url)+'" loading="lazy" alt="'+E(name)+'">':'<span class="tdm-team-avatar">'+E(String(name).slice(0,2).toUpperCase())+'</span>';
 const club=(n,l)=>'<div class="tdm-team">'+badge(n,l)+'<strong>'+E(n)+'</strong></div>';
 const UEFA_FILTERS=[['ucl','Champions League','UCL'],['uel','Europa League','UEL'],['uecl','Conference League','UECL']];
