@@ -44,22 +44,51 @@ async function faPrimaryScheduled(env){
  }}));
  return {games,partial:failures.length>0};
 }
+export function faLivePredictor(game,model,fitted=null){
+ if(!faPrimaryLiveStatus.has(game.status)||![game.home_score,game.away_score].every(n=>Number.isInteger(n)&&n>=0&&n<=30)||game.status==='PEN_LIVE')return null;
+ const minute=game.status==='HT'?45:game.minute;
+ if(!Number.isInteger(minute)||minute<0||minute>130)return null;
+ const league=model?.leagues?.[game.league_key],global=model?.global;
+ const valid=r=>r&&[r.hmean,r.amean].every(n=>Number.isFinite(n)&&n>0&&n<=5)&&r.matches>=80;
+ const team=fitted?.tier==='team'&&[fitted.mu_home,fitted.mu_away].every(n=>Number.isFinite(n)&&n>0&&n<=5);
+ const prior=valid(league)?league:valid(global)?global:{hmean:1.45,amean:1.15};
+ const basis=team?'team_history':valid(league)?'league_average':valid(global)?'global_average':'generic_assumption';
+ const duration=game.status==='ET'?120:90,remaining=Math.max(1,duration-minute);
+ const mh=(team?fitted.mu_home:prior.hmean)*remaining/90,ma=(team?fitted.mu_away:prior.amean)*remaining/90;
+ const pmf=x=>{const a=[Math.exp(-x)];for(let i=1;i<=18;i++)a.push(a[i-1]*x/i);return a};
+ const H=pmf(mh),A=pmf(ma);let total=0,one=0,draw=0,two=0,over=0,btts=0,best={p:-1,h:0,a:0};
+ for(let i=0;i<H.length;i++)for(let j=0;j<A.length;j++){
+  const w=H[i]*A[j],h=game.home_score+i,a=game.away_score+j;total+=w;
+  if(h>a)one+=w;else if(h===a)draw+=w;else two+=w;
+  if(h+a>2)over+=w;if(h>0&&a>0)btts+=w;if(w>best.p)best={p:w,h,a};
+ }
+ const pct=n=>Math.round(n/total*10000)/100,any=1-Math.exp(-mh-ma);
+ return {source:'football_api_conditional_poisson',experimental:true,validated:false,prior_basis:basis,
+  fixture_id:game.id,minute:game.minute,calculation_minute:minute,phase:game.status,observed_score:[game.home_score,game.away_score],
+  time_basis:game.status==='HT'?'halftime_45':minute>=duration?'one_minute_remaining_assumption':'reported_match_minute',
+  remaining_standard_minutes:remaining,live_stats_applied:false,
+  p1:pct(one),px:pct(draw),p2:pct(two),over25:pct(over),under25:pct(total-over),btts:pct(btts),
+  remaining_expected_goals:{home:mh,away:ma},next_goal:{home:any*mh/(mh+ma)*100,away:any*ma/(mh+ma)*100,none:(1-any)*100},
+  most_likely_final:{score:best.h+'-'+best.a,probability:pct(best.p)},
+  warning:'Experimental conditional Poisson. Average-rate priors are not team-strength forecasts. HT uses 45 minutes; late play assumes at least one remaining minute. No live statistics or penalty-shootout forecast.'};
+}
 function faPrimaryForecast(game,model){
+ const fallback=()=>({live_outlook:faLivePredictor(game,model),prematch_prediction:null});
  const legacy=model?faHistoricalIdentity(game,model,fhName):null;
- if(!legacy)return {...game,p1:null,px:null,p2:null,coverage:'unmatched_historical_identity',forecast_review:{status:'withheld',reasons:['unmatched_historical_identity']}};
+ if(!legacy)return {...game,...fallback(),p1:null,px:null,p2:null,coverage:'unmatched_historical_identity',forecast_review:{status:'withheld',reasons:['unmatched_historical_identity']}};
  const logo=id=>'https://cdn.sportmonks.com/images/soccer/teams/'+(id%32)+'/'+id+'.png';
  game={...game,logos:{home:logo(legacy.home_id),away:logo(legacy.away_id)}};
  const review=forecastIntegrity(legacy,model,fhTeamKey);
  const fitted=fhEstimate(legacy,model)||fhEstimate(legacy,model,{experimentalPreview:true});
  const usable=fitted?.tier==='team'&&fitted.team_samples.home>=3&&fitted.team_samples.away>=3;
- if(!usable)return {...game,p1:null,px:null,p2:null,coverage:'insufficient_team_history',forecast_review:review};
- const live=faPrimaryLiveStatus.has(game.status),outlook=live?liveOutlook(game,fitted,[]):null;
+ if(!usable)return {...game,...fallback(),p1:null,px:null,p2:null,coverage:'insufficient_team_history',forecast_review:review};
+ const live=faPrimaryLiveStatus.has(game.status),outlook=live?faLivePredictor(game,model,fitted):null;
  const p={...fitted,prediction_tier:fitted.tier,most_likely_score:fhLikelyScore(fitted.mu_home,fitted.mu_away)};
  const withheld=review.status==='withheld';
  return {...game,...(live||withheld?{}:p),p1:live||withheld?null:p.p1,px:live||withheld?null:p.px,p2:live||withheld?null:p.p2,
   model:live||withheld?null:p,experimental_preview:!live&&withheld?p:null,
   prematch_prediction:live?{...p,source:'tiki_prematch_experimental_reference'}:null,
-  live_outlook:outlook?{...outlook,source:'historical_team_live_poisson',model_version:model.model_version,historical_cutoff:model.cutoff}:null,
+  live_outlook:outlook?{...outlook,model_version:model.model_version,historical_cutoff:model.cutoff}:null,
   forecast_review:review,historical_sample:fitted.team_samples,model_coverage:fitted.team_samples,
   coverage:'verified_historical_inputs',forecast_source:'published_trained_model',forecast_calculated_at:model.trained_at,
   historical_identity:{home:'sportmonks:'+legacy.home_id,away:'sportmonks:'+legacy.away_id,method:'unique_archived_alias'},

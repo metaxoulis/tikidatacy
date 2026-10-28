@@ -323,7 +323,7 @@ const club=(n,l)=>'<div class="tdm-team">'+badge(n,l)+'<strong>'+E(n)+'</strong>
 const UEFA_FILTERS=[['ucl','Champions League','UCL'],['uel','Europa League','UEL'],['uecl','Conference League','UECL']];
 const source=m=>({team:'Ιστορικό ομάδων',partial_team:'Μερικό ιστορικό',league:'Μέσοι όροι λίγκας',cross_league:'Γενική βάση · χαμηλή βεβαιότητα'})[m.prediction_tier]||(m.prediction_tier==='provider'?'SportMonks · 1X2':'Πειραματική ανάλυση');
 const valid123=p=>p&&[p.p1,p.px,p.p2].every(x=>typeof x==='number'&&Number.isFinite(x)&&x>=0&&x<=100)&&Math.abs(p.p1+p.px+p.p2-100)<1;
-const pr=m=>{if(live(m))return [m.live_outlook,m.live_prediction,m.prematch_prediction].find(valid123)||null;if(m.forecast_review?.status==='withheld')return valid123(m.experimental_preview)?m.experimental_preview:null;return valid123(m)?m:null};
+const pr=m=>{if(live(m))return [m.live_outlook,m.live_prediction].find(valid123)||null;if(m.forecast_review?.status==='withheld')return valid123(m.experimental_preview)?m.experimental_preview:null;return valid123(m)?m:null};
 const is29=n=>/(omoni|ομον)/i.test(String(n||''))&&/29/.test(String(n||''))&&/(mai|may|μα[ιΐ]|maio)/i.test(String(n||''));
 const logoH=m=>is29(m.home)?"https://d2ol7oe51mr4n9.cloudfront.net/user_3KbDlDrtS3WJpvJUdX17ksOLOSL/753375b7-7137-4e56-99bc-b3ca04d2249c.jpg":m.logos?.home||m.home_logo,logoA=m=>is29(m.away)?"https://d2ol7oe51mr4n9.cloudfront.net/user_3KbDlDrtS3WJpvJUdX17ksOLOSL/753375b7-7137-4e56-99bc-b3ca04d2249c.jpg":m.logos?.away||m.away_logo;
 const stamp=m=>live(m)?'<span class="tdm-live">● LIVE '+(Number.isInteger(m.minute)?m.minute+'′':'')+'</span>':E(when(m.date));
@@ -370,7 +370,11 @@ const dateChips=()=>{const days=availableDays(),today=dayKey(new Date()),tomorro
 const liveStatsLabels={on_target:'Σουτ στην εστία',shots:'Σουτ',dangerous:'Επικίνδυνες επιθέσεις',attacks:'Επιθέσεις',possession:'Κατοχή',corners:'Κόρνερ',red:'Κόκκινες κάρτες'};
 function liveStatsModelNote(m,compact=false){
  if(!live(m)||!valid123(m.live_outlook))return '';
- if(m.source==='football-api.com')return '<div class="tdm-live-model-note"><strong>Ιστορικό + σκορ + λεπτό</strong>'+(compact?'':'<p>Πειραματικό μοντέλο χωρίς live στατιστικά κατοχής, σουτ ή επιθέσεων.</p>')+'</div>';
+ if(m.source==='football-api.com'){
+  const p=m.live_outlook,label=({team_history:'Ιστορικό ομάδων',league_average:'Μέσος όρος λίγκας',global_average:'Γενικός ιστορικός μέσος όρος',generic_assumption:'Γενική υπόθεση γκολ'})[p.prior_basis]||'Ιστορικό';
+  const timing=p.time_basis==='halftime_45'?' · Ημίχρονο: υπολογισμός από 45′':p.time_basis==='one_minute_remaining_assumption'?' · Υπόθεση: απομένει τουλάχιστον 1′':'';
+  return '<div class="tdm-live-model-note"><strong>Live predictor · '+E(label)+'</strong>'+(compact?'':'<p>Σκορ '+E(p.observed_score?.join('–'))+' · '+E(label)+E(timing)+'. Πειραματική εκτίμηση χωρίς live στατιστικά κατοχής, σουτ ή επιθέσεων.</p>')+'</div>';
+ }
  const p=m.live_outlook,active=p.live_stats_applied===true,stale=!!(m.live_probability_stale||state.livePending);
  const metrics=(p.live_stats_adjustment?.metrics_used||[]).filter(k=>Object.hasOwn(liveStatsLabels,k)).map(k=>liveStatsLabels[k]);
  const title=stale?'Live εκτίμηση · αναμονή ενημέρωσης':active?'● Live stats στο μοντέλο':'Live μοντέλο · χωρίς διόρθωση stats';
@@ -618,7 +622,7 @@ function matchCenterHero(m,d,p,is){
  const final=['FT','FULL_TIME','FINISHED','AET','FT_PEN','PEN'].includes(String(m.status||'').toUpperCase());
  const hasScore=Number.isInteger(m.home_score)&&Number.isInteger(m.away_score);
  const result=(is||final)&&hasScore?m.home_score+' : '+m.away_score:'VS';
- const status=is?'● LIVE'+(Number.isInteger(m.minute)?' · '+m.minute+'′':''):final?'Τελικό αποτέλεσμα':({POSTP:'Αναβολή',POSTPONED:'Αναβολή',CANC:'Ακύρωση',CANCELLED:'Ακύρωση'}[m.status]||'Πριν από τη σέντρα');
+ const status=is?'● LIVE'+(m.status==='HT'?' · ΗΜΙΧΡΟΝΟ':Number.isInteger(m.minute)?' · '+m.minute+'′':''):final?'Τελικό αποτέλεσμα':({POSTP:'Αναβολή',POSTPONED:'Αναβολή',CANC:'Ακύρωση',CANCELLED:'Ακύρωση'}[m.status]||'Πριν από τη σέντρα');
  const kickoff=new Date(m.date).toLocaleString(window.__tdLocale==='el'?'el-GR':'en-GB',{timeZone:'Asia/Nicosia',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
  const team=side=>'<div class="tdm-match-team '+side+'">'+badge(m[side],side==='home'?logoH(m):logoA(m))+'<div><h1>'+E(m[side])+'</h1>'+matchCenterForm(m,d,side)+'</div></div>';
  const bar=valid123(p)?'<div class="tdm-match-odds"><div class="tdm-match-odds-labels">'+[['1',p.p1],['Χ',p.px],['2',p.p2]].map(([k,v])=>'<span>'+k+': <b>'+pct(v)+'</b></span>').join('')+'</div><div class="tdm-match-prob-meter" role="img" aria-label="1: '+pct(p.p1)+', Χ: '+pct(p.px)+', 2: '+pct(p.p2)+'">'+[p.p1,p.px,p.p2].map(v=>'<span style="width:'+v+'%"></span>').join('')+'</div></div>':'<p class="tdm-detail-prob-empty">Δεν υπάρχουν διαθέσιμες πιθανότητες 1Χ2.</p>';

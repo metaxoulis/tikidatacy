@@ -28,7 +28,7 @@ test('2026–27 results show in match analysis but do not override review gate',
  assert.match(ui,/function currentSeasonFormBlock\(m,d\)/);
  assert.match(ui,/currentSeasonFormBlock\(m,d\)\+historicalSummaryBlock/);
  assert.match(ui,/currentSeasonFormBlock\(m,d\)\+allStatisticsBlock/);
- assert.match(ui,/const pr=m=>\{if\(live\(m\)\)return \[m\.live_outlook,m\.live_prediction,m\.prematch_prediction\]\.find\(valid123\)/);
+ assert.match(ui,/const pr=m=>\{if\(live\(m\)\)return \[m\.live_outlook,m\.live_prediction\]\.find\(valid123\)/);
  const card=ui.slice(ui.indexOf('const card=m=>'),ui.indexOf('const empty=',ui.indexOf('const card=m=>')));
  assert.doesNotMatch(card,/currentSeasonFormBlock/);
  const constant=worker.match(/^const MOBILE_UI_JS=(.*);$/m);
