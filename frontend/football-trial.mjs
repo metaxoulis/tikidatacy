@@ -2,7 +2,7 @@
  * All upstream requests reserve a centrally enforced daily budget before fetch.
  * Cache leases and usage counters use primary D1 writes, across visitors/regions.
  */
-export const FA_TRIAL_CAP=2500;
+export const FA_TRIAL_CAP=8500;
 const faText=v=>typeof v==='string'?v.slice(0,180):'';
 const faId=v=>/^\d{1,14}$/.test(String(v))&&Number(v)>0?Number(v):null;
 const faStamp=v=>{const s=String(v||'').replace(' ','T').replace(/Z?$/,'Z');return Number.isFinite(Date.parse(s))?s:null};
@@ -10,12 +10,17 @@ export function faTrialMatch(m){
  const id=faId(m?.id),h=faText(m?.home?.name),a=faText(m?.away?.name);
  if(!id||!h||!a||!faId(m?.home?.id)||!faId(m?.away?.id)||Number(m.home.id)===Number(m.away.id))return null;
  const score=/^(\d{1,2})\s*-\s*(\d{1,2})$/.exec(String(m.scores?.score||''));
- return {id:'football-api-'+id,match_id:id,fixture_id:faId(m.fixture_id),home:h,away:a,
+ const day=/^\d{4}-\d{2}-\d{2}$/.test(String(m.date||''))?m.date:String(m.added||'').slice(0,10);
+ const clock=/^\d{2}:\d{2}(?::\d{2})?$/.test(String(m.scheduled||''))?m.scheduled:null;
+ let date=clock?faStamp(day+'T'+clock):null;
+ if(date&&faStamp(m.added)&&Date.parse(date)<Date.parse(faStamp(m.added))-12*3600000)date=new Date(Date.parse(date)+86400000).toISOString();
+ const logo=v=>typeof v==='string'&&/^https:\/\/cdn\.football-api\.com\/[^?]+$/.test(v)?v:null;
+ return {id:'football-api-'+id,match_id:id,fixture_id:faId(m.fixture_id),home:h,away:a,date,
   home_id:faId(m.home.id),away_id:faId(m.away.id),league:faText(m.competition?.name),
   country:faText(m.country?.name),competition_id:faId(m.competition?.id),
   status:faText(m.status),minute:faText(String(m.time||'')),
   home_score:score?Number(score[1]):null,away_score:score?Number(score[2]):null,
-  provider_updated_at:faStamp(m.last_changed),source:'football-api.com'};
+  provider_updated_at:faStamp(m.last_changed),venue:faText(m.location),round:faText(String(m.round||'')),logos:{home:logo(m.home.logo,m.home.id),away:logo(m.away.logo,m.away.id)},source:'football-api.com'};
 }
 export function faTrialEvents(d){
  return (Array.isArray(d?.event)?d.event:[]).slice(0,300).map(e=>({id:faId(e.id),
@@ -72,7 +77,7 @@ export async function faTrialCached(env,key,path,params,ttl,normalize,fetcher=fe
   const data=normalize(raw.data);
   await db.prepare('UPDATE football_trial_cache SET payload_json=?1,fetched_at=?2,lease_until=0,retry_after=0,last_error=NULL WHERE cache_key=?3')
    .bind(JSON.stringify(data),now,key).run();
-  return {data,fetched_at:now,stale:false};
+  return {data,fetched_at:now,stale:false,refreshed:true};
  }catch(e){
   const safe=new Set(['trial_daily_limit_reached','provider_network_error','provider_access_denied','provider_http_error','provider_invalid_response','provider_request_rejected']);
   const error=safe.has(e.message)?e.message:'trial_storage_error';
@@ -90,9 +95,9 @@ export async function faTrialRoute(req,env){
  const url=new URL(req.url),path=url.pathname;
  try{
   if(path==='/api/football-trial/live'){
-   const r=await faTrialCached(env,'live-v1','/matches/live.json',{},30000,d=>{if(!Array.isArray(d?.match))throw Error('provider_invalid_response');return d.match.map(faTrialMatch).filter(Boolean)});
+   const r=await faTrialCached(env,'live-primary-v2','/matches/live.json',{},30000,d=>{if(!Array.isArray(d?.match))throw Error('provider_invalid_response');return d.match.map(faTrialMatch).filter(Boolean)});
    const matches=(r.data||[]).map(m=>({...m,source_stale:faTrialSourceStale(m)}));
-   if(!r.stale&&matches.length){
+   if(r.refreshed&&matches.length){
     const stmts=matches.map(m=>env.FOOTBALL_TRIAL_DB.prepare('INSERT INTO football_trial_matches(match_id,payload_json,observed_at,finished) VALUES(?1,?2,?3,?4) ON CONFLICT(match_id) DO UPDATE SET payload_json=excluded.payload_json,observed_at=excluded.observed_at,finished=excluded.finished WHERE football_trial_matches.finished=0 OR excluded.finished=1')
      .bind(m.match_id,JSON.stringify(m),new Date(r.fetched_at).toISOString(),m.status==='FINISHED'?1:0));
     for(let i=0;i<stmts.length;i+=50)await env.FOOTBALL_TRIAL_DB.batch(stmts.slice(i,i+50));
