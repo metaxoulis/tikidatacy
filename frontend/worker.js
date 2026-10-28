@@ -696,7 +696,7 @@ const FH_LEAGUES={
 const fhText=s=>String(s||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase();
 function fhLeague(name,country='',leagueId=null){
  const uefa=classifyUefaLeague(name,country,leagueId);if(uefa)return uefa;
- const domesticIds={8:'epl',564:'laliga',82:'bundesliga',384:'seriea',301:'ligue1',271:'greece',253:'cyprus'};
+ const domesticIds={8:'epl',564:'laliga',82:'bundesliga',384:'seriea',301:'ligue1',325:'greece',253:'cyprus'};
  if(domesticIds[Number(leagueId)])return domesticIds[Number(leagueId)];
  const n=fhText(name).replace(/\s+/g,' '),c=fhText(country);
  let key=null;
@@ -967,7 +967,7 @@ async function fhLoadModel(db,ctx,allowTraining=false){
   if(!allowTraining)return null;
   const result=await db.prepare("SELECT dataset_slug,match_date,home_team,away_team,home_score,away_score,'openfootball_cc0' AS source_provider FROM openfootball_matches WHERE match_status='FINISHED' AND home_score IS NOT NULL AND away_score IS NOT NULL ORDER BY match_date LIMIT 10000").all();
   if(!Array.isArray(result.results)||result.results.length<80)return null;
-  let sportmonks=[];try{const extra=await db.prepare("SELECT dataset_slug,match_date,home_team,away_team,home_score,away_score,home_team_id,away_team_id,'sportmonks' AS source_provider FROM sportmonks_training_results WHERE match_date <= date('now','-3 day') ORDER BY match_date DESC LIMIT 15000").all();sportmonks=extra.results||[];}catch{}
+  let sportmonks=[];try{const extra=await db.prepare("SELECT dataset_slug,match_date,home_team,away_team,home_score,away_score,home_team_id,away_team_id,'sportmonks' AS source_provider FROM sportmonks_training_results WHERE match_date <= date('now','-3 day') ORDER BY match_date DESC LIMIT 40000").all();sportmonks=extra.results||[];}catch{}
   const model=fhTrain([...result.results,...sportmonks]);
   const task=db.prepare('INSERT INTO focus_model_snapshots(model_key,payload_json,expires_at,trained_at) VALUES(?1,?2,?3,?4) ON CONFLICT(model_key) DO UPDATE SET payload_json=excluded.payload_json,expires_at=excluded.expires_at,trained_at=excluded.trained_at').bind(key,JSON.stringify(model),Math.floor(Date.now()/1000)+21600,model.trained_at).run();
   if(ctx?.waitUntil)ctx.waitUntil(task.catch(()=>{}));else await task.catch(()=>{});

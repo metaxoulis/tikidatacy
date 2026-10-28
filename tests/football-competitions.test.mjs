@@ -39,3 +39,8 @@ test('competition logos resolve by league key, or by name for cups without a kno
  assert.equal(faLeagueLogo({league_key:'fa998',league:'Cyprus Cup',country:'Cyprus'},stored),'/league-logos/name-cyprus-cyprus-cup.png');
  assert.equal(faLeagueLogo({league_key:'fa997',league:'Coppa Italia',country:'Italy'},stored),null);
 });
+test('worker trains Greek Super League (Sportmonks 325) as greece and reads up to 40000 licensed rows',async()=>{
+ const fs=await import('node:fs');const w=fs.readFileSync(new URL('../frontend/worker.js',import.meta.url),'utf8');
+ assert.match(w,/325:'greece'/);assert.doesNotMatch(w,/271:'greece'/);
+ assert.match(w,/FROM sportmonks_training_results WHERE match_date <= date\('now','-3 day'\) ORDER BY match_date DESC LIMIT 40000/);
+});
