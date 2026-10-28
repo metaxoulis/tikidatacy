@@ -22,7 +22,7 @@ test('comparative team and match live statistics are reserved for match details'
 test('only independently gated or explicit experimental-preview 1X2 can be displayed', () => {
   assert.match(ui, /const valid123=p=>/);
   assert.match(ui, /Math\.abs\(p\.p1\+p\.px\+p\.p2-100\)<1/);
- assert.match(ui,/const pr=m=>\{if\(live\(m\)\)return \[m\.live_outlook,m\.live_prediction,m\.prematch_prediction\]\.find\(valid123\)/);
+ assert.match(ui,/const pr=m=>\{if\(live\(m\)\)return \[m\.live_outlook,m\.live_prediction\]\.find\(valid123\)/);
   assert.match(ui, /const p=m\.forecast_review\?\.status==='withheld'\?pr\(m\):/);
   assert.doesNotThrow(() => new Function(ui));
 });
