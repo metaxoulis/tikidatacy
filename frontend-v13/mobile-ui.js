@@ -1,3 +1,252 @@
+/* Tiki-Data theme: light / dark mode with a header toggle.
+   Loaded in <head> (not deferred) so the saved theme applies before first paint. */
+(function () {
+  var KEY = 'td-theme';
+  var root = document.documentElement;
+  var media = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+
+  function saved() {
+    try { return localStorage.getItem(KEY); } catch (e) { return null; }
+  }
+  function current() {
+    return saved() || 'dark';
+  }
+  function apply(theme) {
+    root.setAttribute('data-theme', theme);
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', theme === 'dark' ? '#06080d' : '#ffffff');
+    var btn = document.querySelector('.td-theme-toggle');
+    if (btn) {
+      btn.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
+      btn.setAttribute('aria-label', theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+      btn.title = btn.getAttribute('aria-label');
+    }
+  }
+
+  apply(current());
+  if (media && media.addEventListener) {
+    media.addEventListener('change', function () { if (!saved()) apply(current()); });
+  }
+
+  var ICON =
+    '<svg class="td-icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7Z"/></svg>' +
+    '<svg class="td-icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.2M12 19.8V22M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M2 12h2.2M19.8 12H22M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6"/></svg>';
+
+  // mobile-ui.js re-renders the header, so the toggle is re-attached whenever it disappears.
+  function mount() {
+    var auth = document.querySelector('#td-mobile-root .tdm-top .tdm-auth-nav');
+    if (!auth || auth.querySelector('.td-theme-toggle')) return;
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'td-theme-toggle';
+    btn.innerHTML = ICON;
+    btn.addEventListener('click', function () {
+      var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      try { localStorage.setItem(KEY, next); } catch (e) {}
+      apply(next);
+    });
+    auth.insertBefore(btn, auth.firstChild);
+    apply(current());
+  }
+
+  // Loading feedback: mobile-ui.js renders "—" KPIs and a "Φόρτωση…/Loading…" message
+  // while data is in flight; tag them so the stylesheet can show skeletons instead.
+  var LOADING = /(\u03a6\u03cc\u03c1\u03c4\u03c9\u03c3\u03b7|Loading)/i;
+  function markLoading() {
+    var r = document.getElementById('td-mobile-root');
+    if (!r) return;
+    var kpis = r.querySelectorAll('.tdm-kpi b, .tdm-audit-kpis b');
+    for (var i = 0; i < kpis.length; i++) kpis[i].classList.toggle('td-pending', kpis[i].textContent.trim() === '—');
+    var empties = r.querySelectorAll('.tdm-empty');
+    for (var j = 0; j < empties.length; j++) empties[j].classList.toggle('td-loading', LOADING.test(empties[j].textContent));
+  }
+
+  // Greek strings inside an English page: mark them lang="el" so uppercase headings drop
+  // their accents (Greek typesetting) and screen readers use Greek pronunciation.
+  var GREEK = /[\u0370-\u03ff\u1f00-\u1fff]/;
+  function markGreek() {
+    var r = document.getElementById('td-mobile-root');
+    if (!r || (document.documentElement.lang || '').indexOf('el') === 0) return;
+    var all = r.getElementsByTagName('*');
+    for (var i = 0; i < all.length; i++) {
+      var el = all[i];
+      if (el.hasAttribute('lang')) continue;
+      for (var n = el.firstChild; n; n = n.nextSibling) {
+        if (n.nodeType === 3 && GREEK.test(n.nodeValue)) { el.setAttribute('lang', 'el'); break; }
+      }
+    }
+  }
+
+  // Filter console (Matches page). The three chip rows become one panel: the mode chips form a
+  // segmented switch and the league chips collapse behind a "Leagues" button. The app's own
+  // buttons are moved, not recreated, so mobile-ui.js's delegated click handler keeps working.
+  // The search field is never moved: the app re-focuses it after every keystroke.
+  var leaguesOpen = false;
+  var CHEVRON = '<svg class="td-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+  function setLeaguesOpen(open) {
+    leaguesOpen = open;
+    var bar = document.querySelector('#td-mobile-root .td-filterbar');
+    if (!bar) return;
+    bar.classList.toggle('is-open', open);
+    var t = bar.querySelector('.td-league-toggle');
+    if (t) t.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  function enhanceFilters() {
+    var main = document.querySelector('#td-mobile-root main');
+    var days = main && main.querySelector('.tdm-day-chips');
+    if (!days || main.querySelector('.td-filterbar')) return;
+    var modeBtn = main.querySelector('.tdm-chips [data-mode]');
+    var leagueBtn = main.querySelector('.tdm-chips [data-league]');
+    if (!modeBtn || !leagueBtn) return;
+    var modeRow = modeBtn.parentNode;
+    var leagueRow = leagueBtn.parentNode;
+
+    var bar = document.createElement('section');
+    bar.className = 'td-filterbar' + (leaguesOpen ? ' is-open' : '');
+    bar.setAttribute('aria-label', 'Filters');
+    main.insertBefore(bar, modeRow);
+
+    var top = document.createElement('div');
+    top.className = 'td-filterbar-top';
+    modeRow.classList.add('td-seg');
+    modeRow.setAttribute('role', 'group');
+    top.appendChild(modeRow);
+
+    var active = leagueRow.querySelector('[data-league].active') || leagueBtn;
+    var toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'td-league-toggle';
+    toggle.setAttribute('aria-controls', 'td-league-panel');
+    toggle.setAttribute('aria-expanded', leaguesOpen ? 'true' : 'false');
+    if (active.getAttribute('data-league') !== 'all') toggle.setAttribute('data-lg', active.getAttribute('data-league'));
+    var crest = active.querySelector('img');
+    if (crest) {
+      var img = document.createElement('img');
+      img.alt = '';
+      img.src = crest.getAttribute('src');
+      toggle.appendChild(img);
+    }
+    var label = document.createElement('span');
+    label.className = 'td-league-label';
+    label.textContent = active.textContent.trim();
+    toggle.appendChild(label);
+    toggle.insertAdjacentHTML('beforeend', CHEVRON);
+    toggle.addEventListener('click', function () { setLeaguesOpen(!leaguesOpen); });
+    top.appendChild(toggle);
+    bar.appendChild(top);
+
+    leagueRow.id = 'td-league-panel';
+    leagueRow.classList.add('td-league-panel');
+    // Picking a league closes the panel; the app then re-renders with the new filter.
+    leagueRow.addEventListener('click', function (e) { if (e.target.closest('[data-league]')) leaguesOpen = false; });
+    bar.appendChild(leagueRow);
+    bar.appendChild(days);
+  }
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && leaguesOpen) setLeaguesOpen(false); });
+  document.addEventListener('click', function (e) {
+    if (leaguesOpen && !e.target.closest('.td-filterbar')) setLeaguesOpen(false);
+  });
+
+  // Match page: read the numbers the app rendered to draw head-to-head bars for live stats,
+  // flag the favourite 1X2 tile, and add a bar to percentage rows in goal scenarios.
+  function num(el) {
+    var v = parseFloat(String((el && el.textContent) || '').replace(',', '.').replace(/[^0-9.\-]/g, ''));
+    return isFinite(v) ? v : null;
+  }
+  function enhanceMatch() {
+    var r = document.getElementById('td-mobile-root');
+    if (!r || !r.querySelector('.tdm-match-content')) return;
+    // The sticky section tabs sit directly under the sticky header, whatever its height.
+    var top = r.querySelector('.tdm-top');
+    if (top) document.documentElement.style.setProperty('--mx-header-h', top.offsetHeight + 'px');
+    var rows = r.querySelectorAll('.tdm-stat-grid-row:not(.tdm-stat-grid-head)');
+    for (var i = 0; i < rows.length; i++) {
+      var b = rows[i].querySelectorAll('b');
+      if (b.length < 2) continue;
+      var h = num(b[0]), a = num(b[1]);
+      if (h === null || a === null) continue;
+      var total = h + a;
+      rows[i].style.setProperty('--h', total ? (h / total).toFixed(3) : '0');
+      rows[i].style.setProperty('--a', total ? (a / total).toFixed(3) : '0');
+      rows[i].classList.add('td-h2h');
+      b[0].classList.toggle('td-lead', h > a);
+      b[1].classList.toggle('td-lead', a > h);
+    }
+    var groups = r.querySelectorAll('.tdm-probs');
+    for (var g = 0; g < groups.length; g++) {
+      var tiles = groups[g].querySelectorAll('.tdm-prob'), best = null, top = -1;
+      for (var k = 0; k < tiles.length; k++) {
+        var v = num(tiles[k].querySelector('b'));
+        tiles[k].classList.remove('td-fav');
+        if (v !== null && v > top) { top = v; best = tiles[k]; }
+      }
+      if (best) best.classList.add('td-fav');
+    }
+    var scen = r.querySelectorAll('.tdm-large-stats .tdm-row');
+    for (var s = 0; s < scen.length; s++) {
+      var val = scen[s].querySelector('b'), p = val && /%/.test(val.textContent) ? num(val) : null;
+      scen[s].classList.toggle('td-pbar', p !== null);
+      if (p !== null) scen[s].style.setProperty('--p', (Math.max(0, Math.min(100, p)) / 100).toFixed(3));
+    }
+  }
+
+  // Keep the tab title in step with in-app navigation (the server sets the same titles on load).
+  var TITLES = {
+    home: ['Football predictions & live 1X2 probabilities', 'Ποδοσφαιρικά προγνωστικά & πιθανότητες 1Χ2'],
+    matches: ['Football fixtures & 1X2 predictions today', 'Πρόγραμμα αγώνων & προγνωστικά 1Χ2 σήμερα'],
+    live: ['Live football scores & in-play probabilities', 'Live ποδόσφαιρο: σκορ & πιθανότητες σε πραγματικό χρόνο'],
+    transparency: ['Prediction accuracy & transparency report', 'Ακρίβεια προβλέψεων & διαφάνεια']
+  };
+  function updateTitle() {
+    var r = document.getElementById('td-mobile-root');
+    if (!r) return;
+    var el = window.__tdLocale === 'el', title = null;
+    var teams = r.querySelectorAll('.tdm-match-team h1');
+    if (teams.length === 2) {
+      var a = teams[0].textContent.trim(), b = teams[1].textContent.trim();
+      if (a && b) title = el ? 'Προγνωστικό ' + a + ' - ' + b : a + ' vs ' + b + ' prediction';
+    } else {
+      var p = location.pathname, q = new URLSearchParams(location.search);
+      var key = p.indexOf('/transparency') === 0 ? 'transparency' : p.indexOf('/predictions') === 0 ? (q.get('filter') === 'live' ? 'live' : 'matches') : p === '/' ? 'home' : null;
+      if (key && !q.get('league')) title = TITLES[key][el ? 1 : 0];
+    }
+    if (title) {
+      title += ' | Tiki-Data';
+      if (document.title !== title) document.title = title;
+    }
+  }
+
+  var queued = false;
+  function refresh() {
+    // Synchronous: MutationObserver callbacks run before paint, so the filter console and
+    // match bars are in place before the re-rendered page is drawn (no flash).
+    enhanceFilters();
+    enhanceMatch();
+    if (queued) return;
+    queued = true;
+    // A timer, not requestAnimationFrame: rAF is paused in background tabs.
+    setTimeout(function () { queued = false; mount(); markLoading(); markGreek(); updateTitle(); }, 30);
+  }
+
+  function start() {
+    // Entrance animations are for the first paint only; mobile-ui.js re-renders on every
+    // live refresh and would otherwise replay them (content blinking out and back in).
+    setTimeout(function () { root.classList.add('td-booted'); }, 1400);
+    enhanceFilters();
+    enhanceMatch();
+    mount();
+    markLoading();
+    markGreek();
+    new MutationObserver(refresh).observe(document.body, { childList: true, subtree: true, characterData: true });
+    // Installable app: the service worker only provides an offline screen (no data caching).
+    if ('serviceWorker' in navigator && location.protocol === 'https:') {
+      navigator.serviceWorker.register('/sw.js').catch(function () {});
+    }
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
+})();
+
 (()=>{'use strict';
 const deepCache=new Map(),deepLoading=new Set();
 const favKey='tiki.followedTeams.v2',params=new URLSearchParams(location.search),state={view:params.get('account')==='1'?'account':location.pathname.startsWith('/transparency')?'transparency':location.pathname.includes('/predictions')?(params.get('match')&&/^sportmonks-[1-9]\d{0,13}$/.test(params.get('match'))?'detail':params.get('filter')==='live'?'live':'matches'):'home',previous:['home','matches','live','teams'].includes(params.get('from'))?params.get('from'):params.get('filter')==='live'?'live':'matches',mode:params.get('filter')==='live'?'live':'all',league:['ucl','uel','uecl'].includes(params.get('league'))?params.get('league'):'all',day:'all',query:'',tab:'summary',id:/^sportmonks-[1-9]\d{0,13}$/.test(params.get('match')||'')?params.get('match'):'',matches:[],loading:true,error:'',fromCache:false,visible:42,liveUpdatedAt:'',livePending:false};
@@ -10,7 +259,26 @@ if(authText[authResult])accountError=authText[authResult];
 if(authResult&&authText[authResult]&&state.view==='home')state.view='account';
 const uefaStageById=new Map();
 const stageLabel=m=>Number.isSafeInteger(m?.stage_id)?uefaStageById.get(m.stage_id)||null:null;
-const SITE_FOOTER="<footer class=\"tdm-site-footer\" aria-label=\"Σχετικά και πολιτικές\"><span>© 2026 Tiki-Data · Στατιστικές εκτιμήσεις, όχι στοιχηματικές αποδόσεις</span><nav aria-label=\"Πληροφορίες\"><a href=\"/transparency\">Διαφάνεια</a><a href=\"/about\">Σχετικά</a><a href=\"/privacy\">Απόρρητο</a><a href=\"/terms\">Όροι</a><a href=\"/cookies\">Cookies</a><a href=\"/contact\">Επικοινωνία</a></nav></footer>";
+// Site footer. Built at render time (not at load) so it follows the active language:
+// locale.js sets window.__tdLocale after this file has loaded.
+const siteFooter=()=>{
+ const en=window.__tdLocale==='en';
+ const t=(el,eng)=>en?eng:el;
+ const col=(head,links)=>'<div class="tdm-footer-col"><h4>'+head+'</h4>'+links.map(([href,label])=>'<a href="'+href+'">'+label+'</a>').join('')+'</div>';
+ return '<footer class="tdm-site-footer tdm-footer-pro" aria-label="'+t('Σχετικά και πολιτικές','About and policies')+'">'+
+  '<div class="tdm-footer-brand"><a href="/" class="tdm-footer-logo" aria-label="Tiki-Data"></a>'+
+  '<p>'+t('Ποδοσφαιρικά δεδομένα: πραγματικοί αγώνες, live στατιστικά και διαφανείς εκτιμήσεις 1Χ2.','Football intelligence: real fixtures, live statistics and transparent 1X2 estimates.')+'</p></div>'+
+  '<nav class="tdm-footer-cols" aria-label="'+t('Πληροφορίες','Information')+'">'+
+  col(t('Πλατφόρμα','Platform'),[['/',t('Αρχική','Home')],['/predictions',t('Αγώνες','Matches')],['/predictions?filter=live','Live'],['/transparency',t('Διαφάνεια','Transparency')]])+
+  col(t('Διοργανώσεις','Competitions'),UEFA_FILTERS.map(([key,label])=>['/predictions?league='+key,label]))+
+  col(t('Εταιρεία','Company'),[['/about',t('Σχετικά','About')],['/contact',t('Επικοινωνία','Contact')]])+
+  col(t('Νομικά','Legal'),[['/privacy',t('Απόρρητο','Privacy')],['/terms',t('Όροι','Terms')],['/cookies','Cookies']])+
+  '</nav>'+
+  '<div class="tdm-footer-bottom"><span>© 2026 Tiki-Data</span><span>'+t('Στατιστικές εκτιμήσεις, όχι στοιχηματικές αποδόσεις.','Statistical estimates, not betting odds.')+'</span></div>'+
+  '</footer>';
+};
+// Templates concatenate SITE_FOOTER as a string; toString() renders it in the current language.
+const SITE_FOOTER={toString:siteFooter};
 
 let auditArchive={matches:[]},auditLoading=true,auditError='';
 let auditLoaded=false,auditPromise=null;
@@ -145,25 +413,30 @@ const empty=x=>'<div class="tdm-empty">'+E(x)+'</div>';
 function home(){
  const rank=m=>(isFav(m.home)||isFav(m.away)?5:0)+(accountLeagues.includes(m.league_key)?2:0);
  const ordered=state.matches.slice().sort((a,b)=>rank(b)-rank(a)||Date.parse(a.date)-Date.parse(b.date));
- const upcoming=ordered.filter(m=>!live(m));
- const highlight=ordered[0];
  const en=window.__tdLocale==='en';
  const t=(el,eng)=>en?eng:el;
- return '<div class="tdm-overview-header"><span class="tdm-overview-eyebrow">TIKI-DATA LAB · '+t('ΕΥΡΩΠΑΪΚΟ ΠΟΔΟΣΦΑΙΡΟ','EUROPEAN FOOTBALL')+'</span>'+
- '<h1>'+t('Ποδόσφαιρο,','Football,')+' <em>'+t('με τη δύναμη των δεδομένων.','powered by data.')+'</em></h1>'+
- '<p>'+t('Πραγματικοί αγώνες, στατιστικές εκτιμήσεις και δυναμική ενημέρωση αγώνων, με σαφείς ενδείξεις προέλευσης και διαθεσιμότητας.','Real fixtures, statistical forecasts and live match updates, with clear evidence and availability labels.')+'</p></div>'+
- '<section class="tdm-overview-hero" aria-label="Tiki-Data football intelligence"><div class="tdm-overview-hero-copy">'+
- '<span class="tdm-overview-eyebrow">'+t('ΑΝΑΛΥΣΗ ΑΓΩΝΩΝ · TIKI-DATA LAB','MATCH INTELLIGENCE · TIKI-DATA LAB')+'</span>'+
- '<h2>'+t('Τα δεδομένα αφηγούνται','Data tells')+'<br><em>'+t('την ιστορία του αγώνα.','the story of the match.')+'</em></h2>'+
- '<p>'+t('Πιθανότητες 1Χ2, αναμενόμενα γκολ και πραγματικά στοιχεία πρόσφατης φόρμας, όπου διατίθενται.','1X2 probabilities, expected goals and observed recent form when available.')+'</p>'+
- '<div class="tdm-overview-actions"><button class="tdm-accent-btn" data-view="matches">'+t('Δες τους αγώνες','Explore matches')+' <span aria-hidden="true">↗</span></button><a href="/predictions?filter=live" class="tdm-overview-secondary"><span aria-hidden="true">●</span> '+t('Ζωντανοί αγώνες','Live matches')+'</a></div></div>'+
- '<div class="tdm-overview-orbit" aria-hidden="true"><div class="tdm-overview-ring"><span>1</span><span>X</span><span>2</span></div><strong>TIKI-DATA</strong><small>FOOTBALL INTELLIGENCE</small></div></section>'+
- '<div class="tdm-summary-eyebrow">'+t('ΣΕ ΠΡΑΓΜΑΤΙΚΟ ΧΡΟΝΟ','LATEST DATA')+'</div>'+kpis()+liveUpdateLabel()+
- '<section class="tdm-uefa-section"><div class="tdm-section"><h2>'+t('Ευρωπαϊκές διοργανώσεις','European competitions')+'</h2><button data-view="matches" class="tdm-link">'+t('Όλοι','View all')+' →</button></div><div class="tdm-uefa-links">'+UEFA_FILTERS.map(([key,label,short])=>'<a href="/predictions?league='+key+'"><b>'+short+'</b><span>'+label+'</span><span aria-hidden="true">↗</span></a>').join('')+'</div></section>'+
- title(t('Αγώνας στο επίκεντρο','Match spotlight'),t('Όλοι','View all'),'matches')+(highlight?card(highlight):empty(t('Αναμονή πραγματικών αγώνων','Waiting for live fixtures')))+
- title(t('Επόμενοι αγώνες & εκτιμήσεις','Upcoming fixtures & forecasts'),t('Περισσότερα','More'),'matches')+
- '<div class="tdm-list tdm-overview-fixtures">'+upcoming.filter(m=>m!==highlight).slice(0,4).map(card).join('')+'</div>'+
- '<section class="tdm-overview-disclosure"><span aria-hidden="true">ⓘ</span><div><strong>'+t('Μόνο πραγματικά δεδομένα','Real evidence only')+'</strong><p>'+t('Οι πιθανότητες είναι πειραματικές στατιστικές εκτιμήσεις, όχι στοιχηματικές αποδόσεις ή πιστοποιημένη ακρίβεια. Μη διαθέσιμα στοιχεία δεν αντικαθίστανται από υποθετικά.','Probabilities are experimental estimates, not bookmaker odds or independently validated accuracy. Missing data is never replaced by invented metrics.')+'</p></div><a href="/transparency">'+t('Μεθοδολογία','Methodology')+' ↗</a></section>';
+ const loading=state.loading&&!state.matches.length;
+ const liveNow=ordered.filter(coveredLive);
+ const upcoming=ordered.filter(m=>!live(m));
+ const today=dayKey(new Date());
+ const todays=upcoming.filter(m=>dayKey(m.date)===today);
+ const next=(todays.length?todays:upcoming).slice(0,6);
+ const shown=new Set(next.map(m=>m.id));
+ // Strongest forecasts: upcoming matches where the model's favourite outcome is most likely.
+ const strongest=upcoming.filter(m=>!shown.has(m.id)&&pr(m)).map(m=>{const p=pr(m);return [m,Math.max(p.p1,p.px,p.p2)]}).sort((a,b)=>b[1]-a[1]).slice(0,3).map(x=>x[0]);
+ const stat=(n,label,cls)=>'<span class="tdm-home-stat'+(cls?' '+cls:'')+'"><b>'+(loading?'—':n)+'</b><span>'+label+'</span></span>';
+ const list=ms=>'<div class="tdm-list tdm-overview-fixtures">'+ms.map(card).join('')+'</div>';
+ return '<section class="tdm-home-intro">'+
+  '<h1>'+t('Οι σημερινοί αγώνες,','Today’s matches,')+' <em>'+t('σε αριθμούς.','in numbers.')+'</em></h1>'+
+  '<p class="tdm-home-stats">'+stat(state.matches.length,t('αγώνες','matches'))+stat(liveNow.length,'live','live')+stat(state.matches.filter(m=>!!pr(m)).length,t('με εκτίμηση 1Χ2','with 1X2 forecast'))+'</p>'+
+  '<div class="tdm-home-actions"><button class="tdm-accent-btn" data-view="matches">'+t('Όλοι οι αγώνες','All matches')+' <span aria-hidden="true">→</span></button>'+
+  (liveNow.length?'<a href="/predictions?filter=live" class="tdm-overview-secondary"><span aria-hidden="true">●</span> '+t('Live τώρα','Live now')+' ('+liveNow.length+')</a>':'')+'</div>'+
+  liveUpdateLabel()+'</section>'+
+  (liveNow.length?title(t('Live τώρα','Live now'),t('Όλοι','View all'),'matches')+list(liveNow.slice(0,4)):'')+
+  title(todays.length?t('Σήμερα','Today'):t('Επόμενοι αγώνες','Next up'),t('Πλήρες πρόγραμμα','Full schedule'),'matches')+
+  (next.length?list(next):empty(loading?t('Φόρτωση πραγματικών αγώνων…','Loading fixtures…'):t('Αναμονή πραγματικών αγώνων','Waiting for live fixtures')))+
+  (strongest.length?title(t('Πιο καθαρές εκτιμήσεις','Strongest forecasts'),'','')+list(strongest):'')+
+  '<p class="tdm-home-note"><span aria-hidden="true">ⓘ</span> '+t('Πειραματικές στατιστικές εκτιμήσεις, όχι στοιχηματικές αποδόσεις.','Experimental statistical estimates, not bookmaker odds.')+' <a href="/transparency">'+t('Μεθοδολογία','Methodology')+' ↗</a></p>';
 }
 
 async function accountLoad(){
