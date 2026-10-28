@@ -3776,7 +3776,7 @@ function faPrimaryGame(row){
  const status=row.status==='FINISHED'?'FT':row.status==='HALF TIME BREAK'?'HT':row.status==='IN PLAY'?(Number(min?.[1])<=45?'1ST':'2ND'):row.status==='EXTRA TIME'?'ET':row.status==='PENALTY SHOOTOUT'?'PEN_LIVE':'NS';
  return {...row,id:row.fixture_id?'football-api-fixture-'+row.fixture_id:'football-api-'+row.match_id,
   league_key:key,league:['ucl','uel','uecl'].includes(key)?'UEFA '+row.league:row.country&&/^Cup$/i.test(row.league)?row.country+' Cup':row.league,
-  status,minute:status==='NS'?null:min?Number(min[1]):null,events:[],lineups:[],statistics:[],live_stats:[],match_statistics_available:false};
+  status,minute:status==='NS'?null:min?Number(min[1]):null,logos:{home:null,away:null},events:[],lineups:[],statistics:[],live_stats:[],match_statistics_available:false};
 }
 function faPrimaryFixture(raw){
  const row=faTrialMatch({...raw,scheduled:raw.time,status:'NS',fixture_id:raw.id});
