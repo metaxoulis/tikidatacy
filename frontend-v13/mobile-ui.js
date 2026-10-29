@@ -384,7 +384,8 @@ function liveStatsModelNote(m,compact=false){
 /* Live measurements are sourced from Sportmonks, not from the probability model. */
 function liveStatsBlock(m,compact=false){
  if(!live(m))return '';
- if(m.source==='football-api.com')return compact?'':'<section class="tdm-panel"><h3>Football-API · Σκορ & γεγονότα</h3><p class="tdm-note">Το τρέχον πακέτο δεν παρέχει κατοχή, σουτ ή επιθέσεις. Οι live εκτιμήσεις βασίζονται στο αποθηκευμένο ιστορικό, στο σκορ και στο λεπτό.</p></section>';
+ // Football-API match statistics are shown in the match page's statistics table (from /api/match), not per live card.
+ if(m.source==='football-api.com')return '';
  const rows=Array.isArray(m.live_stats)?m.live_stats:[],show=(compact?['shots','on_target','corners','possession']:['shots','on_target','off_target','blocked','possession','corners','attacks','dangerous','offsides','saves','throwins','goal_kicks','fouls','yellow','red']);
  const relevant=show.map(k=>rows.find(x=>x.key===k)).filter(Boolean);
  if(!relevant.length)return compact?'<p class="tdm-live-stat-hint">Δεν υπάρχουν ακόμη live μετρήσεις.</p>':'<section class="tdm-panel"><h3>LIVE · Tiki-Data Lab</h3><p class="tdm-lead">Δεν έχουν δημοσιευθεί πραγματικές μετρήσεις για αυτόν τον αγώνα.</p></section>';

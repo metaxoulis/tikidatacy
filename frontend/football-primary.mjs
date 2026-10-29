@@ -196,6 +196,21 @@ async function faPrimaryHistory(env,legacy,fixture){
   return {...empty,home:recent(legacy.home_id),away:recent(legacy.away_id),head_to_head:rows.filter(r=>[r.home_id,r.away_id].includes(legacy.home_id)&&[r.home_id,r.away_id].includes(legacy.away_id)).slice(0,5)};
  }catch{return empty}
 }
+/* Match statistics for the Stats tab ({type,side,value} per team), labelled in Greek from this list (the site's
+   language switch translates them) and shown in this order. Unknown types are dropped. Counters the provider rarely
+   tracks (attacks, throw-ins...) are hidden when both teams show 0, which means "not recorded". */
+const FA_STAT_LABELS={possesion:'Κατοχή',attempts_on_goal:'Σουτ',shots_on_target:'Σουτ στην εστία',shots_off_target:'Σουτ εκτός εστίας',
+ shots_blocked:'Μπλοκαρισμένα σουτ',corners:'Κόρνερ',fauls:'Φάουλ',offsides:'Οφσάιντ',saves:'Αποκρούσεις',yellow_cards:'Κίτρινες κάρτες',
+ red_cards:'Κόκκινες κάρτες',penalties:'Πέναλτι',dangerous_attacks:'Επικίνδυνες επιθέσεις',attacks:'Επιθέσεις',free_kicks:'Ελεύθερα λακτίσματα',
+ goal_kicks:'Άουτ εστίας',throw_ins:'Πλάγια άουτ',substitutions:'Αλλαγές',treatments:'Περιθάλψεις'};
+const FA_STAT_ORDER=Object.keys(FA_STAT_LABELS);
+const FA_STAT_OPTIONAL=new Set(['dangerous_attacks','attacks','free_kicks','goal_kicks','throw_ins','substitutions','treatments']);
+export function faDetailStatistics(rows){
+ return (Array.isArray(rows)?rows:[]).filter(x=>Object.hasOwn(FA_STAT_LABELS,x?.type)&&!(FA_STAT_OPTIONAL.has(x.type)&&!x.home&&!x.away))
+  .sort((a,b)=>FA_STAT_ORDER.indexOf(a.type)-FA_STAT_ORDER.indexOf(b.type)).flatMap(x=>{
+   const label=FA_STAT_LABELS[x.type],fmt=v=>v===null?null:x.type==='possesion'?v+'%':v;
+   return [{type:label,side:'home',value:fmt(x.home)},{type:label,side:'away',value:fmt(x.away)}]});
+}
 export async function faPrimaryDetail(req,env,publicId){
  if(req.method!=='GET')return smResponse({error:'method_not_allowed'},405);
  try{
@@ -208,10 +223,10 @@ export async function faPrimaryDetail(req,env,publicId){
   const lineups={home:side('home'),away:side('away')};
   return smResponse({source:'football-api.com',fixture_id:game.match_id||game.fixture_id,public_id:game.id,verified:true,
    lineup_status:lineups.home.starters.length&&lineups.away.starters.length?'unconfirmed':'unavailable',confirmed_lineup:null,lineups,lineup_sources:{home:lineups.home.starters.length?'official':'unavailable',away:lineups.away.starters.length?'official':'unavailable'},
-   formations:{home:null,away:null},statistics:[],match_statistics_available:false,xg:{home:null,away:null,available:false},player_xg:[],venue:game.venue||null,
+   formations:{home:null,away:null},statistics:faDetailStatistics(data?.statistics),match_statistics_available:!!data?.match_statistics_available,statistics_updated_at:data?.statistics_updated_at||null,xg:{home:null,away:null,available:false},player_xg:[],venue:game.venue||null,
    events:(data?.events||[]).map(e=>({...e,type:e.type,team_id:e.side==='home'?game.home_id:e.side==='away'?game.away_id:null})),
    history:await faPrimaryHistory(env,legacy,game),current_season_form:legacy?await tdSeason2627Form(env.TIKI_DB,legacy):null,
-   updated_at:new Date().toISOString(),news:[],disclosures:{lineups:'Παίκτες από Football-API. Δεν παρέχονται επιβεβαιωμένες θέσεις ή σχηματισμός.',xg:'Δεν υπάρχει πρόσβαση σε στατιστικά ή xG με το τρέχον πακέτο.'}},200,30);
+   updated_at:new Date().toISOString(),news:[],disclosures:{lineups:'Παίκτες από Football-API. Δεν παρέχονται επιβεβαιωμένες θέσεις ή σχηματισμός.',xg:'Ο πάροχος δεν παρέχει xG.'}},200,30);
  }catch{return smResponse({error:'football_api_details_unavailable'},503)}
 }
 /* Finished results for model training (/matches/history.json, 90-minute ft_score). Football-API team IDs are
