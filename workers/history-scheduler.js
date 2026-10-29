@@ -1,3 +1,4 @@
+import {runArchiveBatch} from './archive-scheduler.mjs';
 import {learnCalibration} from './ml-calibration.mjs';
 // Keep training, prospective capture and settlement observable and independent.
 export function settlement(m) {
@@ -65,5 +66,5 @@ export async function runPipeline(env) {
 }
 export default {
  async fetch(){return new Response('Scheduled pipeline only',{status:403});},
- async scheduled(event,env,ctx){ctx.waitUntil(runPipeline(env));}
+ async scheduled(event,env,ctx){ctx.waitUntil(event.cron==='* * * * *'?runArchiveBatch(env):runPipeline(env));}
 };
