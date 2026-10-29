@@ -188,13 +188,47 @@ export async function faPrimaryFocus(req,env,ctx){
    model:{name:'Tiki-Data historical Poisson',trained_at:model?.trained_at||null,historical_cutoff:model?.cutoff||null,validated:false},model_unavailable:!model,model_predictions_available:available,usage:snapshot.usage,match_statistics_available:false},200,30);
  }catch{return smResponse({source:'football-api.com',error:'football_api_schedule_unavailable',matches:[],stale:true},503)}
 }
-async function faPrimaryHistory(env,legacy,fixture){
- const empty={home:[],away:[],head_to_head:[],source:'archived_historical_results'};if(!legacy||!env.TIKI_DB)return empty;
- try{const d=await env.TIKI_DB.prepare('SELECT fixture_id,match_date,home_team,away_team,home_team_id,away_team_id,home_score,away_score,league_key FROM sportmonks_training_results WHERE match_date<?1 AND (home_team_id IN (?2,?3) OR away_team_id IN (?2,?3)) ORDER BY match_date DESC LIMIT 80').bind(fixture.date.slice(0,10),legacy.home_id,legacy.away_id).all();
-  const rows=(d.results||[]).map(r=>({id:'archived-sportmonks-'+r.fixture_id,date:r.match_date,home:r.home_team,away:r.away_team,home_id:r.home_team_id,away_id:r.away_team_id,home_score:r.home_score,away_score:r.away_score,league:r.league_key}));
-  const recent=id=>rows.filter(r=>r.home_id===id||r.away_id===id).slice(0,8).map(r=>{const h=r.home_id===id?r.home_score:r.away_score,a=r.home_id===id?r.away_score:r.home_score;return {...r,result:h>a?'W':h===a?'D':'L'}});
-  return {...empty,home:recent(legacy.home_id),away:recent(legacy.away_id),head_to_head:rows.filter(r=>[r.home_id,r.away_id].includes(legacy.home_id)&&[r.home_id,r.away_id].includes(legacy.away_id)).slice(0,5)};
+/* Finished results for match-page panels, keyed by the model's Sportmonks team identities: the Sportmonks archive
+   table, then results synced from Football-API. Small indexed lookups in one batch per table (never a scan), and a
+   match present in both sources (26-28 Oct overlap) is counted once. */
+const FA_RESULT_SOURCES=[['sportmonks_training_results','fixture_id','archived-sportmonks-'],['football_training_results','fa_match_id','football-api-']];
+export async function faTeamResults(db,a,b,before){
+ const rows=new Map(),h2h=new Map();
+ for(const [table,idCol,prefix] of FA_RESULT_SOURCES){
+  const cols=idCol+' AS id,dataset_slug,match_date,home_team,away_team,home_team_id,away_team_id,home_score,away_score,league_key';
+  const stmts=[
+   db.prepare('SELECT '+cols+' FROM '+table+' WHERE home_team_id IN (?1,?2) AND match_date<?3 ORDER BY match_date DESC LIMIT 60').bind(a,b,before),
+   db.prepare('SELECT '+cols+' FROM '+table+' WHERE away_team_id IN (?1,?2) AND match_date<?3 ORDER BY match_date DESC LIMIT 60').bind(a,b,before),
+   db.prepare('SELECT '+cols+' FROM '+table+' WHERE ((home_team_id=?1 AND away_team_id=?2) OR (home_team_id=?2 AND away_team_id=?1)) AND match_date<?3 ORDER BY match_date DESC LIMIT 5').bind(a,b,before)];
+  let out;try{out=db.batch?await db.batch(stmts):await Promise.all(stmts.map(x=>x.all()))}catch{continue}
+  out.forEach((r,i)=>{for(const x of r?.results||[]){const key=x.match_date+'|'+x.home_team_id+'|'+x.away_team_id,row={...x,id:prefix+x.id};
+   if(!rows.has(key))rows.set(key,row);if(i===2&&!h2h.has(key))h2h.set(key,row)}});
+ }
+ const newest=(x,y)=>y.match_date.localeCompare(x.match_date);
+ return {rows:[...rows.values()].sort(newest),h2h:[...h2h.values()].sort(newest)};
+}
+export async function faPrimaryHistory(env,legacy,fixture,found=null){
+ const empty={home:[],away:[],head_to_head:[],source:'archived_and_synced_results'};if(!legacy||!env.TIKI_DB)return empty;
+ try{const {rows:all,h2h}=found||await faTeamResults(env.TIKI_DB,legacy.home_id,legacy.away_id,fixture.date.slice(0,10));
+  const row=r=>({id:r.id,date:r.match_date,home:r.home_team,away:r.away_team,home_id:r.home_team_id,away_id:r.away_team_id,home_score:r.home_score,away_score:r.away_score,league:r.league_key});
+  const recent=id=>all.filter(r=>r.home_team_id===id||r.away_team_id===id).slice(0,8).map(r=>{const h=r.home_team_id===id?r.home_score:r.away_score,a=r.home_team_id===id?r.away_score:r.home_score;return {...row(r),result:h>a?'W':h===a?'D':'L'}});
+  return {...empty,home:recent(legacy.home_id),away:recent(legacy.away_id),head_to_head:h2h.slice(0,5).map(row)};
  }catch{return empty}
+}
+/* 2026-27 home record of the home club and away record of the away club, from the same lookups, with the training
+   embargo (results older than three days). Same shape as the former td_2026_27_team_form view. */
+export function faSeasonForm(found,legacy,now=Date.now()){
+ const cutoff=new Date(Date.parse(new Date(now).toISOString().slice(0,10)+'T00:00:00Z')-3*86400000).toISOString().slice(0,10);
+ const venue=(id,side)=>{
+  const games=(found?.rows||[]).filter(r=>r[side+'_team_id']===id&&String(r.dataset_slug).endsWith('-2026-27')&&r.match_date>='2026-07-01'&&r.match_date<cutoff);
+  if(!games.length)return null;
+  const gf=r=>side==='home'?r.home_score:r.away_score,ga=r=>side==='home'?r.away_score:r.home_score,uefa=r=>['ucl','uel','uecl'].includes(r.league_key);
+  return {team_id:id,venue:side,played:games.length,wins:games.filter(r=>gf(r)>ga(r)).length,draws:games.filter(r=>gf(r)===ga(r)).length,
+   losses:games.filter(r=>gf(r)<ga(r)).length,goals_for:games.reduce((n,r)=>n+gf(r),0),goals_against:games.reduce((n,r)=>n+ga(r),0),
+   uefa_matches:games.filter(uefa).length,domestic_matches:games.filter(r=>!uefa(r)).length};
+ };
+ return {season:'2026-27',source:'stored_final_results',current_season_only:true,training_cutoff_exclusive:cutoff,probability_model:false,
+  home:venue(legacy.home_id,'home'),away:venue(legacy.away_id,'away')};
 }
 /* Match statistics for the Stats tab ({type,side,value} per team), labelled in Greek from this list (the site's
    language switch translates them) and shown in this order. Unknown types are dropped. Counters the provider rarely
@@ -217,6 +251,7 @@ export async function faPrimaryDetail(req,env,publicId){
   const focus=await (await faPrimaryFocus(req,env)).json();const game=focus.matches?.find(m=>m.id===publicId);
   if(!game)return smResponse({error:'match_not_in_current_schedule'},404);
   const model=await tdPublishedModel(env),legacy=model?faHistoricalIdentity(game,model,fhName,faBadgeCache.identities):null;
+  const found=legacy&&env.TIKI_DB?await faTeamResults(env.TIKI_DB,legacy.home_id,legacy.away_id,game.date.slice(0,10)).catch(()=>null):null;
   let data=null;if(game.match_id){const r=await faTrialRoute(new Request(new URL('/api/football-trial/match/'+game.match_id,req.url)),env);if(r.ok)data=await r.json()}
   const players=side=>(data?.lineups?.[side]?.players||[]).map(p=>({id:p.id,name:p.name,number:Number(p.number)||null,position:null,role:null,is_goalkeeper:false,order:null,substitute:p.substitute}));
   const side=key=>{const p=players(key);return {starters:p.filter(p=>!p.substitute),bench:p.filter(p=>p.substitute)}};
@@ -225,7 +260,7 @@ export async function faPrimaryDetail(req,env,publicId){
    lineup_status:lineups.home.starters.length&&lineups.away.starters.length?'unconfirmed':'unavailable',confirmed_lineup:null,lineups,lineup_sources:{home:lineups.home.starters.length?'official':'unavailable',away:lineups.away.starters.length?'official':'unavailable'},
    formations:{home:null,away:null},statistics:faDetailStatistics(data?.statistics),match_statistics_available:!!data?.match_statistics_available,statistics_updated_at:data?.statistics_updated_at||null,xg:{home:null,away:null,available:false},player_xg:[],venue:game.venue||null,
    events:(data?.events||[]).map(e=>({...e,type:e.type,team_id:e.side==='home'?game.home_id:e.side==='away'?game.away_id:null})),
-   history:await faPrimaryHistory(env,legacy,game),current_season_form:legacy?await tdSeason2627Form(env.TIKI_DB,legacy):null,
+   history:await faPrimaryHistory(env,legacy,game,found),current_season_form:found?faSeasonForm(found,legacy):null,
    updated_at:new Date().toISOString(),news:[],disclosures:{lineups:'Παίκτες από Football-API. Δεν παρέχονται επιβεβαιωμένες θέσεις ή σχηματισμός.',xg:'Ο πάροχος δεν παρέχει xG.'}},200,30);
  }catch{return smResponse({error:'football_api_details_unavailable'},503)}
 }
