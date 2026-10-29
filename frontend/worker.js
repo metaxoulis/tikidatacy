@@ -967,12 +967,12 @@ async function fhLoadModel(db,ctx,allowTraining=false){
   if(!allowTraining)return null;
   const result=await db.prepare("SELECT dataset_slug,match_date,home_team,away_team,home_score,away_score,'openfootball_cc0' AS source_provider FROM openfootball_matches WHERE match_status='FINISHED' AND home_score IS NOT NULL AND away_score IS NOT NULL ORDER BY match_date LIMIT 10000").all();
   if(!Array.isArray(result.results)||result.results.length<80)return null;
-  let sportmonks=[];try{const extra=await db.prepare("SELECT dataset_slug,match_date,home_team,away_team,home_score,away_score,home_team_id,away_team_id,'sportmonks' AS source_provider FROM sportmonks_training_results WHERE match_date <= date('now','-3 day') ORDER BY match_date DESC LIMIT 40000").all();sportmonks=extra.results||[];}catch{}
+  let sportmonks=[];try{const extra=await db.prepare("SELECT dataset_slug,match_date,home_team,away_team,home_score,away_score,home_team_id,away_team_id,'sportmonks' AS source_provider FROM sportmonks_training_results WHERE match_date <= date('now','-3 day') ORDER BY match_date DESC LIMIT 40000").all();sportmonks=extra.results||[];}catch{throw Error('sportmonks_history_unavailable')}
   // Finished Football-API results (fa_team_identity-mapped) continue the history after the Sportmonks archive.
-  let footballApi=[];try{const extra=await db.prepare("SELECT dataset_slug,match_date,home_team,away_team,home_score,away_score,home_team_id,away_team_id,'football_api' AS source_provider FROM football_training_results WHERE match_date <= date('now','-3 day') ORDER BY match_date DESC LIMIT 20000").all();footballApi=extra.results||[]}catch{}
+  let footballApi=[];try{const extra=await db.prepare("SELECT dataset_slug,match_date,home_team,away_team,home_score,away_score,home_team_id,away_team_id,'football_api' AS source_provider FROM football_training_results WHERE match_date <= date('now','-3 day') ORDER BY match_date DESC LIMIT 20000").all();footballApi=extra.results||[]}catch{throw Error('football_history_unavailable')}
   const model=fhTrain([...result.results,...sportmonks,...footballApi]);
   const task=db.prepare('INSERT INTO focus_model_snapshots(model_key,payload_json,expires_at,trained_at) VALUES(?1,?2,?3,?4) ON CONFLICT(model_key) DO UPDATE SET payload_json=excluded.payload_json,expires_at=excluded.expires_at,trained_at=excluded.trained_at').bind(key,JSON.stringify(model),Math.floor(Date.now()/1000)+21600,model.trained_at).run();
-  if(ctx?.waitUntil)ctx.waitUntil(task.catch(()=>{}));else await task.catch(()=>{});
+  if(ctx?.waitUntil)ctx.waitUntil(task.catch(()=>{}));else await task;
   return model;
  }catch{return null;}
 }
@@ -3355,10 +3355,13 @@ async function tdRunScheduledTraining(req,env){
  if(req.method!=='POST'||!await tdTrainingAuthorized(req,env))return smResponse({error:'not_found'},404);
  if(!env.MATCHIQ_CACHE||!env.TIKI_DB)return smResponse({error:'training_not_configured'},503);
  const now=new Date().toISOString();const previous=await env.MATCHIQ_CACHE.get(TD_TRAIN_STATUS,'json').catch(()=>null);
+ const retained=await tdPublishedModel(env);
+ if(retained)await env.MATCHIQ_CACHE.put(TD_MODEL_KEY+':previous',JSON.stringify(retained));
  await env.MATCHIQ_CACHE.put(TD_TRAIN_STATUS,JSON.stringify({status:'running',started_at:now,last_success:previous?.last_success||null}));
  try{
   // Sportmonks ingestion is retired: training uses stored history plus synced Football-API results.
-  const footballResults=await faSyncResults(env).catch(e=>({status:'failed',reason:String(e?.message||e).slice(0,80)}));
+  const footballResults=await faSyncResults(env).catch(()=>({status:'failed'}));
+  if(!['ok','up_to_date'].includes(footballResults.status))throw Error('football_results_sync_incomplete');
   const scopedHistory={status:'retired',reason:'sportmonks_ingestion_retired'};
   const model=await fhLoadModel(env.TIKI_DB,null,true);
   if(!model||Object.keys(model.all_teams||{}).length<10)throw Error('training_data_unavailable');
