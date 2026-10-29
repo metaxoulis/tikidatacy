@@ -4121,20 +4121,29 @@ async function sportmonksArchive(req,env){
  if(!db||!env.SPORTMONKS_API_TOKEN)return Response.json({error:'archive_not_configured'},{status:503});
  const input=await req.json();
  if(input.action==='init'){
+  await db.prepare("DELETE FROM archive_state WHERE key='terminal_status'").run();
   await db.batch(SM_ARCHIVE_TASKS.map(([task,path,params={}],priority)=>db.prepare('INSERT OR IGNORE INTO archive_tasks(task,path,params_json,priority) VALUES(?1,?2,?3,?4)').bind(task,path,JSON.stringify({per_page:50,...params}),task.startsWith('fixtures-')?-10+priority:priority)));
   return Response.json(await archiveSummary(db));
  }
  if(input.action==='status')return Response.json(await archiveSummary(db));
  if(input.action!=='step')return Response.json({error:'invalid_action'},{status:400});
+ const terminal=await db.prepare("SELECT value FROM archive_state WHERE key='terminal_status'").first();
+ if(terminal)return Response.json(JSON.parse(terminal.value));
+ const budgetKey='reserved-pages:'+new Date().toISOString().slice(0,10);
+ const used=await db.prepare('SELECT value FROM archive_state WHERE key=?1').bind(budgetKey).first();
+ if(Number(used?.value||0)>=15000)return Response.json({paused:'daily_archive_budget',resumes:'next UTC day'});
  const now=Date.now();
  let task;
  for(const state of ['running','retry'])if(!task)task=await db.prepare('SELECT * FROM archive_tasks WHERE status=?1 AND lease_until<?2 ORDER BY lease_until LIMIT 1').bind(state,now).first();
  if(!task)task=await db.prepare("SELECT * FROM archive_tasks WHERE status='pending' ORDER BY priority,task LIMIT 1").first();
- if(!task)return Response.json(await archiveSummary(db));
+ if(!task){
+  const summary=await archiveSummary(db);
+  if(summary.tasks.every(t=>['complete','blocked'].includes(t.status)))await db.prepare("INSERT INTO archive_state(key,value) VALUES('terminal_status',?1) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(JSON.stringify(summary)).run();
+  return Response.json(summary);
+ }
  const lease=await db.prepare("UPDATE archive_tasks SET status='running',lease_until=?1 WHERE task=?2 AND lease_until<?3").bind(now+180000,task.task,now).run();
  if(!lease.meta.changes)return Response.json({busy:true});
  const batchSize=task.task==='seasons'?1:Math.min(6,Math.max(1,Number(input.pages)||6)),params=JSON.parse(task.params_json),out=[];
- const budgetKey='reserved-pages:'+new Date().toISOString().slice(0,10);
  const reservation=await db.prepare('INSERT INTO archive_state(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=CAST(value AS INTEGER)+?2 WHERE CAST(value AS INTEGER)<=15000-?2 RETURNING value').bind(budgetKey,batchSize).first();
  if(!reservation){
   await db.prepare("UPDATE archive_tasks SET status='pending',lease_until=0 WHERE task=?1").bind(task.task).run();
