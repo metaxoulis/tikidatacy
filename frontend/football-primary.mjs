@@ -35,14 +35,19 @@ export function faLegacyTeamId(name,model,nameKey){
  if(model?.team_identity?.ambiguous?.includes(n))return null;
  const value=model?.team_identity?.aliases?.[n];return /^sportmonks:[1-9]\d*$/.test(value||'')?Number(value.split(':')[1]):null;
 }
-export function faHistoricalIdentity(game,model,nameKey){
- const h=faLegacyTeamId(game.home,model,nameKey),a=faLegacyTeamId(game.away,model,nameKey);
- return h&&a&&h!==a?{...game,home_id:h,away_id:a}:null;
+export function faForecastIdentity(game,model,nameKey,identities=null){
+ const resolve=(id,name)=>{const mapped=identities?.get(id);return Number.isSafeInteger(mapped)&&mapped>0?mapped:faLegacyTeamId(name,model,nameKey)};
+ const h=resolve(game.home_id,game.home),a=resolve(game.away_id,game.away);
+ return {...game,home_id:h&&h!==a?h:null,away_id:a&&h!==a?a:null};
+}
+export function faHistoricalIdentity(game,model,nameKey,identities=null){
+ const g=faForecastIdentity(game,model,nameKey,identities);
+ return g.home_id&&g.away_id?g:null;
 }
 /* Badges stored in D1 (team_badges, keyed by Football-API team ID) are served from /badges/<id>.png.
    Each side is resolved on its own; the archived Sportmonks CDN image is only a fallback. */
 export function faTeamLogos(game,model,badges,nameKey){
- const legacy=name=>{const id=model?faLegacyTeamId(name,model,nameKey):null;return id?'https://cdn.sportmonks.com/images/soccer/teams/'+(id%32)+'/'+id+'.png':null};
+ const legacy=name=>{const id=model?faLegacyTeamId(name,model,nameKey):null;return id?'/archived-badges/'+id+'.png':null};
  const pick=(id,name)=>badges?.has(id)?'/badges/'+id+'.png':legacy(name);
  return {home:pick(game.home_id,game.home),away:pick(game.away_id,game.away)};
 }
@@ -53,12 +58,12 @@ export function faLeagueLogo(game,leagues){
  const key=leagues?.has(game.league_key)?game.league_key:leagues?.has(faLeagueLogoKey(game))?faLeagueLogoKey(game):null;
  return key?'/league-logos/'+key+'.png':null;
 }
-let faBadgeCache={at:0,ids:new Set(),leagues:new Set()};
+let faBadgeCache={at:0,ids:new Set(),leagues:new Set(),identities:new Map()};
 async function faBadgeIds(env,now=Date.now()){
  if(now-faBadgeCache.at<600000)return faBadgeCache.ids;
- try{const [t,l]=await Promise.all([env.TIKI_DB.prepare('SELECT fa_team_id FROM team_badges').all(),env.TIKI_DB.prepare('SELECT league_key FROM league_logos').all().catch(()=>({results:[]}))]);
-  faBadgeCache={at:now,ids:new Set((t.results||[]).map(x=>x.fa_team_id)),leagues:new Set((l.results||[]).map(x=>x.league_key))}}
- catch{faBadgeCache={at:now,ids:new Set(),leagues:new Set()}}
+ try{const [t,l,identity]=await Promise.all([env.TIKI_DB.prepare('SELECT fa_team_id FROM team_badges').all(),env.TIKI_DB.prepare('SELECT league_key FROM league_logos').all().catch(()=>({results:[]})),env.TIKI_DB.prepare('SELECT fa_team_id,sportmonks_team_id FROM fa_team_identity').all().catch(()=>({results:[]}))]);
+  faBadgeCache={at:now,ids:new Set((t.results||[]).map(x=>x.fa_team_id)),leagues:new Set((l.results||[]).map(x=>x.league_key)),identities:new Map((identity.results||[]).map(x=>[x.fa_team_id,x.sportmonks_team_id]))}}
+ catch{faBadgeCache={at:now,ids:new Set(),leagues:new Set(),identities:new Map()}}
  return faBadgeCache.ids;
 }
 const FA_BADGE_TYPES=new Set(['image/png','image/jpeg','image/webp']);
@@ -130,23 +135,20 @@ export function faLivePredictor(game,model,fitted=null){
 }
 function faPrimaryForecast(game,model,badges){
  game={...game,logos:faTeamLogos(game,model,badges,fhName),league_logo:faLeagueLogo(game,faBadgeCache.leagues)};
- const fallback=()=>({live_outlook:faLivePredictor(game,model),prematch_prediction:null});
- const legacy=model?faHistoricalIdentity(game,model,fhName):null;
- if(!legacy)return {...game,...fallback(),p1:null,px:null,p2:null,coverage:'unmatched_historical_identity',forecast_review:{status:'withheld',reasons:['unmatched_historical_identity']}};
+ const legacy=faForecastIdentity(game,model,fhName,faBadgeCache.identities);
  const review=forecastIntegrity(legacy,model,fhTeamKey);
- const fitted=fhEstimate(legacy,model)||fhEstimate(legacy,model,{experimentalPreview:true});
- const usable=fitted?.tier==='team'&&fitted.team_samples.home>=3&&fitted.team_samples.away>=3;
- if(!usable)return {...game,...fallback(),p1:null,px:null,p2:null,coverage:'insufficient_team_history',forecast_review:review};
+ const fitted=fhEstimate(legacy,model,{allowHistoricalPriors:true});
+ if(!fitted)return {...game,p1:null,px:null,p2:null,model:null,coverage:'stored_model_unavailable',forecast_review:review,live_outlook:null};
  const live=faPrimaryLiveStatus.has(game.status),outlook=live?faLivePredictor(game,model,fitted):null;
- const p={...fitted,prediction_tier:fitted.tier,most_likely_score:fhLikelyScore(fitted.mu_home,fitted.mu_away)};
- const withheld=review.status==='withheld';
- return {...game,...(live||withheld?{}:p),p1:live||withheld?null:p.p1,px:live||withheld?null:p.px,p2:live||withheld?null:p.p2,
-  model:live||withheld?null:p,experimental_preview:!live&&withheld?p:null,
+ const p={...fitted,prediction_tier:fitted.tier,most_likely_score:fhLikelyScore(fitted.mu_home,fitted.mu_away),
+  experimental:true,validated:false,limited_evidence:fitted.tier!=='team'};
+ const display=live&&outlook?outlook:p;
+ return {...game,...display,model:p,experimental_preview:!live&&review.status==='withheld'?p:null,
   prematch_prediction:live?{...p,source:'tiki_prematch_experimental_reference'}:null,
   live_outlook:outlook?{...outlook,model_version:model.model_version,historical_cutoff:model.cutoff}:null,
   forecast_review:review,historical_sample:fitted.team_samples,model_coverage:fitted.team_samples,
-  coverage:'verified_historical_inputs',forecast_source:'published_trained_model',forecast_calculated_at:model.trained_at,
-  historical_identity:{home:'sportmonks:'+legacy.home_id,away:'sportmonks:'+legacy.away_id,method:'unique_archived_alias'},
+  coverage:fitted.tier==='team'?'verified_historical_inputs':'limited_historical_inputs',forecast_source:'published_trained_model',forecast_calculated_at:model.trained_at,
+  historical_identity:{home:legacy.home_id?'sportmonks:'+legacy.home_id:null,away:legacy.away_id?'sportmonks:'+legacy.away_id:null,method:'verified_id_map_or_unique_archived_alias'},
   analysis_provenance:'historical_score_minute_no_live_statistics',live_stats:[],statistics:[]};
 }
 async function faPrimarySnapshot(req,env){
@@ -166,7 +168,7 @@ export function faForecastLogWrites(env,matches,model,now=Date.now()){
  if(!env?.TIKI_DB||!model)return [];
  if(faLogged.size>5000)faLogged.clear();
  const stamp=new Date(now).toISOString();
- return matches.filter(g=>g.status==='NS'&&g.model&&[g.p1,g.px,g.p2].every(Number.isFinite)&&Date.parse(g.date)>now+2*3600000&&!faLogged.has(g.id+'|'+model.cutoff))
+ return matches.filter(g=>g.status==='NS'&&g.model&&[g.p1,g.px,g.p2].every(Number.isFinite)&&Date.parse(g.date)>now+2*3600000&&!faLogged.has(g.id+'|'+model.cutoff)).slice(0,20)
   .map(g=>{faLogged.add(g.id+'|'+model.cutoff);
    return env.TIKI_DB.prepare("INSERT OR IGNORE INTO prospective_forecast_log (fixture_key,created_at,model_version,data_cutoff,source_sync_at,ph,pd,pa) VALUES (?1,datetime('now'),?2,?3,?4,?5,?6,?7)")
     .bind(g.id+':'+g.date,model.model_version,model.cutoff,stamp,g.p1/100,g.px/100,g.p2/100)});
@@ -199,7 +201,7 @@ export async function faPrimaryDetail(req,env,publicId){
  try{
   const focus=await (await faPrimaryFocus(req,env)).json();const game=focus.matches?.find(m=>m.id===publicId);
   if(!game)return smResponse({error:'match_not_in_current_schedule'},404);
-  const model=await tdPublishedModel(env),legacy=model?faHistoricalIdentity(game,model,fhName):null;
+  const model=await tdPublishedModel(env),legacy=model?faHistoricalIdentity(game,model,fhName,faBadgeCache.identities):null;
   let data=null;if(game.match_id){const r=await faTrialRoute(new Request(new URL('/api/football-trial/match/'+game.match_id,req.url)),env);if(r.ok)data=await r.json()}
   const players=side=>(data?.lineups?.[side]?.players||[]).map(p=>({id:p.id,name:p.name,number:Number(p.number)||null,position:null,role:null,is_goalkeeper:false,order:null,substitute:p.substitute}));
   const side=key=>{const p=players(key);return {starters:p.filter(p=>!p.substitute),bench:p.filter(p=>p.substitute)}};

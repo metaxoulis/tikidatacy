@@ -25,7 +25,7 @@ test('each side gets its own badge: stored badge first, archived identity second
  const key=n=>String(n).toLowerCase();
  const game={home:'Bayern Munich',home_id:10,away:'Magdeburg',away_id:11};
  const none=faTeamLogos(game,model,new Set(),key);
- assert.equal(none.home,'https://cdn.sportmonks.com/images/soccer/teams/23/503.png');assert.equal(none.away,null);
+ assert.equal(none.home,'/archived-badges/503.png');assert.equal(none.away,null);
  const stored=faTeamLogos(game,model,new Set([10,11]),key);
  assert.equal(stored.home,'/badges/10.png');assert.equal(stored.away,'/badges/11.png');
 });

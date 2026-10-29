@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {readFileSync} from 'node:fs';
-import {gunzipSync} from 'node:zlib';
+import {gunzipSync,gzipSync} from 'node:zlib';
 import {createHash} from 'node:crypto';
-import {sportmonksArchive,archiveSafeJSON} from '../frontend/sportmonks-archive.mjs';
+import {sportmonksArchive,archiveSafeJSON,archiveCursor} from '../frontend/sportmonks-archive.mjs';
 function setup(){
  const sql=new DatabaseSync(':memory:');sql.exec(readFileSync(new URL('../migrations/20261029_sportmonks_raw_archive.sql',import.meta.url),'utf8'));
  sql.exec("INSERT INTO archive_tasks(task,path,params_json) VALUES('fixture','/v3/football/fixtures','{}')");
@@ -44,5 +44,20 @@ test('rate limiting records an incomplete task and resumes at the first missing 
   fail=false;sql.exec('UPDATE archive_tasks SET lease_until=0');
   const resumed=await(await sportmonksArchive(request('step'),env)).json();assert.equal(resumed.status,'complete');
   assert.equal(sql.prepare('SELECT records FROM archive_tasks').get().records,3);assert.equal(sql.prepare('SELECT count(*) n FROM archive_pages').get().n,3);
+ }finally{globalThis.fetch=original}
+});
+
+test('deep exports recover the saved next_cursor rather than repeating an invalid 20,000-row offset',async()=>{
+ const {sql,env}=setup(),original=globalThis.fetch;
+ const previous={data:[{id:20050}],pagination:{has_more:true,next_cursor:'https://api.sportmonks.com/v3/football/fixtures?cursor=after20050'}};
+ sql.prepare("INSERT INTO archive_pages VALUES('fixture',401,'/v3/football/fixtures','{}',?,'previous',50,100,100,'t')").run(gzipSync(JSON.stringify(previous)));
+ sql.exec("UPDATE archive_tasks SET page=402,records=20050,pages=401");
+ const calls=[];
+ globalThis.fetch=async u=>{const url=new URL(u),cursor=url.searchParams.get('cursor');calls.push(cursor);assert.equal(url.searchParams.has('page'),false);
+  return Response.json({data:[{id:cursor==='after20050'?20051:20052}],pagination:{has_more:cursor==='after20050',next_cursor:cursor==='after20050'?'https://api.sportmonks.com/v3/football/fixtures?cursor=after20051':null}})};
+ try{
+  const result=await(await sportmonksArchive(request('step'),env)).json();assert.equal(result.status,'complete');assert.equal(result.next_page,404);
+  assert.deepEqual(calls,['after20050','after20051']);assert.equal(sql.prepare('SELECT records FROM archive_tasks').get().records,20052);
+  assert.throws(()=>archiveCursor('https://example.com/?cursor=secret'),/unapproved_cursor_origin/);
  }finally{globalThis.fetch=original}
 });

@@ -23,6 +23,21 @@ export function archiveSafeJSON(payload,token){
  // Pagination URLs may include credentials. Keep every data field and redact only secrets.
  return JSON.stringify(payload).replaceAll(token,'REDACTED').replace(/([?&]api_token=)[^&"\s]+/g,'$1REDACTED');
 }
+export function archiveCursor(link){
+ if(!link)return null;
+ const url=new URL(link);
+ if(url.protocol!=='https:'||url.hostname!=='api.sportmonks.com'||!/^\/(?:api\/)?v3\//.test(url.pathname))throw Error('unapproved_cursor_origin');
+ return url.searchParams.get('cursor')||null;
+}
+async function recoverArchiveCursor(env,task){
+ if(task.page<=1)return null;
+ for(let i=0;i<3;i++){
+  const db=env['SPORTMONKS_RAW_'+i];if(!db)continue;
+  const row=await db.prepare('SELECT payload_gzip FROM archive_pages WHERE task=?1 AND page=?2').bind(task.task,task.page-1).first();
+  if(row){const text=await new Response(new Blob([row.payload_gzip]).stream().pipeThrough(new DecompressionStream('gzip'))).text();return archiveCursor(JSON.parse(text).pagination?.next_cursor);}
+ }
+ return null;
+}
 async function archiveRead(response){
  const reader=response.body.getReader(),chunks=[];let size=0;
  try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;
@@ -86,30 +101,32 @@ export async function sportmonksArchive(req,env){
   return Response.json({paused:'daily_archive_budget',resumes:'next UTC day',task:task.task});
  }
 
- // Two requests in flight; retain compressed pages only to bound memory during rich lineup exports.
- for(let start=0;start<batchSize;start+=2){
-  const results=await Promise.all(Array.from({length:Math.min(2,batchSize-start)},async(_,i)=>{
-   const page=task.page+start+i;
-   try{
-    const result=await archiveFetch(task.path,{...params,page},env.SPORTMONKS_API_TOKEN);
-    if(result.status!==200)return {page,...result};
-    if(result.payload?.data===undefined)return {page,status:422,payload:{message:'missing_data_field'}};
-    const raw=archiveSafeJSON(result.payload,env.SPORTMONKS_API_TOKEN),encoded=new TextEncoder().encode(raw);
-    const count=Array.isArray(result.payload.data)?result.payload.data.length:1;
-    const pagination=result.payload.pagination;
-    const children=task.task==='seasons'&&Array.isArray(result.payload.data)?result.payload.data.flatMap(s=>Number.isSafeInteger(s.id)?[
-     ['topscorers-season-'+s.id,'/v3/football/topscorers/seasons/'+s.id],
-     ['schedule-season-'+s.id,'/v3/football/schedules/seasons/'+s.id],
-     ['standings-season-'+s.id,'/v3/football/standings/seasons/'+s.id]
-    ]:[]):[];
-    result.payload=null;
-    const sha=[...new Uint8Array(await crypto.subtle.digest('SHA-256',encoded))].map(v=>v.toString(16).padStart(2,'0')).join('');
-    const gzip=await new Response(new Blob([encoded]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer();
-    return {page,status:200,payload:{pagination},count,raw_bytes:encoded.length,sha,gzip,children};
-   }
-   catch(e){return {page,status:0,error:String(e.message).replaceAll(env.SPORTMONKS_API_TOKEN,'REDACTED')}}
-  }));out.push(...results);
-  if(results.some(r=>r.status!==200||r.payload?.pagination?.has_more!==true))break;
+ // Cursor pagination is sequential: numeric offsets are rejected beyond 20,000 records.
+ // Recover the checkpoint from the last immutable page for exports started before cursor support.
+ if(!params.cursor){const recovered=await recoverArchiveCursor(env,task);if(recovered)params.cursor=recovered;}
+ let requestParams={...params};
+ for(let i=0;i<batchSize;i++){
+  const page=task.page+i,actualParams={...requestParams};
+  if(actualParams.cursor)delete actualParams.page;else actualParams.page=page;
+  try{
+   const result=await archiveFetch(task.path,actualParams,env.SPORTMONKS_API_TOKEN);
+   if(result.status!==200){out.push({page,...result});break;}
+   if(result.payload?.data===undefined){out.push({page,status:422,payload:{message:'missing_data_field'}});break;}
+   const raw=archiveSafeJSON(result.payload,env.SPORTMONKS_API_TOKEN),encoded=new TextEncoder().encode(raw);
+   const count=Array.isArray(result.payload.data)?result.payload.data.length:1,pagination=result.payload.pagination;
+   const children=task.task==='seasons'&&Array.isArray(result.payload.data)?result.payload.data.flatMap(s=>Number.isSafeInteger(s.id)?[
+    ['topscorers-season-'+s.id,'/v3/football/topscorers/seasons/'+s.id],
+    ['schedule-season-'+s.id,'/v3/football/schedules/seasons/'+s.id],
+    ['standings-season-'+s.id,'/v3/football/standings/seasons/'+s.id]
+   ]:[]):[];
+   result.payload=null;
+   const sha=[...new Uint8Array(await crypto.subtle.digest('SHA-256',encoded))].map(v=>v.toString(16).padStart(2,'0')).join('');
+   const gzip=await new Response(new Blob([encoded]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer();
+   out.push({page,status:200,payload:{pagination},count,raw_bytes:encoded.length,sha,gzip,children,actualParams});
+   if(pagination?.has_more!==true)break;
+   const cursor=archiveCursor(pagination.next_cursor);
+   requestParams={...params};if(cursor)requestParams.cursor=cursor;else delete requestParams.cursor;
+  }catch(e){out.push({page,status:0,error:String(e.message).replaceAll(env.SPORTMONKS_API_TOKEN,'REDACTED')});break;}
  }
  let next=task.page,status='pending',error=null,records=0,pages=0,bytes=0;
  let shard=Number((await db.prepare("SELECT value FROM archive_state WHERE key='shard'").first())?.value||0);
@@ -120,17 +137,18 @@ export async function sportmonksArchive(req,env){
   const target=env['SPORTMONKS_RAW_'+shard];
   if(!target){status='blocked';error='archive_storage_shards_full';break;}
   const saved=await target.prepare('INSERT OR IGNORE INTO archive_pages(task,page,request_path,params_json,payload_gzip,sha256,records,raw_bytes,gzip_bytes,fetched_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)')
-   .bind(task.task,result.page,task.path,JSON.stringify({...params,page:result.page}),gzip,sha,count,raw_bytes,gzip.byteLength,new Date().toISOString()).run();
+   .bind(task.task,result.page,task.path,JSON.stringify(result.actualParams),gzip,sha,count,raw_bytes,gzip.byteLength,new Date().toISOString()).run();
   const children=result.children||[];
   for(let i=0;i<children.length;i+=25){const batch=children.slice(i,i+25);
    await db.prepare('INSERT OR IGNORE INTO archive_tasks(task,path,params_json,priority) VALUES'+batch.map(()=>'(?,?,?,?)').join(','))
     .bind(...batch.flatMap(([name,path])=>[name,path,'{"per_page":50}',200])).run();
   }
+  const cursor=archiveCursor(result.payload?.pagination?.next_cursor);if(cursor)params.cursor=cursor;else delete params.cursor;
   records+=count;pages++;bytes+=gzip.byteLength;next++;
   if(saved.meta.size_after>400*1024*1024){shard++;await db.prepare("INSERT INTO archive_state VALUES('shard',?1) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(String(shard)).run();}
   if(result.payload?.pagination?.has_more!==true){status='complete';break;}
  }
- await db.prepare('UPDATE archive_tasks SET page=?1,status=?2,records=records+?3,pages=pages+?4,gzip_bytes=gzip_bytes+?5,last_error=?6,updated_at=?7,lease_until=?8 WHERE task=?9')
-  .bind(next,status,records,pages,bytes,error,new Date().toISOString(),status==='retry'?Date.now()+120000:0,task.task).run();
+ await db.prepare('UPDATE archive_tasks SET page=?1,status=?2,records=records+?3,pages=pages+?4,gzip_bytes=gzip_bytes+?5,last_error=?6,updated_at=?7,lease_until=?8,params_json=?10 WHERE task=?9')
+  .bind(next,status,records,pages,bytes,error,new Date().toISOString(),status==='retry'?Date.now()+120000:0,task.task,JSON.stringify(params)).run();
  return Response.json({task:task.task,status,next_page:next,records,pages,gzip_bytes:bytes,error});
 }

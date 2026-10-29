@@ -932,7 +932,7 @@ function validHistoricalTier(value){
 
 function fhEstimate(fixture,model,options=null){
  const integrity=forecastIntegrity(fixture,model,fhTeamKey);
- if(integrity.status==='withheld'&&!options?.experimentalPreview)return null;
+ if(integrity.status==='withheld'&&!options?.experimentalPreview&&!options?.allowHistoricalPriors)return null;
  const league=model?.leagues?.[fixture?.league_key],baseline=league||model?.global;
  if(!baseline||baseline.matches<80)return null;
  const home=model?.all_teams?.[fhTeamKey(fixture?.home,fixture?.home_id,model?.team_identity)]?.home,away=model?.all_teams?.[fhTeamKey(fixture?.away,fixture?.away_id,model?.team_identity)]?.away;
@@ -3322,9 +3322,11 @@ async function tdProviderCached(req,ctx,ttl,build){
 
 const TD_MODEL_KEY='tiki:published-model:v11',TD_TRAIN_STATUS='tiki:training-status:v1';
 async function tdPublishedModel(env){
- try{const m=await env.MATCHIQ_CACHE.get(TD_MODEL_KEY,'json');
-  return m?.model_version===FH_TRAINING.version&&Object.keys(m.all_teams||{}).length?m:null;
- }catch{return null;}
+ const valid=m=>m?.model_version===FH_TRAINING.version&&Object.keys(m.all_teams||{}).length>0;
+ try{const m=await env.MATCHIQ_CACHE.get(TD_MODEL_KEY,'json');if(valid(m))return m;}catch{}
+ try{const row=await env.TIKI_DB.prepare('SELECT payload_json FROM focus_model_snapshots WHERE model_key=?1').bind(FH_TRAINING.version).first();const m=JSON.parse(row?.payload_json||'null');if(valid(m))return m;}catch{}
+ try{const m=await env.MATCHIQ_CACHE.get(TD_MODEL_KEY+':previous','json');if(valid(m))return m;}catch{}
+ return null;
 }
 async function tdTrainingAuthorized(req,env){
  if(!env.MODEL_TRAINING_TOKEN)return false;
@@ -3360,17 +3362,18 @@ async function tdRunScheduledTraining(req,env){
  await env.MATCHIQ_CACHE.put(TD_TRAIN_STATUS,JSON.stringify({status:'running',started_at:now,last_success:previous?.last_success||null}));
  try{
   // Sportmonks ingestion is retired: training uses stored history plus synced Football-API results.
+  const localAssets=await syncLocalSportmonksAssets(env).catch(()=>({status:'failed'}));
   const footballResults=await faSyncResults(env).catch(()=>({status:'failed'}));
   if(!['ok','up_to_date'].includes(footballResults.status))throw Error('football_results_sync_incomplete');
   const scopedHistory={status:'retired',reason:'sportmonks_ingestion_retired'};
   const model=await fhLoadModel(env.TIKI_DB,null,true);
   if(!model||Object.keys(model.all_teams||{}).length<10)throw Error('training_data_unavailable');
   model.uefa_team_history_refresh=scopedHistory;model.football_api_results_sync=footballResults;
-  model.training_origin='scheduled_d1_history';model.training_records=Object.values(model.leagues).reduce((n,l)=>n+(l.matches||0),0);
+  model.local_assets_sync=localAssets;model.training_origin='scheduled_d1_history';model.training_records=Object.values(model.leagues).reduce((n,l)=>n+(l.matches||0),0);
   await env.MATCHIQ_CACHE.put(TD_MODEL_KEY,JSON.stringify(model));
 
   const status={status:'success',started_at:now,completed_at:new Date().toISOString(),last_success:model.trained_at,
-   historical_matches:model.training_records,teams:Object.keys(model.all_teams).length,cutoff:model.cutoff,football_api_results_sync:footballResults,cross_competition_validation:model.cross_competition_validation,uefa_team_history_refresh:scopedHistory};
+   historical_matches:model.training_records,teams:Object.keys(model.all_teams).length,cutoff:model.cutoff,local_assets_sync:localAssets,football_api_results_sync:footballResults,cross_competition_validation:model.cross_competition_validation,uefa_team_history_refresh:scopedHistory};
   await env.MATCHIQ_CACHE.put(TD_TRAIN_STATUS,JSON.stringify(status));return smResponse(status,200,0);
  }catch(e){
   const status={status:'retry_next_schedule',started_at:now,completed_at:new Date().toISOString(),
@@ -3810,14 +3813,19 @@ function faLegacyTeamId(name,model,nameKey){
  if(model?.team_identity?.ambiguous?.includes(n))return null;
  const value=model?.team_identity?.aliases?.[n];return /^sportmonks:[1-9]\d*$/.test(value||'')?Number(value.split(':')[1]):null;
 }
-function faHistoricalIdentity(game,model,nameKey){
- const h=faLegacyTeamId(game.home,model,nameKey),a=faLegacyTeamId(game.away,model,nameKey);
- return h&&a&&h!==a?{...game,home_id:h,away_id:a}:null;
+function faForecastIdentity(game,model,nameKey,identities=null){
+ const resolve=(id,name)=>{const mapped=identities?.get(id);return Number.isSafeInteger(mapped)&&mapped>0?mapped:faLegacyTeamId(name,model,nameKey)};
+ const h=resolve(game.home_id,game.home),a=resolve(game.away_id,game.away);
+ return {...game,home_id:h&&h!==a?h:null,away_id:a&&h!==a?a:null};
+}
+function faHistoricalIdentity(game,model,nameKey,identities=null){
+ const g=faForecastIdentity(game,model,nameKey,identities);
+ return g.home_id&&g.away_id?g:null;
 }
 /* Badges stored in D1 (team_badges, keyed by Football-API team ID) are served from /badges/<id>.png.
    Each side is resolved on its own; the archived Sportmonks CDN image is only a fallback. */
 function faTeamLogos(game,model,badges,nameKey){
- const legacy=name=>{const id=model?faLegacyTeamId(name,model,nameKey):null;return id?'https://cdn.sportmonks.com/images/soccer/teams/'+(id%32)+'/'+id+'.png':null};
+ const legacy=name=>{const id=model?faLegacyTeamId(name,model,nameKey):null;return id?'/archived-badges/'+id+'.png':null};
  const pick=(id,name)=>badges?.has(id)?'/badges/'+id+'.png':legacy(name);
  return {home:pick(game.home_id,game.home),away:pick(game.away_id,game.away)};
 }
@@ -3828,12 +3836,12 @@ function faLeagueLogo(game,leagues){
  const key=leagues?.has(game.league_key)?game.league_key:leagues?.has(faLeagueLogoKey(game))?faLeagueLogoKey(game):null;
  return key?'/league-logos/'+key+'.png':null;
 }
-let faBadgeCache={at:0,ids:new Set(),leagues:new Set()};
+let faBadgeCache={at:0,ids:new Set(),leagues:new Set(),identities:new Map()};
 async function faBadgeIds(env,now=Date.now()){
  if(now-faBadgeCache.at<600000)return faBadgeCache.ids;
- try{const [t,l]=await Promise.all([env.TIKI_DB.prepare('SELECT fa_team_id FROM team_badges').all(),env.TIKI_DB.prepare('SELECT league_key FROM league_logos').all().catch(()=>({results:[]}))]);
-  faBadgeCache={at:now,ids:new Set((t.results||[]).map(x=>x.fa_team_id)),leagues:new Set((l.results||[]).map(x=>x.league_key))}}
- catch{faBadgeCache={at:now,ids:new Set(),leagues:new Set()}}
+ try{const [t,l,identity]=await Promise.all([env.TIKI_DB.prepare('SELECT fa_team_id FROM team_badges').all(),env.TIKI_DB.prepare('SELECT league_key FROM league_logos').all().catch(()=>({results:[]})),env.TIKI_DB.prepare('SELECT fa_team_id,sportmonks_team_id FROM fa_team_identity').all().catch(()=>({results:[]}))]);
+  faBadgeCache={at:now,ids:new Set((t.results||[]).map(x=>x.fa_team_id)),leagues:new Set((l.results||[]).map(x=>x.league_key)),identities:new Map((identity.results||[]).map(x=>[x.fa_team_id,x.sportmonks_team_id]))}}
+ catch{faBadgeCache={at:now,ids:new Set(),leagues:new Set(),identities:new Map()}}
  return faBadgeCache.ids;
 }
 const FA_BADGE_TYPES=new Set(['image/png','image/jpeg','image/webp']);
@@ -3905,23 +3913,20 @@ function faLivePredictor(game,model,fitted=null){
 }
 function faPrimaryForecast(game,model,badges){
  game={...game,logos:faTeamLogos(game,model,badges,fhName),league_logo:faLeagueLogo(game,faBadgeCache.leagues)};
- const fallback=()=>({live_outlook:faLivePredictor(game,model),prematch_prediction:null});
- const legacy=model?faHistoricalIdentity(game,model,fhName):null;
- if(!legacy)return {...game,...fallback(),p1:null,px:null,p2:null,coverage:'unmatched_historical_identity',forecast_review:{status:'withheld',reasons:['unmatched_historical_identity']}};
+ const legacy=faForecastIdentity(game,model,fhName,faBadgeCache.identities);
  const review=forecastIntegrity(legacy,model,fhTeamKey);
- const fitted=fhEstimate(legacy,model)||fhEstimate(legacy,model,{experimentalPreview:true});
- const usable=fitted?.tier==='team'&&fitted.team_samples.home>=3&&fitted.team_samples.away>=3;
- if(!usable)return {...game,...fallback(),p1:null,px:null,p2:null,coverage:'insufficient_team_history',forecast_review:review};
+ const fitted=fhEstimate(legacy,model,{allowHistoricalPriors:true});
+ if(!fitted)return {...game,p1:null,px:null,p2:null,model:null,coverage:'stored_model_unavailable',forecast_review:review,live_outlook:null};
  const live=faPrimaryLiveStatus.has(game.status),outlook=live?faLivePredictor(game,model,fitted):null;
- const p={...fitted,prediction_tier:fitted.tier,most_likely_score:fhLikelyScore(fitted.mu_home,fitted.mu_away)};
- const withheld=review.status==='withheld';
- return {...game,...(live||withheld?{}:p),p1:live||withheld?null:p.p1,px:live||withheld?null:p.px,p2:live||withheld?null:p.p2,
-  model:live||withheld?null:p,experimental_preview:!live&&withheld?p:null,
+ const p={...fitted,prediction_tier:fitted.tier,most_likely_score:fhLikelyScore(fitted.mu_home,fitted.mu_away),
+  experimental:true,validated:false,limited_evidence:fitted.tier!=='team'};
+ const display=live&&outlook?outlook:p;
+ return {...game,...display,model:p,experimental_preview:!live&&review.status==='withheld'?p:null,
   prematch_prediction:live?{...p,source:'tiki_prematch_experimental_reference'}:null,
   live_outlook:outlook?{...outlook,model_version:model.model_version,historical_cutoff:model.cutoff}:null,
   forecast_review:review,historical_sample:fitted.team_samples,model_coverage:fitted.team_samples,
-  coverage:'verified_historical_inputs',forecast_source:'published_trained_model',forecast_calculated_at:model.trained_at,
-  historical_identity:{home:'sportmonks:'+legacy.home_id,away:'sportmonks:'+legacy.away_id,method:'unique_archived_alias'},
+  coverage:fitted.tier==='team'?'verified_historical_inputs':'limited_historical_inputs',forecast_source:'published_trained_model',forecast_calculated_at:model.trained_at,
+  historical_identity:{home:legacy.home_id?'sportmonks:'+legacy.home_id:null,away:legacy.away_id?'sportmonks:'+legacy.away_id:null,method:'verified_id_map_or_unique_archived_alias'},
   analysis_provenance:'historical_score_minute_no_live_statistics',live_stats:[],statistics:[]};
 }
 async function faPrimarySnapshot(req,env){
@@ -3941,7 +3946,7 @@ function faForecastLogWrites(env,matches,model,now=Date.now()){
  if(!env?.TIKI_DB||!model)return [];
  if(faLogged.size>5000)faLogged.clear();
  const stamp=new Date(now).toISOString();
- return matches.filter(g=>g.status==='NS'&&g.model&&[g.p1,g.px,g.p2].every(Number.isFinite)&&Date.parse(g.date)>now+2*3600000&&!faLogged.has(g.id+'|'+model.cutoff))
+ return matches.filter(g=>g.status==='NS'&&g.model&&[g.p1,g.px,g.p2].every(Number.isFinite)&&Date.parse(g.date)>now+2*3600000&&!faLogged.has(g.id+'|'+model.cutoff)).slice(0,20)
   .map(g=>{faLogged.add(g.id+'|'+model.cutoff);
    return env.TIKI_DB.prepare("INSERT OR IGNORE INTO prospective_forecast_log (fixture_key,created_at,model_version,data_cutoff,source_sync_at,ph,pd,pa) VALUES (?1,datetime('now'),?2,?3,?4,?5,?6,?7)")
     .bind(g.id+':'+g.date,model.model_version,model.cutoff,stamp,g.p1/100,g.px/100,g.p2/100)});
@@ -3974,7 +3979,7 @@ async function faPrimaryDetail(req,env,publicId){
  try{
   const focus=await (await faPrimaryFocus(req,env)).json();const game=focus.matches?.find(m=>m.id===publicId);
   if(!game)return smResponse({error:'match_not_in_current_schedule'},404);
-  const model=await tdPublishedModel(env),legacy=model?faHistoricalIdentity(game,model,fhName):null;
+  const model=await tdPublishedModel(env),legacy=model?faHistoricalIdentity(game,model,fhName,faBadgeCache.identities):null;
   let data=null;if(game.match_id){const r=await faTrialRoute(new Request(new URL('/api/football-trial/match/'+game.match_id,req.url)),env);if(r.ok)data=await r.json()}
   const players=side=>(data?.lineups?.[side]?.players||[]).map(p=>({id:p.id,name:p.name,number:Number(p.number)||null,position:null,role:null,is_goalkeeper:false,order:null,substitute:p.substitute}));
   const side=key=>{const p=players(key);return {starters:p.filter(p=>!p.substitute),bench:p.filter(p=>p.substitute)}};
@@ -4059,7 +4064,7 @@ async function faSyncResults(env,now=Date.now(),fetcher=fetch){
 /* football-primary:end */
 
 export default {async fetch(req,env,ctx){if(new URL(req.url).pathname==='/api/internal/sportmonks-archive'){if(!await tdTrainingAuthorized(req,env))return new Response('Not Found',{status:404});return sportmonksArchive(req,env);}const u=new URL(req.url),path=u.pathname;if(path==='/provider-check'||path==='/provider-check/')return new Response(null,{status:302,headers:{Location:'/predictions?filter=live','Cache-Control':'no-store'}});if(path.startsWith('/api/football-trial/'))return smResponse({error:'trial_retired'},410);if(/^\/api\/match\/football-api(?:-fixture)?-[1-9]\d{0,13}$/.test(path))return faPrimaryDetail(req,env,path.split('/').at(-1));if(path==='/landing-football.webp')return new Response(Uint8Array.from(atob(TD_LANDING_ART),c=>c.charCodeAt(0)),{headers:{'Content-Type':'image/webp','Cache-Control':'public,max-age=86400'}});if(path==='/api/internal/train')return tdRunScheduledTraining(req,env);if(path==='/api/model/statistics-status')return smResponse(await tdStatisticsStatus(env),200,60);if(path==='/api/model/training-status')return tdTrainingStatus(env);if(path==='/transparency'||path==='/transparency/')return asset(await seoPage(tdHtmlWithAdsenseVerification(HTML_PREDICTIONS,env),req,env,ctx,'transparency'),'text/html; charset=utf-8');if(path==='/api/transparency')return tdTransparency(req,env,ctx);if(path==='/transparency.xlsx')return new Response(Uint8Array.from(atob(TD_AUDIT_EXCEL),c=>c.charCodeAt(0)),{headers:{'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':'attachment; filename="Tiki-Data_Verification_18-10-2026.xlsx"','Cache-Control':'public, max-age=300'}});if(path==='/3287221.txt')return new Response('3287221',{headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'public, max-age=300'}});if(path==='/api/auth/session')return tdAuthSession(req,env);if(path==='/auth/google/start')return tdAuthStart(req,env);if(path==='/auth/google/callback')return tdAuthCallback(req,env);if(path==='/api/auth/preferences')return tdAuthPreferences(req,env);if(path==='/api/auth/logout')return tdAuthLogout(req,env);if(path==='/api/auth/delete')return tdAuthDeleteAccount(req,env);if(!['GET','HEAD'].includes(req.method))return new Response('Method Not Allowed',{status:405});if(path==='/'||path==='/index.html')return asset(await seoPage(tdHtmlWithAdsenseVerification(HTML_HOME,env),req,env,ctx,'home'),'text/html; charset=utf-8');if(path==='/predictions'||path==='/predictions/')return asset(await seoPage(tdHtmlWithAdsenseVerification(HTML_PREDICTIONS,env),req,env,ctx,'predictions'),'text/html; charset=utf-8');if(path==='/about'||path==='/about/')return asset(tdHtmlWithAdsenseVerification(u.searchParams.get('lang')==='el'?LEGAL_ABOUT:tdLegalEnglish('about'),env),'text/html; charset=utf-8');if(path==='/privacy'||path==='/privacy/')return asset(tdHtmlWithAdsenseVerification(u.searchParams.get('lang')==='el'?LEGAL_PRIVACY:tdLegalEnglish('privacy'),env),'text/html; charset=utf-8');if(path==='/terms'||path==='/terms/')return asset(tdHtmlWithAdsenseVerification(u.searchParams.get('lang')==='el'?LEGAL_TERMS:tdLegalEnglish('terms'),env),'text/html; charset=utf-8');if(path==='/cookies'||path==='/cookies/')return asset(tdHtmlWithAdsenseVerification(u.searchParams.get('lang')==='el'?LEGAL_COOKIES:tdLegalEnglish('cookies'),env),'text/html; charset=utf-8');if(path==='/contact'||path==='/contact/')return asset(tdHtmlWithAdsenseVerification(u.searchParams.get('lang')==='el'?LEGAL_CONTACT:tdLegalEnglish('contact'),env),'text/html; charset=utf-8');if(path==='/legal.css')return asset(LEGAL_CSS,'text/css; charset=utf-8');if(path==='/ads.txt'){const publisher=tdAdsensePublisherId(env);return publisher?asset('google.com, '+publisher+', DIRECT, f08c47fec0942fa0\n','text/plain; charset=utf-8'):new Response('Not Found',{status:404,headers:{'Cache-Control':'no-store'}});}
-if(path.startsWith('/badges/')&&path.endsWith('.png'))return faBadgeRoute(env,path.slice(8,-4));if(path.startsWith('/league-logos/')&&path.endsWith('.png'))return faLeagueLogoRoute(env,path.slice(14,-4));if(path==='/robots.txt')return asset(ADSENSE_ROBOTS,'text/plain; charset=utf-8');if(path==='/google72d157a252fdd591.html')return new Response("google-site-verification: google72d157a252fdd591.html",{status:200,headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'public,max-age=3600','X-Content-Type-Options':'nosniff'}});if(path==='/sitemap.xml')return seoSitemap(req,env,ctx);if(path==='/og-image.jpg')return seoOgImage();if(path==='/data'||path==='/data/')return new Response(null,{status:302,headers:{Location:'/predictions','Cache-Control':'no-store'}});if(path==='/data.css')return asset(CSS_DATA,'text/css; charset=utf-8');if(path==='/data.js')return asset(JS_DATA,'application/javascript; charset=utf-8');if(path==='/home-v23.css')return asset(HOME_V23_CSS,'text/css; charset=utf-8');if(path==='/home-v23.js')return asset(HOME_V23_JS,'application/javascript; charset=utf-8');if(path==='/styles.css')return asset(CSS,'text/css; charset=utf-8');if(path==='/logos.js')return asset(LOGOS,'application/javascript; charset=utf-8');if(path==='/home.js')return asset(HOME,'application/javascript; charset=utf-8');if(path==='/app.js')return asset(JS,'application/javascript; charset=utf-8');if(path==='/mobile-ui.js'){const response=asset(MOBILE_UI_JS,'application/javascript; charset=utf-8');response.headers.set('Cache-Control','no-cache, must-revalidate');return response;}if(path==='/locale.js')return asset(LOCALE_JS,'application/javascript; charset=utf-8');if(path==='/mobile-ui.css')return asset(MOBILE_UI_CSS,'text/css; charset=utf-8');if(path==='/stadium.svg')return asset(STADIUM,'image/svg+xml');/* pwa-routes:start */if(path==='/manifest.webmanifest')return asset(PWA_MANIFEST,'application/manifest+json');if(path==='/sw.js')return pwaWorker();if(Object.prototype.hasOwnProperty.call(PWA_ICONS,path))return pwaIcon(path);/* pwa-routes:end */if(path==='/brand.svg')return asset(BRAND,'image/svg+xml');if(path==='/favicon.svg')return asset(FAVICON,'image/svg+xml');if(path.startsWith('/api/allsports/')||path.startsWith('/api/sport/')||path==='/api/home-v23'||path==='/api/fixtures'||path.startsWith('/api/logo/team/'))return new Response(JSON.stringify({error:'retired_api'}),{status:410,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});if(path.startsWith('/api/sportmonks/')||path==='/api/history/fixtures'||path==='/api/history/odds/summary')return smResponse({error:'provider_migrated',source:'football-api.com'},410);if(path==='/api/sportmonks/health')return smCheckAccess(req,env);if(path==='/api/sportmonks/stage')return smStage(req,env);if(path==='/api/home-focus')return tdProviderFocus(req,env,ctx);if(path==='/api/uefa/evidence-status')return tdUefaEvidenceStatus(env);if(path==='/api/uefa/stages')return smResponse({source:'football-api.com',leagues:[]},200,3600);if(path==='/api/live')return tdProviderLive(req,env,ctx);if(/^\/api\/match\/sportmonks-[1-9]\d{0,13}$/.test(path))return smResponse({error:'provider_migrated'},410);if(path==='/api/model/backtest')return tdBacktestResponse(req,env,ctx);if(path==='/api/model/sync-status')return tdSyncStatus(req,env);if(path==='/api/history/fixtures')return smHistoryFixturesRoute(req,env,ctx);if(path==='/api/history/odds/summary')return smHistoryOddsRoute(req,env,ctx);return new Response('Not Found',{status:404})}};
+if(path.startsWith('/archived-badges/')&&path.endsWith('.png'))return localArchivedBadge(env,path.slice(17,-4));if(path.startsWith('/badges/')&&path.endsWith('.png'))return faBadgeRoute(env,path.slice(8,-4));if(path.startsWith('/league-logos/')&&path.endsWith('.png'))return faLeagueLogoRoute(env,path.slice(14,-4));if(path==='/robots.txt')return asset(ADSENSE_ROBOTS,'text/plain; charset=utf-8');if(path==='/google72d157a252fdd591.html')return new Response("google-site-verification: google72d157a252fdd591.html",{status:200,headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'public,max-age=3600','X-Content-Type-Options':'nosniff'}});if(path==='/sitemap.xml')return seoSitemap(req,env,ctx);if(path==='/og-image.jpg')return seoOgImage();if(path==='/data'||path==='/data/')return new Response(null,{status:302,headers:{Location:'/predictions','Cache-Control':'no-store'}});if(path==='/data.css')return asset(CSS_DATA,'text/css; charset=utf-8');if(path==='/data.js')return asset(JS_DATA,'application/javascript; charset=utf-8');if(path==='/home-v23.css')return asset(HOME_V23_CSS,'text/css; charset=utf-8');if(path==='/home-v23.js')return asset(HOME_V23_JS,'application/javascript; charset=utf-8');if(path==='/styles.css')return asset(CSS,'text/css; charset=utf-8');if(path==='/logos.js')return asset(LOGOS,'application/javascript; charset=utf-8');if(path==='/home.js')return asset(HOME,'application/javascript; charset=utf-8');if(path==='/app.js')return asset(JS,'application/javascript; charset=utf-8');if(path==='/mobile-ui.js'){const response=asset(MOBILE_UI_JS,'application/javascript; charset=utf-8');response.headers.set('Cache-Control','no-cache, must-revalidate');return response;}if(path==='/locale.js')return asset(LOCALE_JS,'application/javascript; charset=utf-8');if(path==='/mobile-ui.css')return asset(MOBILE_UI_CSS,'text/css; charset=utf-8');if(path==='/stadium.svg')return asset(STADIUM,'image/svg+xml');/* pwa-routes:start */if(path==='/manifest.webmanifest')return asset(PWA_MANIFEST,'application/manifest+json');if(path==='/sw.js')return pwaWorker();if(Object.prototype.hasOwnProperty.call(PWA_ICONS,path))return pwaIcon(path);/* pwa-routes:end */if(path==='/brand.svg')return asset(BRAND,'image/svg+xml');if(path==='/favicon.svg')return asset(FAVICON,'image/svg+xml');if(path.startsWith('/api/allsports/')||path.startsWith('/api/sport/')||path==='/api/home-v23'||path==='/api/fixtures'||path.startsWith('/api/logo/team/'))return new Response(JSON.stringify({error:'retired_api'}),{status:410,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});if(path.startsWith('/api/sportmonks/')||path==='/api/history/fixtures'||path==='/api/history/odds/summary')return smResponse({error:'provider_migrated',source:'football-api.com'},410);if(path==='/api/sportmonks/health')return smCheckAccess(req,env);if(path==='/api/sportmonks/stage')return smStage(req,env);if(path==='/api/home-focus')return tdProviderFocus(req,env,ctx);if(path==='/api/uefa/evidence-status')return tdUefaEvidenceStatus(env);if(path==='/api/uefa/stages')return smResponse({source:'football-api.com',leagues:[]},200,3600);if(path==='/api/live')return tdProviderLive(req,env,ctx);if(/^\/api\/match\/sportmonks-[1-9]\d{0,13}$/.test(path))return smResponse({error:'provider_migrated'},410);if(path==='/api/model/backtest')return tdBacktestResponse(req,env,ctx);if(path==='/api/model/sync-status')return tdSyncStatus(req,env);if(path==='/api/history/fixtures')return smHistoryFixturesRoute(req,env,ctx);if(path==='/api/history/odds/summary')return smHistoryOddsRoute(req,env,ctx);return new Response('Not Found',{status:404})}};
 
 /* sportmonks-archive:start */
 /* Private, resumable, lossless JSON snapshots. No model or public feed writes. */
@@ -4086,6 +4091,21 @@ const SM_ARCHIVE_TASKS=[
 function archiveSafeJSON(payload,token){
  // Pagination URLs may include credentials. Keep every data field and redact only secrets.
  return JSON.stringify(payload).replaceAll(token,'REDACTED').replace(/([?&]api_token=)[^&"\s]+/g,'$1REDACTED');
+}
+function archiveCursor(link){
+ if(!link)return null;
+ const url=new URL(link);
+ if(url.protocol!=='https:'||url.hostname!=='api.sportmonks.com'||!/^\/(?:api\/)?v3\//.test(url.pathname))throw Error('unapproved_cursor_origin');
+ return url.searchParams.get('cursor')||null;
+}
+async function recoverArchiveCursor(env,task){
+ if(task.page<=1)return null;
+ for(let i=0;i<3;i++){
+  const db=env['SPORTMONKS_RAW_'+i];if(!db)continue;
+  const row=await db.prepare('SELECT payload_gzip FROM archive_pages WHERE task=?1 AND page=?2').bind(task.task,task.page-1).first();
+  if(row){const text=await new Response(new Blob([row.payload_gzip]).stream().pipeThrough(new DecompressionStream('gzip'))).text();return archiveCursor(JSON.parse(text).pagination?.next_cursor);}
+ }
+ return null;
 }
 async function archiveRead(response){
  const reader=response.body.getReader(),chunks=[];let size=0;
@@ -4150,30 +4170,32 @@ async function sportmonksArchive(req,env){
   return Response.json({paused:'daily_archive_budget',resumes:'next UTC day',task:task.task});
  }
 
- // Two requests in flight; retain compressed pages only to bound memory during rich lineup exports.
- for(let start=0;start<batchSize;start+=2){
-  const results=await Promise.all(Array.from({length:Math.min(2,batchSize-start)},async(_,i)=>{
-   const page=task.page+start+i;
-   try{
-    const result=await archiveFetch(task.path,{...params,page},env.SPORTMONKS_API_TOKEN);
-    if(result.status!==200)return {page,...result};
-    if(result.payload?.data===undefined)return {page,status:422,payload:{message:'missing_data_field'}};
-    const raw=archiveSafeJSON(result.payload,env.SPORTMONKS_API_TOKEN),encoded=new TextEncoder().encode(raw);
-    const count=Array.isArray(result.payload.data)?result.payload.data.length:1;
-    const pagination=result.payload.pagination;
-    const children=task.task==='seasons'&&Array.isArray(result.payload.data)?result.payload.data.flatMap(s=>Number.isSafeInteger(s.id)?[
-     ['topscorers-season-'+s.id,'/v3/football/topscorers/seasons/'+s.id],
-     ['schedule-season-'+s.id,'/v3/football/schedules/seasons/'+s.id],
-     ['standings-season-'+s.id,'/v3/football/standings/seasons/'+s.id]
-    ]:[]):[];
-    result.payload=null;
-    const sha=[...new Uint8Array(await crypto.subtle.digest('SHA-256',encoded))].map(v=>v.toString(16).padStart(2,'0')).join('');
-    const gzip=await new Response(new Blob([encoded]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer();
-    return {page,status:200,payload:{pagination},count,raw_bytes:encoded.length,sha,gzip,children};
-   }
-   catch(e){return {page,status:0,error:String(e.message).replaceAll(env.SPORTMONKS_API_TOKEN,'REDACTED')}}
-  }));out.push(...results);
-  if(results.some(r=>r.status!==200||r.payload?.pagination?.has_more!==true))break;
+ // Cursor pagination is sequential: numeric offsets are rejected beyond 20,000 records.
+ // Recover the checkpoint from the last immutable page for exports started before cursor support.
+ if(!params.cursor){const recovered=await recoverArchiveCursor(env,task);if(recovered)params.cursor=recovered;}
+ let requestParams={...params};
+ for(let i=0;i<batchSize;i++){
+  const page=task.page+i,actualParams={...requestParams};
+  if(actualParams.cursor)delete actualParams.page;else actualParams.page=page;
+  try{
+   const result=await archiveFetch(task.path,actualParams,env.SPORTMONKS_API_TOKEN);
+   if(result.status!==200){out.push({page,...result});break;}
+   if(result.payload?.data===undefined){out.push({page,status:422,payload:{message:'missing_data_field'}});break;}
+   const raw=archiveSafeJSON(result.payload,env.SPORTMONKS_API_TOKEN),encoded=new TextEncoder().encode(raw);
+   const count=Array.isArray(result.payload.data)?result.payload.data.length:1,pagination=result.payload.pagination;
+   const children=task.task==='seasons'&&Array.isArray(result.payload.data)?result.payload.data.flatMap(s=>Number.isSafeInteger(s.id)?[
+    ['topscorers-season-'+s.id,'/v3/football/topscorers/seasons/'+s.id],
+    ['schedule-season-'+s.id,'/v3/football/schedules/seasons/'+s.id],
+    ['standings-season-'+s.id,'/v3/football/standings/seasons/'+s.id]
+   ]:[]):[];
+   result.payload=null;
+   const sha=[...new Uint8Array(await crypto.subtle.digest('SHA-256',encoded))].map(v=>v.toString(16).padStart(2,'0')).join('');
+   const gzip=await new Response(new Blob([encoded]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer();
+   out.push({page,status:200,payload:{pagination},count,raw_bytes:encoded.length,sha,gzip,children,actualParams});
+   if(pagination?.has_more!==true)break;
+   const cursor=archiveCursor(pagination.next_cursor);
+   requestParams={...params};if(cursor)requestParams.cursor=cursor;else delete requestParams.cursor;
+  }catch(e){out.push({page,status:0,error:String(e.message).replaceAll(env.SPORTMONKS_API_TOKEN,'REDACTED')});break;}
  }
  let next=task.page,status='pending',error=null,records=0,pages=0,bytes=0;
  let shard=Number((await db.prepare("SELECT value FROM archive_state WHERE key='shard'").first())?.value||0);
@@ -4184,19 +4206,98 @@ async function sportmonksArchive(req,env){
   const target=env['SPORTMONKS_RAW_'+shard];
   if(!target){status='blocked';error='archive_storage_shards_full';break;}
   const saved=await target.prepare('INSERT OR IGNORE INTO archive_pages(task,page,request_path,params_json,payload_gzip,sha256,records,raw_bytes,gzip_bytes,fetched_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)')
-   .bind(task.task,result.page,task.path,JSON.stringify({...params,page:result.page}),gzip,sha,count,raw_bytes,gzip.byteLength,new Date().toISOString()).run();
+   .bind(task.task,result.page,task.path,JSON.stringify(result.actualParams),gzip,sha,count,raw_bytes,gzip.byteLength,new Date().toISOString()).run();
   const children=result.children||[];
   for(let i=0;i<children.length;i+=25){const batch=children.slice(i,i+25);
    await db.prepare('INSERT OR IGNORE INTO archive_tasks(task,path,params_json,priority) VALUES'+batch.map(()=>'(?,?,?,?)').join(','))
     .bind(...batch.flatMap(([name,path])=>[name,path,'{"per_page":50}',200])).run();
   }
+  const cursor=archiveCursor(result.payload?.pagination?.next_cursor);if(cursor)params.cursor=cursor;else delete params.cursor;
   records+=count;pages++;bytes+=gzip.byteLength;next++;
   if(saved.meta.size_after>400*1024*1024){shard++;await db.prepare("INSERT INTO archive_state VALUES('shard',?1) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(String(shard)).run();}
   if(result.payload?.pagination?.has_more!==true){status='complete';break;}
  }
- await db.prepare('UPDATE archive_tasks SET page=?1,status=?2,records=records+?3,pages=pages+?4,gzip_bytes=gzip_bytes+?5,last_error=?6,updated_at=?7,lease_until=?8 WHERE task=?9')
-  .bind(next,status,records,pages,bytes,error,new Date().toISOString(),status==='retry'?Date.now()+120000:0,task.task).run();
+ await db.prepare('UPDATE archive_tasks SET page=?1,status=?2,records=records+?3,pages=pages+?4,gzip_bytes=gzip_bytes+?5,last_error=?6,updated_at=?7,lease_until=?8,params_json=?10 WHERE task=?9')
+  .bind(next,status,records,pages,bytes,error,new Date().toISOString(),status==='retry'?Date.now()+120000:0,task.task,JSON.stringify(params)).run();
  return Response.json({task:task.task,status,next_page:next,records,pages,gzip_bytes:bytes,error});
 }
 
 /* sportmonks-archive:end */
+
+/* sportmonks-assets:start */
+/* Copy licensed archive crests into Tiki-Data storage; public routes never call Sportmonks. */
+const ASSET_TYPES=new Set(['image/png','image/jpeg','image/webp']);
+function archivedTeamMatch(team,rows,identity,nameKey){
+ const known=identity.get(team.id);
+ if(known)return rows.find(r=>r.id===known)||null;
+ const matches=rows.filter(r=>nameKey(r.name)===nameKey(team.name)&&(!team.country||String(r.country).toLowerCase()===team.country.toLowerCase()));
+ return matches.length===1?matches[0]:null;
+}
+async function storedCrest(archive,path){
+ if(typeof path!=='string')return null;
+ const row=await archive.prepare('SELECT content_type,image FROM sm_images WHERE path=?1').bind(path).first();
+ if(row?.image&&ASSET_TYPES.has(row.content_type))return {type:row.content_type,bytes:new Uint8Array(row.image),source:'sportmonks_local_archive'};
+ const url=new URL(path);
+ if(url.protocol!=='https:'||url.hostname!=='cdn.sportmonks.com'||url.search||!url.pathname.startsWith('/images/'))return null;
+ const r=await fetch(url,{redirect:'error',signal:AbortSignal.timeout(12000)}),type=r.headers.get('content-type')?.split(';')[0];
+ if(!r.ok||!ASSET_TYPES.has(type))return null;
+ const reader=r.body.getReader(),chunks=[];let size=0;
+ try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>2*1024*1024){await reader.cancel();return null}chunks.push(value)}}finally{reader.releaseLock()}
+ const bytes=new Uint8Array(size);let at=0;for(const c of chunks){bytes.set(c,at);at+=c.length}
+ const valid=type==='image/png'?bytes[0]===137&&bytes[1]===80&&bytes[2]===78&&bytes[3]===71:
+  type==='image/jpeg'?bytes[0]===255&&bytes[1]===216:new TextDecoder().decode(bytes.slice(0,4))==='RIFF'&&new TextDecoder().decode(bytes.slice(8,12))==='WEBP';
+ if(!valid)return null;
+ await archive.prepare('INSERT OR IGNORE INTO sm_images(path,content_type,image) VALUES(?1,?2,?3)').bind(path,type,bytes.buffer).run();
+ return {type,bytes,source:'sportmonks_cdn_saved_locally'};
+}
+async function crestHash(bytes){return [...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(v=>v.toString(16).padStart(2,'0')).join('')}
+async function syncLocalSportmonksAssets(env){
+ const archive=env.SPORTMONKS_ARCHIVE_DB,db=env.TIKI_DB;
+ if(!archive||!db)return {status:'archive_binding_unavailable'};
+ const [schedule,teamRows,leagueRows,existing,mapping,leagueExisting]=await Promise.all([
+  faPrimaryScheduled(env),archive.prepare('SELECT id,name,country,image_path FROM sm_teams').all(),
+  archive.prepare('SELECT id,name,country,image_path FROM sm_leagues').all(),
+  db.prepare('SELECT fa_team_id FROM team_badges').all(),db.prepare('SELECT fa_team_id,sportmonks_team_id FROM fa_team_identity').all(),
+  db.prepare('SELECT league_key FROM league_logos').all()
+ ]);
+ const teams=new Map(),competitions=new Map();
+ for(const g of schedule.games){
+  for(const side of ['home','away'])teams.set(g[side+'_id'],{id:g[side+'_id'],name:g[side],country:g.country||''});
+  competitions.set(g.league_key,g);
+ }
+ const identity=new Map(mapping.results.map(r=>[r.fa_team_id,r.sportmonks_team_id])),badges=new Set(existing.results.map(r=>r.fa_team_id)),leagues=new Set(leagueExisting.results.map(r=>r.league_key));
+ const report={status:schedule.partial?'partial':'ok',teams_saved:0,league_logos_saved:0,identities_added:0,unmatched_teams:[],missing_images:[]},stamp=new Date().toISOString();
+ for(const team of teams.values()){
+  const match=archivedTeamMatch(team,teamRows.results,identity,fhName);
+  if(!match){if(!badges.has(team.id))report.unmatched_teams.push(team);continue;}
+  if(!identity.has(team.id)){
+   await db.prepare('INSERT OR IGNORE INTO fa_team_identity(fa_team_id,sportmonks_team_id,team_name,matched_by,updated_at) VALUES(?1,?2,?3,?4,?5)').bind(team.id,match.id,team.name,'unique_archived_name_and_country',stamp).run();report.identities_added++;
+  }
+  if(badges.has(team.id))continue;
+  try{const image=await storedCrest(archive,match.image_path);if(!image){report.missing_images.push(team.name);continue;}
+   await db.prepare('INSERT OR IGNORE INTO team_badges(fa_team_id,team_name,country,content_type,image,image_sha256,source,source_ref,matched_by,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)')
+    .bind(team.id,team.name,team.country,image.type,image.bytes.buffer,await crestHash(image.bytes),image.source,'sportmonks:team:'+match.id,'verified_archive_identity',stamp).run();report.teams_saved++;
+  }catch{report.missing_images.push(team.name)}
+ }
+ const leagueIds={epl:8,bundesliga:82,laliga:564,seriea:384,ligue1:301,greece:325,cyprus:253,ucl:2,uel:5,uecl:2286};
+ for(const [key,game]of competitions){
+  if(leagues.has(key))continue;
+  const candidates=leagueRows.results.filter(r=>r.id===leagueIds[key]||fhName(r.name)===fhName(game.league.replace(/^UEFA\s+/g,''))&&(!game.country||r.country===game.country));
+  if(candidates.length!==1){report.missing_images.push('league:'+key);continue;}
+  try{const image=await storedCrest(archive,candidates[0].image_path);if(!image){report.missing_images.push('league:'+key);continue;}
+   await db.prepare('INSERT OR IGNORE INTO league_logos(league_key,name,content_type,image,image_sha256,source,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7)').bind(key,game.league,image.type,image.bytes.buffer,await crestHash(image.bytes),image.source,stamp).run();report.league_logos_saved++;
+  }catch{report.missing_images.push('league:'+key)}
+ }
+ if(typeof faBadgeCache!=='undefined')faBadgeCache.at=0;
+ return report;
+}
+async function localArchivedBadge(env,id){
+ if(!/^[1-9]\d{0,13}$/.test(String(id))||!env.SPORTMONKS_ARCHIVE_DB)return new Response('Not Found',{status:404});
+ const archive=env.SPORTMONKS_ARCHIVE_DB;
+ const team=await archive.prepare('SELECT image_path FROM sm_teams WHERE id=?1').bind(Number(id)).first();
+ const row=team?await archive.prepare('SELECT image,content_type FROM sm_images WHERE path=?1').bind(team.image_path).first():null;
+ if(!row?.image||!ASSET_TYPES.has(row.content_type))return new Response('Not Found',{status:404});
+ return new Response(new Uint8Array(row.image),{headers:{'Content-Type':row.content_type,'Cache-Control':'public,max-age=86400','X-Content-Type-Options':'nosniff'}});
+}
+
+/* sportmonks-assets:end */
