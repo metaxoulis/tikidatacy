@@ -14,7 +14,9 @@ const bundles={
   HTML_PREDICTIONS:'frontend-v13/predictions.html',
   JS_DATA:'frontend-v13/data.js',
   CSS_DATA:'frontend-v13/data.css',
-  HTML_DATA:'frontend-v13/data.html'
+  HTML_DATA:'frontend-v13/data.html',
+  LEGAL_CSS:'frontend-v13/legal.css',
+  LEGAL_THEME_JS:'frontend-v13/legal-theme.js'
 };
 for(const [key,source] of Object.entries(bundles)){
  test('Cloudflare embedded '+key+' exactly matches '+source,()=>{

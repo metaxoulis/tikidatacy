@@ -6,12 +6,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 worker = ROOT / 'frontend/worker.js'
 text = worker.read_text()
+crlf = '\r\n' in worker.read_bytes().decode()
 assets = {
     'JS': 'app.js', 'HOME_V23_JS': 'home-v23.js', 'HOME_V23_CSS': 'home-v23.css',
     'HTML_HOME': 'home-v23.html', 'HTML_PREDICTIONS': 'predictions.html',
     'JS_DATA': 'data.js', 'CSS_DATA': 'data.css', 'HTML_DATA': 'data.html',
     'MOBILE_UI_JS': 'mobile-ui.js', 'MOBILE_UI_CSS': 'mobile-ui.css',
     'BRAND': 'brand.svg', 'FAVICON': 'favicon-new.svg',
+    'LEGAL_CSS': 'legal.css', 'LEGAL_THEME_JS': 'legal-theme.js',
     **{'LEGAL_' + page.upper(): page + '.html' for page in ['about', 'privacy', 'terms', 'cookies', 'contact']},
 }
 for key, filename in assets.items():
@@ -41,5 +43,8 @@ module = (ROOT / 'frontend/sportmonks-assets.mjs').read_text().replace('export '
 text, count = re.subn(r'/\* sportmonks-assets:start \*/.*?/\* sportmonks-assets:end \*/', lambda _: '/* sportmonks-assets:start */\n' + module + '\n/* sportmonks-assets:end */', text, flags=re.S)
 if count != 1:
     raise RuntimeError('Missing sportmonks-assets markers')
-# Existing Worker uses CRLF. Preserve it to keep diffs focused on the changes.
-worker.write_bytes(text.replace('\r\n', '\n').replace('\n', '\r\n').encode())
+# Keep the Worker's existing line endings so diffs stay focused on the changes.
+text = text.replace('\r\n', '\n')
+if crlf:
+    text = text.replace('\n', '\r\n')
+worker.write_bytes(text.encode())
