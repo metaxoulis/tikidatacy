@@ -16,7 +16,16 @@ test('match overview always uses compact 1-X-2 columns even when forecast is wit
 test('comparative team and match live statistics are reserved for match details', () => {
   assert.doesNotMatch(card, /liveStatsBlock\(m,true\)|liveMethodNote\(m\)/);
   assert.match(ui, /if\(state\.tab==='summary'\)content=currentSeasonFormBlock\(m,d\)\+historicalSummaryBlock\(m,d\)\+allStatisticsBlock\(m,d\)\+liveStatsBlock\(m\)/);
-  assert.match(ui, /if\(state\.tab==='stats'\)content=currentSeasonFormBlock\(m,d\)\+allStatisticsBlock\(m,d\)\+content/);
+  assert.match(ui, /content=\(types\.size\?table:''\)\+currentSeasonFormBlock\(m,d\)\+allStatisticsBlock\(m,d\)\+/);
+});
+
+test('live Football-API matches keep their provider features after the live feed merge', () => {
+  // /api/live replaces source with the live model name; the id prefix still marks the provider.
+  const faMatch = new Function('return ' + ui.match(/const faMatch=(m=>[^\n]+);/)[1])();
+  assert.equal(faMatch({ id: 'football-api-fixture-1901742', source: 'football_api_conditional_poisson' }), true);
+  assert.equal(faMatch({ id: 'football-api-743352', source: 'football-api.com' }), true);
+  assert.equal(faMatch({ id: 'sportmonks-19135003', source: 'sportmonks' }), false);
+  assert.doesNotMatch(ui, /m\??\.source==='football-api\.com'\)|m\.source==='football-api\.com'\?/);
 });
 
 test('only independently gated or explicit experimental-preview 1X2 can be displayed', () => {
