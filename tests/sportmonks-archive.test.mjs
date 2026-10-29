@@ -51,9 +51,9 @@ test('deep exports recover the saved next_cursor rather than repeating an invali
  const {sql,env}=setup(),original=globalThis.fetch;
  const previous={data:[{id:20050}],pagination:{has_more:true,next_cursor:'https://api.sportmonks.com/v3/football/fixtures?cursor=after20050'}};
  sql.prepare("INSERT INTO archive_pages VALUES('fixture',401,'/v3/football/fixtures','{}',?,'previous',50,100,100,'t')").run(gzipSync(JSON.stringify(previous)));
- sql.exec("UPDATE archive_tasks SET page=402,records=20050,pages=401");
+ sql.exec("UPDATE archive_tasks SET page=402,records=20050,pages=401,params_json='{\"per_page\":50}'");
  const calls=[];
- globalThis.fetch=async u=>{const url=new URL(u),cursor=url.searchParams.get('cursor');calls.push(cursor);assert.equal(url.searchParams.has('page'),false);
+ globalThis.fetch=async u=>{const url=new URL(u),cursor=url.searchParams.get('cursor');calls.push(cursor);assert.equal(url.searchParams.has('page'),false);assert.equal(url.searchParams.has('per_page'),false);
   return Response.json({data:[{id:cursor==='after20050'?20051:20052}],pagination:{has_more:cursor==='after20050',next_cursor:cursor==='after20050'?'https://api.sportmonks.com/v3/football/fixtures?cursor=after20051':null}})};
  try{
   const result=await(await sportmonksArchive(request('step'),env)).json();assert.equal(result.status,'complete');assert.equal(result.next_page,404);

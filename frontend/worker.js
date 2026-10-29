@@ -4176,7 +4176,7 @@ async function sportmonksArchive(req,env){
  let requestParams={...params};
  for(let i=0;i<batchSize;i++){
   const page=task.page+i,actualParams={...requestParams};
-  if(actualParams.cursor)delete actualParams.page;else actualParams.page=page;
+  if(actualParams.cursor){delete actualParams.page;delete actualParams.per_page;}else actualParams.page=page;
   try{
    const result=await archiveFetch(task.path,actualParams,env.SPORTMONKS_API_TOKEN);
    if(result.status!==200){out.push({page,...result});break;}
