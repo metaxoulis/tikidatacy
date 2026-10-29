@@ -8,7 +8,7 @@ import {sportmonksArchive,archiveSafeJSON,archiveCursor} from '../frontend/sport
 function setup(){
  const sql=new DatabaseSync(':memory:');sql.exec(readFileSync(new URL('../migrations/20261029_sportmonks_raw_archive.sql',import.meta.url),'utf8'));
  sql.exec("INSERT INTO archive_tasks(task,path,params_json) VALUES('fixture','/v3/football/fixtures','{}')");
- const db={prepare(q){let args=[];return {bind(...a){args=a.map(x=>x instanceof ArrayBuffer?new Uint8Array(x):x);return this},async first(){return sql.prepare(q).get(...args)||null},async all(){return {results:sql.prepare(q).all(...args)}},async run(){const r=sql.prepare(q).run(...args);return {meta:{changes:Number(r.changes),size_after:1024}}}}}};
+ const db={prepare(q){let args=[];return {bind(...a){args=a.map(x=>x instanceof ArrayBuffer?new Uint8Array(x):x);return this},async first(){const row=sql.prepare(q).get(...args)||null;if(row?.payload_gzip)row.payload_gzip=Array.from(row.payload_gzip);return row},async all(){return {results:sql.prepare(q).all(...args)}},async run(){const r=sql.prepare(q).run(...args);return {meta:{changes:Number(r.changes),size_after:1024}}}}}};
  return {sql,env:{SPORTMONKS_RAW_0:db,SPORTMONKS_API_TOKEN:'test-secret'}};
 }
 const request=action=>new Request('https://example.com/api/internal/sportmonks-archive',{method:'POST',body:JSON.stringify({action,pages:4})});

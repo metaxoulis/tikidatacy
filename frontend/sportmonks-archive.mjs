@@ -34,7 +34,7 @@ async function recoverArchiveCursor(env,task){
  for(let i=0;i<3;i++){
   const db=env['SPORTMONKS_RAW_'+i];if(!db)continue;
   const row=await db.prepare('SELECT payload_gzip FROM archive_pages WHERE task=?1 AND page=?2').bind(task.task,task.page-1).first();
-  if(row){const text=await new Response(new Blob([row.payload_gzip]).stream().pipeThrough(new DecompressionStream('gzip'))).text();return archiveCursor(JSON.parse(text).pagination?.next_cursor);}
+  if(row){const text=await new Response(new Blob([new Uint8Array(row.payload_gzip)]).stream().pipeThrough(new DecompressionStream('gzip'))).text();return archiveCursor(JSON.parse(text).pagination?.next_cursor);}
  }
  return null;
 }
