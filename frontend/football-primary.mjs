@@ -35,14 +35,19 @@ export function faLegacyTeamId(name,model,nameKey){
  if(model?.team_identity?.ambiguous?.includes(n))return null;
  const value=model?.team_identity?.aliases?.[n];return /^sportmonks:[1-9]\d*$/.test(value||'')?Number(value.split(':')[1]):null;
 }
-export function faHistoricalIdentity(game,model,nameKey){
- const h=faLegacyTeamId(game.home,model,nameKey),a=faLegacyTeamId(game.away,model,nameKey);
- return h&&a&&h!==a?{...game,home_id:h,away_id:a}:null;
+export function faForecastIdentity(game,model,nameKey,identities=null){
+ const resolve=(id,name)=>{const mapped=identities?.get(id);return Number.isSafeInteger(mapped)&&mapped>0?mapped:faLegacyTeamId(name,model,nameKey)};
+ const h=resolve(game.home_id,game.home),a=resolve(game.away_id,game.away);
+ return {...game,home_id:h&&h!==a?h:null,away_id:a&&h!==a?a:null};
+}
+export function faHistoricalIdentity(game,model,nameKey,identities=null){
+ const g=faForecastIdentity(game,model,nameKey,identities);
+ return g.home_id&&g.away_id?g:null;
 }
 /* Badges stored in D1 (team_badges, keyed by Football-API team ID) are served from /badges/<id>.png.
    Each side is resolved on its own; the archived Sportmonks CDN image is only a fallback. */
 export function faTeamLogos(game,model,badges,nameKey){
- const legacy=name=>{const id=model?faLegacyTeamId(name,model,nameKey):null;return id?'https://cdn.sportmonks.com/images/soccer/teams/'+(id%32)+'/'+id+'.png':null};
+ const legacy=name=>{const id=model?faLegacyTeamId(name,model,nameKey):null;return id?'/archived-badges/'+id+'.png':null};
  const pick=(id,name)=>badges?.has(id)?'/badges/'+id+'.png':legacy(name);
  return {home:pick(game.home_id,game.home),away:pick(game.away_id,game.away)};
 }
@@ -53,12 +58,12 @@ export function faLeagueLogo(game,leagues){
  const key=leagues?.has(game.league_key)?game.league_key:leagues?.has(faLeagueLogoKey(game))?faLeagueLogoKey(game):null;
  return key?'/league-logos/'+key+'.png':null;
 }
-let faBadgeCache={at:0,ids:new Set(),leagues:new Set()};
+let faBadgeCache={at:0,ids:new Set(),leagues:new Set(),identities:new Map()};
 async function faBadgeIds(env,now=Date.now()){
  if(now-faBadgeCache.at<600000)return faBadgeCache.ids;
- try{const [t,l]=await Promise.all([env.TIKI_DB.prepare('SELECT fa_team_id FROM team_badges').all(),env.TIKI_DB.prepare('SELECT league_key FROM league_logos').all().catch(()=>({results:[]}))]);
-  faBadgeCache={at:now,ids:new Set((t.results||[]).map(x=>x.fa_team_id)),leagues:new Set((l.results||[]).map(x=>x.league_key))}}
- catch{faBadgeCache={at:now,ids:new Set(),leagues:new Set()}}
+ try{const [t,l,identity]=await Promise.all([env.TIKI_DB.prepare('SELECT fa_team_id FROM team_badges').all(),env.TIKI_DB.prepare('SELECT league_key FROM league_logos').all().catch(()=>({results:[]})),env.TIKI_DB.prepare('SELECT fa_team_id,sportmonks_team_id FROM fa_team_identity').all().catch(()=>({results:[]}))]);
+  faBadgeCache={at:now,ids:new Set((t.results||[]).map(x=>x.fa_team_id)),leagues:new Set((l.results||[]).map(x=>x.league_key)),identities:new Map((identity.results||[]).map(x=>[x.fa_team_id,x.sportmonks_team_id]))}}
+ catch{faBadgeCache={at:now,ids:new Set(),leagues:new Set(),identities:new Map()}}
  return faBadgeCache.ids;
 }
 const FA_BADGE_TYPES=new Set(['image/png','image/jpeg','image/webp']);
@@ -130,23 +135,20 @@ export function faLivePredictor(game,model,fitted=null){
 }
 function faPrimaryForecast(game,model,badges){
  game={...game,logos:faTeamLogos(game,model,badges,fhName),league_logo:faLeagueLogo(game,faBadgeCache.leagues)};
- const fallback=()=>({live_outlook:faLivePredictor(game,model),prematch_prediction:null});
- const legacy=model?faHistoricalIdentity(game,model,fhName):null;
- if(!legacy)return {...game,...fallback(),p1:null,px:null,p2:null,coverage:'unmatched_historical_identity',forecast_review:{status:'withheld',reasons:['unmatched_historical_identity']}};
+ const legacy=faForecastIdentity(game,model,fhName,faBadgeCache.identities);
  const review=forecastIntegrity(legacy,model,fhTeamKey);
- const fitted=fhEstimate(legacy,model)||fhEstimate(legacy,model,{experimentalPreview:true});
- const usable=fitted?.tier==='team'&&fitted.team_samples.home>=3&&fitted.team_samples.away>=3;
- if(!usable)return {...game,...fallback(),p1:null,px:null,p2:null,coverage:'insufficient_team_history',forecast_review:review};
+ const fitted=fhEstimate(legacy,model,{allowHistoricalPriors:true});
+ if(!fitted)return {...game,p1:null,px:null,p2:null,model:null,coverage:'stored_model_unavailable',forecast_review:review,live_outlook:null};
  const live=faPrimaryLiveStatus.has(game.status),outlook=live?faLivePredictor(game,model,fitted):null;
- const p={...fitted,prediction_tier:fitted.tier,most_likely_score:fhLikelyScore(fitted.mu_home,fitted.mu_away)};
- const withheld=review.status==='withheld';
- return {...game,...(live||withheld?{}:p),p1:live||withheld?null:p.p1,px:live||withheld?null:p.px,p2:live||withheld?null:p.p2,
-  model:live||withheld?null:p,experimental_preview:!live&&withheld?p:null,
+ const p={...fitted,prediction_tier:fitted.tier,most_likely_score:fhLikelyScore(fitted.mu_home,fitted.mu_away),
+  experimental:true,validated:false,limited_evidence:fitted.tier!=='team'};
+ const display=live&&outlook?outlook:p;
+ return {...game,...display,model:p,experimental_preview:!live&&review.status==='withheld'?p:null,
   prematch_prediction:live?{...p,source:'tiki_prematch_experimental_reference'}:null,
   live_outlook:outlook?{...outlook,model_version:model.model_version,historical_cutoff:model.cutoff}:null,
   forecast_review:review,historical_sample:fitted.team_samples,model_coverage:fitted.team_samples,
-  coverage:'verified_historical_inputs',forecast_source:'published_trained_model',forecast_calculated_at:model.trained_at,
-  historical_identity:{home:'sportmonks:'+legacy.home_id,away:'sportmonks:'+legacy.away_id,method:'unique_archived_alias'},
+  coverage:fitted.tier==='team'?'verified_historical_inputs':'limited_historical_inputs',forecast_source:'published_trained_model',forecast_calculated_at:model.trained_at,
+  historical_identity:{home:legacy.home_id?'sportmonks:'+legacy.home_id:null,away:legacy.away_id?'sportmonks:'+legacy.away_id:null,method:'verified_id_map_or_unique_archived_alias'},
   analysis_provenance:'historical_score_minute_no_live_statistics',live_stats:[],statistics:[]};
 }
 async function faPrimarySnapshot(req,env){
@@ -166,7 +168,7 @@ export function faForecastLogWrites(env,matches,model,now=Date.now()){
  if(!env?.TIKI_DB||!model)return [];
  if(faLogged.size>5000)faLogged.clear();
  const stamp=new Date(now).toISOString();
- return matches.filter(g=>g.status==='NS'&&g.model&&[g.p1,g.px,g.p2].every(Number.isFinite)&&Date.parse(g.date)>now+2*3600000&&!faLogged.has(g.id+'|'+model.cutoff))
+ return matches.filter(g=>g.status==='NS'&&g.model&&[g.p1,g.px,g.p2].every(Number.isFinite)&&Date.parse(g.date)>now+2*3600000&&!faLogged.has(g.id+'|'+model.cutoff)).slice(0,20)
   .map(g=>{faLogged.add(g.id+'|'+model.cutoff);
    return env.TIKI_DB.prepare("INSERT OR IGNORE INTO prospective_forecast_log (fixture_key,created_at,model_version,data_cutoff,source_sync_at,ph,pd,pa) VALUES (?1,datetime('now'),?2,?3,?4,?5,?6,?7)")
     .bind(g.id+':'+g.date,model.model_version,model.cutoff,stamp,g.p1/100,g.px/100,g.p2/100)});
@@ -186,30 +188,80 @@ export async function faPrimaryFocus(req,env,ctx){
    model:{name:'Tiki-Data historical Poisson',trained_at:model?.trained_at||null,historical_cutoff:model?.cutoff||null,validated:false},model_unavailable:!model,model_predictions_available:available,usage:snapshot.usage,match_statistics_available:false},200,30);
  }catch{return smResponse({source:'football-api.com',error:'football_api_schedule_unavailable',matches:[],stale:true},503)}
 }
-async function faPrimaryHistory(env,legacy,fixture){
- const empty={home:[],away:[],head_to_head:[],source:'archived_historical_results'};if(!legacy||!env.TIKI_DB)return empty;
- try{const d=await env.TIKI_DB.prepare('SELECT fixture_id,match_date,home_team,away_team,home_team_id,away_team_id,home_score,away_score,league_key FROM sportmonks_training_results WHERE match_date<?1 AND (home_team_id IN (?2,?3) OR away_team_id IN (?2,?3)) ORDER BY match_date DESC LIMIT 80').bind(fixture.date.slice(0,10),legacy.home_id,legacy.away_id).all();
-  const rows=(d.results||[]).map(r=>({id:'archived-sportmonks-'+r.fixture_id,date:r.match_date,home:r.home_team,away:r.away_team,home_id:r.home_team_id,away_id:r.away_team_id,home_score:r.home_score,away_score:r.away_score,league:r.league_key}));
-  const recent=id=>rows.filter(r=>r.home_id===id||r.away_id===id).slice(0,8).map(r=>{const h=r.home_id===id?r.home_score:r.away_score,a=r.home_id===id?r.away_score:r.home_score;return {...r,result:h>a?'W':h===a?'D':'L'}});
-  return {...empty,home:recent(legacy.home_id),away:recent(legacy.away_id),head_to_head:rows.filter(r=>[r.home_id,r.away_id].includes(legacy.home_id)&&[r.home_id,r.away_id].includes(legacy.away_id)).slice(0,5)};
+/* Finished results for match-page panels, keyed by the model's Sportmonks team identities: the Sportmonks archive
+   table, then results synced from Football-API. Small indexed lookups in one batch per table (never a scan), and a
+   match present in both sources (26-28 Oct overlap) is counted once. */
+const FA_RESULT_SOURCES=[['sportmonks_training_results','fixture_id','archived-sportmonks-'],['football_training_results','fa_match_id','football-api-']];
+export async function faTeamResults(db,a,b,before){
+ const rows=new Map(),h2h=new Map();
+ for(const [table,idCol,prefix] of FA_RESULT_SOURCES){
+  const cols=idCol+' AS id,dataset_slug,match_date,home_team,away_team,home_team_id,away_team_id,home_score,away_score,league_key';
+  const stmts=[
+   db.prepare('SELECT '+cols+' FROM '+table+' WHERE home_team_id IN (?1,?2) AND match_date<?3 ORDER BY match_date DESC LIMIT 60').bind(a,b,before),
+   db.prepare('SELECT '+cols+' FROM '+table+' WHERE away_team_id IN (?1,?2) AND match_date<?3 ORDER BY match_date DESC LIMIT 60').bind(a,b,before),
+   db.prepare('SELECT '+cols+' FROM '+table+' WHERE ((home_team_id=?1 AND away_team_id=?2) OR (home_team_id=?2 AND away_team_id=?1)) AND match_date<?3 ORDER BY match_date DESC LIMIT 5').bind(a,b,before)];
+  let out;try{out=db.batch?await db.batch(stmts):await Promise.all(stmts.map(x=>x.all()))}catch{continue}
+  out.forEach((r,i)=>{for(const x of r?.results||[]){const key=x.match_date+'|'+x.home_team_id+'|'+x.away_team_id,row={...x,id:prefix+x.id};
+   if(!rows.has(key))rows.set(key,row);if(i===2&&!h2h.has(key))h2h.set(key,row)}});
+ }
+ const newest=(x,y)=>y.match_date.localeCompare(x.match_date);
+ return {rows:[...rows.values()].sort(newest),h2h:[...h2h.values()].sort(newest)};
+}
+export async function faPrimaryHistory(env,legacy,fixture,found=null){
+ const empty={home:[],away:[],head_to_head:[],source:'archived_and_synced_results'};if(!legacy||!env.TIKI_DB)return empty;
+ try{const {rows:all,h2h}=found||await faTeamResults(env.TIKI_DB,legacy.home_id,legacy.away_id,fixture.date.slice(0,10));
+  const row=r=>({id:r.id,date:r.match_date,home:r.home_team,away:r.away_team,home_id:r.home_team_id,away_id:r.away_team_id,home_score:r.home_score,away_score:r.away_score,league:r.league_key});
+  const recent=id=>all.filter(r=>r.home_team_id===id||r.away_team_id===id).slice(0,8).map(r=>{const h=r.home_team_id===id?r.home_score:r.away_score,a=r.home_team_id===id?r.away_score:r.home_score;return {...row(r),result:h>a?'W':h===a?'D':'L'}});
+  return {...empty,home:recent(legacy.home_id),away:recent(legacy.away_id),head_to_head:h2h.slice(0,5).map(row)};
  }catch{return empty}
+}
+/* 2026-27 home record of the home club and away record of the away club, from the same lookups, with the training
+   embargo (results older than three days). Same shape as the former td_2026_27_team_form view. */
+export function faSeasonForm(found,legacy,now=Date.now()){
+ const cutoff=new Date(Date.parse(new Date(now).toISOString().slice(0,10)+'T00:00:00Z')-3*86400000).toISOString().slice(0,10);
+ const venue=(id,side)=>{
+  const games=(found?.rows||[]).filter(r=>r[side+'_team_id']===id&&String(r.dataset_slug).endsWith('-2026-27')&&r.match_date>='2026-07-01'&&r.match_date<cutoff);
+  if(!games.length)return null;
+  const gf=r=>side==='home'?r.home_score:r.away_score,ga=r=>side==='home'?r.away_score:r.home_score,uefa=r=>['ucl','uel','uecl'].includes(r.league_key);
+  return {team_id:id,venue:side,played:games.length,wins:games.filter(r=>gf(r)>ga(r)).length,draws:games.filter(r=>gf(r)===ga(r)).length,
+   losses:games.filter(r=>gf(r)<ga(r)).length,goals_for:games.reduce((n,r)=>n+gf(r),0),goals_against:games.reduce((n,r)=>n+ga(r),0),
+   uefa_matches:games.filter(uefa).length,domestic_matches:games.filter(r=>!uefa(r)).length};
+ };
+ return {season:'2026-27',source:'stored_final_results',current_season_only:true,training_cutoff_exclusive:cutoff,probability_model:false,
+  home:venue(legacy.home_id,'home'),away:venue(legacy.away_id,'away')};
+}
+/* Match statistics for the Stats tab ({type,side,value} per team), labelled in Greek from this list (the site's
+   language switch translates them) and shown in this order. Unknown types are dropped. Counters the provider rarely
+   tracks (attacks, throw-ins...) are hidden when both teams show 0, which means "not recorded". */
+const FA_STAT_LABELS={possesion:'Κατοχή',attempts_on_goal:'Σουτ',shots_on_target:'Σουτ στην εστία',shots_off_target:'Σουτ εκτός εστίας',
+ shots_blocked:'Μπλοκαρισμένα σουτ',corners:'Κόρνερ',fauls:'Φάουλ',offsides:'Οφσάιντ',saves:'Αποκρούσεις',yellow_cards:'Κίτρινες κάρτες',
+ red_cards:'Κόκκινες κάρτες',penalties:'Πέναλτι',dangerous_attacks:'Επικίνδυνες επιθέσεις',attacks:'Επιθέσεις',free_kicks:'Ελεύθερα λακτίσματα',
+ goal_kicks:'Άουτ εστίας',throw_ins:'Πλάγια άουτ',substitutions:'Αλλαγές',treatments:'Περιθάλψεις'};
+const FA_STAT_ORDER=Object.keys(FA_STAT_LABELS);
+const FA_STAT_OPTIONAL=new Set(['dangerous_attacks','attacks','free_kicks','goal_kicks','throw_ins','substitutions','treatments']);
+export function faDetailStatistics(rows){
+ return (Array.isArray(rows)?rows:[]).filter(x=>Object.hasOwn(FA_STAT_LABELS,x?.type)&&!(FA_STAT_OPTIONAL.has(x.type)&&!x.home&&!x.away))
+  .sort((a,b)=>FA_STAT_ORDER.indexOf(a.type)-FA_STAT_ORDER.indexOf(b.type)).flatMap(x=>{
+   const label=FA_STAT_LABELS[x.type],fmt=v=>v===null?null:x.type==='possesion'?v+'%':v;
+   return [{type:label,side:'home',value:fmt(x.home)},{type:label,side:'away',value:fmt(x.away)}]});
 }
 export async function faPrimaryDetail(req,env,publicId){
  if(req.method!=='GET')return smResponse({error:'method_not_allowed'},405);
  try{
   const focus=await (await faPrimaryFocus(req,env)).json();const game=focus.matches?.find(m=>m.id===publicId);
   if(!game)return smResponse({error:'match_not_in_current_schedule'},404);
-  const model=await tdPublishedModel(env),legacy=model?faHistoricalIdentity(game,model,fhName):null;
+  const model=await tdPublishedModel(env),legacy=model?faHistoricalIdentity(game,model,fhName,faBadgeCache.identities):null;
+  const found=legacy&&env.TIKI_DB?await faTeamResults(env.TIKI_DB,legacy.home_id,legacy.away_id,game.date.slice(0,10)).catch(()=>null):null;
   let data=null;if(game.match_id){const r=await faTrialRoute(new Request(new URL('/api/football-trial/match/'+game.match_id,req.url)),env);if(r.ok)data=await r.json()}
   const players=side=>(data?.lineups?.[side]?.players||[]).map(p=>({id:p.id,name:p.name,number:Number(p.number)||null,position:null,role:null,is_goalkeeper:false,order:null,substitute:p.substitute}));
   const side=key=>{const p=players(key);return {starters:p.filter(p=>!p.substitute),bench:p.filter(p=>p.substitute)}};
   const lineups={home:side('home'),away:side('away')};
   return smResponse({source:'football-api.com',fixture_id:game.match_id||game.fixture_id,public_id:game.id,verified:true,
    lineup_status:lineups.home.starters.length&&lineups.away.starters.length?'unconfirmed':'unavailable',confirmed_lineup:null,lineups,lineup_sources:{home:lineups.home.starters.length?'official':'unavailable',away:lineups.away.starters.length?'official':'unavailable'},
-   formations:{home:null,away:null},statistics:[],match_statistics_available:false,xg:{home:null,away:null,available:false},player_xg:[],venue:game.venue||null,
+   formations:{home:null,away:null},statistics:faDetailStatistics(data?.statistics),match_statistics_available:!!data?.match_statistics_available,statistics_updated_at:data?.statistics_updated_at||null,xg:{home:null,away:null,available:false},player_xg:[],venue:game.venue||null,
    events:(data?.events||[]).map(e=>({...e,type:e.type,team_id:e.side==='home'?game.home_id:e.side==='away'?game.away_id:null})),
-   history:await faPrimaryHistory(env,legacy,game),current_season_form:legacy?await tdSeason2627Form(env.TIKI_DB,legacy):null,
-   updated_at:new Date().toISOString(),news:[],disclosures:{lineups:'Παίκτες από Football-API. Δεν παρέχονται επιβεβαιωμένες θέσεις ή σχηματισμός.',xg:'Δεν υπάρχει πρόσβαση σε στατιστικά ή xG με το τρέχον πακέτο.'}},200,30);
+   history:await faPrimaryHistory(env,legacy,game,found),current_season_form:found?faSeasonForm(found,legacy):null,
+   updated_at:new Date().toISOString(),news:[],disclosures:{lineups:'Παίκτες από Football-API. Δεν παρέχονται επιβεβαιωμένες θέσεις ή σχηματισμός.',xg:'Ο πάροχος δεν παρέχει xG.'}},200,30);
  }catch{return smResponse({error:'football_api_details_unavailable'},503)}
 }
 /* Finished results for model training (/matches/history.json, 90-minute ft_score). Football-API team IDs are

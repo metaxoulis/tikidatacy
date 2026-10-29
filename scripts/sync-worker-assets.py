@@ -33,5 +33,13 @@ module = re.sub(r'^import .*?;\n', '', module, flags=re.M).replace('export ', ''
 text, count = re.subn(r'/\* football-primary:start \*/.*?/\* football-primary:end \*/', lambda _: '/* football-primary:start */\n' + module + '\n/* football-primary:end */', text, flags=re.S)
 if count != 1:
     raise RuntimeError('Missing football-primary markers')
+module = (ROOT / 'frontend/sportmonks-archive.mjs').read_text().replace('export ', '')
+text, count = re.subn(r'/\* sportmonks-archive:start \*/.*?/\* sportmonks-archive:end \*/', lambda _: '/* sportmonks-archive:start */\n' + module + '\n/* sportmonks-archive:end */', text, flags=re.S)
+if count != 1:
+    raise RuntimeError('Missing sportmonks-archive markers')
+module = (ROOT / 'frontend/sportmonks-assets.mjs').read_text().replace('export ', '')
+text, count = re.subn(r'/\* sportmonks-assets:start \*/.*?/\* sportmonks-assets:end \*/', lambda _: '/* sportmonks-assets:start */\n' + module + '\n/* sportmonks-assets:end */', text, flags=re.S)
+if count != 1:
+    raise RuntimeError('Missing sportmonks-assets markers')
 # Existing Worker uses CRLF. Preserve it to keep diffs focused on the changes.
 worker.write_bytes(text.replace('\r\n', '\n').replace('\n', '\r\n').encode())

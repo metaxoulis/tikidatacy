@@ -35,6 +35,13 @@ export function faTrialLineups(d){
    number:faText(String(p.shirt_number??'')),substitute:String(p.substitution)==='1'}))}};
  return {home:team('home'),away:team('away')};
 }
+/* /statistics/matches.json: [{type,label,home,away}]. Keeps only the type and plain counts (possession 0-100);
+   provider labels are not passed on. Rows with neither value are dropped (smaller competitions omit some). */
+export function faTrialStatistics(d){
+ const n=v=>v===null||v===undefined||v===''?null:/^\d{1,5}(?:\.\d+)?$/.test(String(v))&&Number(v)<=50000?Number(v):null;
+ return (Array.isArray(d)?d:[]).slice(0,40).map(x=>({type:String(x?.type||'').slice(0,40),home:n(x?.home),away:n(x?.away)}))
+  .filter(x=>/^[a-z_]+$/.test(x.type)&&(x.home!==null||x.away!==null)&&!(x.type==='possesion'&&(x.home>100||x.away>100)));
+}
 export function faTrialSourceStale(m,now=Date.now()){
  return m.status==='IN PLAY'&&(!m.provider_updated_at||now-Date.parse(m.provider_updated_at)>85000||Date.parse(m.provider_updated_at)>now+60000);
 }
@@ -113,9 +120,11 @@ export async function faTrialRoute(req,env){
    const game=JSON.parse(known.payload_json),ended=game.status==='FINISHED',ttl=ended?86400000:120000;
    const events=await faTrialCached(env,'events-'+id,'/matches/events.json',{match_id:id},ttl,faTrialEvents);
    const lineups=await faTrialCached(env,'lineups-'+id,'/matches/lineups.json',{match_id:id},ended?86400000:1200000,faTrialLineups);
+   const statistics=await faTrialCached(env,'statistics-'+id,'/statistics/matches.json',{match_id:id},ttl,faTrialStatistics);
    return faReply({source:'football-api.com',match:game,events:events.data||[],events_updated_at:events.fetched_at?new Date(events.fetched_at).toISOString():null,
     events_stale:events.stale,lineups:lineups.data||null,lineups_stale:lineups.stale,
-    match_statistics_available:false,errors:[events.error,lineups.error].filter(Boolean),usage:await faTrialUsage(env)});
+    statistics:statistics.data||[],statistics_updated_at:statistics.fetched_at?new Date(statistics.fetched_at).toISOString():null,statistics_stale:statistics.stale,
+    match_statistics_available:!!statistics.data?.length,errors:[events.error,lineups.error,statistics.error].filter(Boolean),usage:await faTrialUsage(env)});
   }
   return faReply({error:'not_found'},404);
  }catch{return faReply({error:'trial_temporarily_unavailable'},503)}

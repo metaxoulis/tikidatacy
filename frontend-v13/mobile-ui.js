@@ -384,7 +384,8 @@ function liveStatsModelNote(m,compact=false){
 /* Live measurements are sourced from Sportmonks, not from the probability model. */
 function liveStatsBlock(m,compact=false){
  if(!live(m))return '';
- if(m.source==='football-api.com')return compact?'':'<section class="tdm-panel"><h3>Football-API · Σκορ & γεγονότα</h3><p class="tdm-note">Το τρέχον πακέτο δεν παρέχει κατοχή, σουτ ή επιθέσεις. Οι live εκτιμήσεις βασίζονται στο αποθηκευμένο ιστορικό, στο σκορ και στο λεπτό.</p></section>';
+ // Football-API match statistics are shown in the match page's statistics table (from /api/match), not per live card.
+ if(m.source==='football-api.com')return '';
  const rows=Array.isArray(m.live_stats)?m.live_stats:[],show=(compact?['shots','on_target','corners','possession']:['shots','on_target','off_target','blocked','possession','corners','attacks','dangerous','offsides','saves','throwins','goal_kicks','fouls','yellow','red']);
  const relevant=show.map(k=>rows.find(x=>x.key===k)).filter(Boolean);
  if(!relevant.length)return compact?'<p class="tdm-live-stat-hint">Δεν υπάρχουν ακόμη live μετρήσεις.</p>':'<section class="tdm-panel"><h3>LIVE · Tiki-Data Lab</h3><p class="tdm-lead">Δεν έχουν δημοσιευθεί πραγματικές μετρήσεις για αυτόν τον αγώνα.</p></section>';
@@ -524,7 +525,7 @@ function currentSeasonFormBlock(m,d){
   if(!valid(x))return '<div class="tdm-team-form"><strong>'+E(name)+'</strong><p>'+t('Δεν υπάρχουν επιβεβαιωμένα αποτελέσματα 2026–27 στη συγκεκριμένη έδρα.','No verified 2026–27 results at this venue.')+'</p></div>';
   return '<div class="tdm-team-form"><strong>'+E(name)+'</strong><small>'+x.played+' '+t('αγώνες','matches')+' · '+x.wins+t('Ν','W')+' '+x.draws+t('Ι','D')+' '+x.losses+t('Η','L')+'</small><div class="tdm-form-figures"><span>'+t('Γκολ υπέρ/κατά','Goals for/against')+' <b>'+x.goals_for+' : '+x.goals_against+'</b></span><span>UEFA <b>'+x.uefa_matches+'</b></span><span>'+t('Άλλες διοργανώσεις','Other competitions')+' <b>'+x.domestic_matches+'</b></span></div></div>';
  };
- return '<section class="tdm-panel"><h3>'+t('Σεζόν 2026–27 · εντός / εκτός έδρας','2026–27 season · home / away form')+'</h3><div class="tdm-form-pair">'+panel(f.home,m.home,'home')+panel(f.away,m.away,'away')+'</div><p class="tdm-note">'+t('Επιβεβαιωμένα τελικά αποτελέσματα από όλες τις διαθέσιμες διοργανώσεις, μαζί με τα προκριματικά UEFA. Μόνο αγώνες πριν από το όριο των 3 ημερών. Δεν αποτελούν πιθανότητες 1Χ2. Η κάλυψη εξαρτάται από το Sportmonks.','Verified finished games from all available competitions, including UEFA qualifiers, with a 3-day embargo. These are not 1X2 forecasts; coverage depends on Sportmonks.')+'</p></section>';
+ return '<section class="tdm-panel"><h3>'+t('Σεζόν 2026–27 · εντός / εκτός έδρας','2026–27 season · home / away form')+'</h3><div class="tdm-form-pair">'+panel(f.home,m.home,'home')+panel(f.away,m.away,'away')+'</div><p class="tdm-note">'+t('Επιβεβαιωμένα τελικά αποτελέσματα από όλες τις διαθέσιμες διοργανώσεις, μαζί με τα προκριματικά UEFA. Μόνο αγώνες πριν από το όριο των 3 ημερών. Δεν αποτελούν πιθανότητες 1Χ2. Η κάλυψη εξαρτάται από τα διαθέσιμα αποτελέσματα.','Verified finished games from all available competitions, including UEFA qualifiers, with a 3-day embargo. These are not 1X2 forecasts; coverage depends on the available results.')+'</p></section>';
 }
 
 function historicalSummaryBlock(m,d){
