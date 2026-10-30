@@ -28,9 +28,7 @@ python -m research.archive_stats_shadow archive.sqlite --asof 2026-10-30 \
 ```
 
 The algorithm discovers every observed statistic and xG type rather than
-hard-coding possession/shots alone. Per-team features use the last eight
-finished games whose *kickoff date is at least three days before the
-target fixture*. Each statistic has a rolling mean and an observed-data
+hard-coding possession/shots alone. Per-team features use up to the last eight finished games from **only the target season and the immediately previous season** (a July-to-June football-season boundary). Every source match must have kicked off at least three days before the target fixture. Values are time-weighted with a 60-day half-life, and the previous season receives a further 0.55 multiplier; newer current-season information dominates. Older games are excluded from feature history rather than given a tiny residual weight. Each statistic has a rolling mean and an observed-data
 coverage indicator; missing values are never interpreted as zero.
 Completed-game statistics cannot enter the features for that same game.
 
