@@ -3372,11 +3372,11 @@ async function tdRunScheduledTraining(req,env){
   model.uefa_team_history_refresh=scopedHistory;model.football_api_results_sync=footballResults;
   model.local_assets_sync=localAssets;model.training_origin='scheduled_d1_history';model.training_records=Object.values(model.leagues).reduce((n,l)=>n+(l.matches||0),0);
   await env.MATCHIQ_CACHE.put(TD_MODEL_KEY,JSON.stringify(model));
-  // Lineups are display evidence only: they run after the model is published and never fail the run.
-  const footballLineups=await faSyncLineups(env).catch(()=>({status:'failed'}));
+  // Lineups and match statistics are stored evidence only: they run after the model is published and never fail the run.
+  const [footballLineups,footballStatistics]=await Promise.all([faSyncLineups(env).catch(()=>({status:'failed'})),faSyncStatistics(env).catch(()=>({status:'failed'}))]);
 
   const status={status:'success',started_at:now,completed_at:new Date().toISOString(),last_success:model.trained_at,
-   historical_matches:model.training_records,teams:Object.keys(model.all_teams).length,cutoff:model.cutoff,local_assets_sync:localAssets,football_api_results_sync:footballResults,football_api_lineups_sync:footballLineups,cross_competition_validation:model.cross_competition_validation,uefa_team_history_refresh:scopedHistory};
+   historical_matches:model.training_records,teams:Object.keys(model.all_teams).length,cutoff:model.cutoff,local_assets_sync:localAssets,football_api_results_sync:footballResults,football_api_lineups_sync:footballLineups,football_api_statistics_sync:footballStatistics,cross_competition_validation:model.cross_competition_validation,uefa_team_history_refresh:scopedHistory};
   await env.MATCHIQ_CACHE.put(TD_TRAIN_STATUS,JSON.stringify(status));return smResponse(status,200,0);
  }catch(e){
   const status={status:'retry_next_schedule',started_at:now,completed_at:new Date().toISOString(),
@@ -4424,39 +4424,60 @@ async function faSyncResults(env,now=Date.now(),fetcher=fetch){
 /* Lineups of finished matches already stored as training results, so probable XIs keep using recent games after the
    Sportmonks archive stopped. Newest first, at most `limit` matches per scheduled run (about 100 provider requests a
    day of the shared budget) and about 20 seconds. Empty provider lineups are retried up to three times, 12 hours apart. */
-async function faSyncLineups(env,now=Date.now(),fetcher=fetch,limit=16,clock=Date.now){
+/* Shared by the lineup and statistics syncs: finished matches of the last 60 days that have no stored answer yet,
+   newest first, four provider requests at a time and about 20 seconds per run. */
+async function faSyncFinished(env,now,fetcher,limit,clock,o){
  if(!env?.TIKI_DB||!env?.FOOTBALL_TRIAL_DB)return {status:'unavailable'};
  const started=clock(),observed=new Date(now).toISOString();
- const pending=(await env.TIKI_DB.prepare('SELECT r.fa_match_id,r.match_date,r.league_key,r.fa_home_id,r.fa_away_id FROM football_training_results r LEFT JOIN football_lineup_fetches f ON f.fa_match_id=r.fa_match_id WHERE (f.fa_match_id IS NULL OR (f.players=0 AND f.attempts<3 AND f.last_attempt_at<?1)) AND r.match_date>=?3 ORDER BY r.match_date DESC,r.fa_match_id DESC LIMIT ?2')
+ const pending=(await env.TIKI_DB.prepare('SELECT r.fa_match_id,r.match_date,r.league_key,r.fa_home_id,r.fa_away_id FROM football_training_results r LEFT JOIN '+o.fetches+' f ON f.fa_match_id=r.fa_match_id WHERE (f.fa_match_id IS NULL OR (f.'+o.count+'=0 AND f.attempts<3 AND f.last_attempt_at<?1)) AND r.match_date>=?3 ORDER BY r.match_date DESC,r.fa_match_id DESC LIMIT ?2')
   .bind(new Date(now-12*3600000).toISOString(),limit,new Date(now-60*86400000).toISOString().slice(0,10)).all()).results||[];
  const report={status:'ok',pending:pending.length,stored:0,empty:0,errors:0};
- const lineup='INSERT INTO football_lineups(fa_match_id,fa_team_id,match_date,league_key,starters_json,bench_json,observed_at) VALUES(?1,?2,?3,?4,?5,?6,?7) ON CONFLICT(fa_match_id,fa_team_id) DO UPDATE SET match_date=excluded.match_date,league_key=excluded.league_key,starters_json=excluded.starters_json,bench_json=excluded.bench_json,observed_at=excluded.observed_at';
- const attempt='INSERT INTO football_lineup_fetches(fa_match_id,players,attempts,last_attempt_at,last_error) VALUES(?1,?2,1,?3,?4) ON CONFLICT(fa_match_id) DO UPDATE SET players=excluded.players,attempts=football_lineup_fetches.attempts+1,last_attempt_at=excluded.last_attempt_at,last_error=excluded.last_error';
+ const attempt='INSERT INTO '+o.fetches+'(fa_match_id,'+o.count+',attempts,last_attempt_at,last_error) VALUES(?1,?2,1,?3,?4) ON CONFLICT(fa_match_id) DO UPDATE SET '+o.count+'=excluded.'+o.count+',attempts='+o.fetches+'.attempts+1,last_attempt_at=excluded.last_attempt_at,last_error=excluded.last_error';
  for(let i=0;i<pending.length&&report.status==='ok';i+=4){
   if(clock()-started>20000){report.status='partial';break}
-  // A cached lineup (from a match-page visit or an earlier try) is reused only if fetched on or after match day and
+  // A cached answer (from a match-page visit or an earlier try) is reused only if fetched on or after match day and
   // within 12 hours, so a retry of an empty answer really asks the provider again.
-  const done=await Promise.all(pending.slice(i,i+4).map(async m=>({m,r:await faTrialCached(env,'lineups-'+m.fa_match_id,'/matches/lineups.json',
-   {match_id:m.fa_match_id},Math.max(60000,Math.min(12*3600000,now-Date.parse(m.match_date+'T00:00:00Z'))),faTrialLineups,fetcher,now)})));
+  const done=await Promise.all(pending.slice(i,i+4).map(async m=>({m,r:await faTrialCached(env,o.cache+m.fa_match_id,o.path,
+   {match_id:m.fa_match_id},Math.max(60000,Math.min(12*3600000,now-Date.parse(m.match_date+'T00:00:00Z'))),o.normalize,fetcher,now)})));
   const writes=[];
   for(const {m,r} of done){
    // Out of budget: leave the match unrecorded so a later run tries it again.
    if(r.error==='trial_daily_limit_reached'){report.status='partial';continue}
-   let players=0;
-   for(const [side,team] of [['home',m.fa_home_id],['away',m.fa_away_id]]){
-    const list=(r.data?.[side]?.players||[]).filter(p=>p?.name).map(p=>({id:p.id||null,name:String(p.name).slice(0,80),
-     number:/^\d{1,2}$/.test(String(p.number))?Number(p.number):null,bench:!!p.substitute}));
-    if(!list.length)continue;
-    players+=list.length;
-    const pick=bench=>JSON.stringify(list.filter(p=>p.bench===bench).map(({bench,...p})=>p));
-    writes.push(env.TIKI_DB.prepare(lineup).bind(m.fa_match_id,team,m.match_date,m.league_key,pick(false),pick(true),observed));
-   }
-   if(players)report.stored++;else if(r.error)report.errors++;else report.empty++;
-   writes.push(env.TIKI_DB.prepare(attempt).bind(m.fa_match_id,players,observed,players?null:r.error||null));
+   const {count,statements}=o.store(m,r.data,observed);
+   writes.push(...statements);
+   if(count)report.stored++;else if(r.error)report.errors++;else report.empty++;
+   writes.push(env.TIKI_DB.prepare(attempt).bind(m.fa_match_id,count,observed,count?null:r.error||null));
   }
   if(writes.length)await env.TIKI_DB.batch(writes);
  }
  return report;
+}
+async function faSyncLineups(env,now=Date.now(),fetcher=fetch,limit=16,clock=Date.now){
+ const lineup='INSERT INTO football_lineups(fa_match_id,fa_team_id,match_date,league_key,starters_json,bench_json,observed_at) VALUES(?1,?2,?3,?4,?5,?6,?7) ON CONFLICT(fa_match_id,fa_team_id) DO UPDATE SET match_date=excluded.match_date,league_key=excluded.league_key,starters_json=excluded.starters_json,bench_json=excluded.bench_json,observed_at=excluded.observed_at';
+ return faSyncFinished(env,now,fetcher,limit,clock,{fetches:'football_lineup_fetches',count:'players',cache:'lineups-',path:'/matches/lineups.json',normalize:faTrialLineups,
+  store(m,data,observed){
+   let count=0;const statements=[];
+   for(const [side,team] of [['home',m.fa_home_id],['away',m.fa_away_id]]){
+    const list=(data?.[side]?.players||[]).filter(p=>p?.name).map(p=>({id:p.id||null,name:String(p.name).slice(0,80),
+     number:/^\d{1,2}$/.test(String(p.number))?Number(p.number):null,bench:!!p.substitute}));
+    if(!list.length)continue;
+    count+=list.length;
+    const pick=bench=>JSON.stringify(list.filter(p=>p.bench===bench).map(({bench,...p})=>p));
+    statements.push(env.TIKI_DB.prepare(lineup).bind(m.fa_match_id,team,m.match_date,m.league_key,pick(false),pick(true),observed));
+   }
+   return {count,statements};
+  }});
+}
+/* Shots, corners, cards, possession and, where the provider has it, xG of finished matches, so team form keeps
+   updating after the Sportmonks archive. Statistics arrive with the result, so a run takes more matches than lineups. */
+async function faSyncStatistics(env,now=Date.now(),fetcher=fetch,limit=40,clock=Date.now){
+ const row='INSERT INTO football_match_statistics(fa_match_id,match_date,league_key,fa_home_id,fa_away_id,home_xg,away_xg,stats_json,observed_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9) ON CONFLICT(fa_match_id) DO UPDATE SET match_date=excluded.match_date,league_key=excluded.league_key,fa_home_id=excluded.fa_home_id,fa_away_id=excluded.fa_away_id,home_xg=excluded.home_xg,away_xg=excluded.away_xg,stats_json=excluded.stats_json,observed_at=excluded.observed_at';
+ return faSyncFinished(env,now,fetcher,limit,clock,{fetches:'football_statistics_fetches',count:'metrics',cache:'statistics-',path:'/statistics/matches.json',normalize:faTrialStatistics,
+  store(m,data,observed){
+   const stats=Object.fromEntries((Array.isArray(data)?data:[]).map(s=>[s.type,[s.home,s.away]]));
+   const count=Object.keys(stats).length,xg=stats.expected_goals||[null,null];
+   return {count,statements:count?[env.TIKI_DB.prepare(row).bind(m.fa_match_id,m.match_date,m.league_key,m.fa_home_id,m.fa_away_id,xg[0],xg[1],JSON.stringify(stats),observed)]:[]};
+  }});
 }
 
 /* football-primary:end */
