@@ -323,7 +323,8 @@ const trusted=x=>typeof x==='string'&&(/^https:\/\/(cdn\.sportmonks\.com|cdn\.fo
 const badge=(name,url)=>trusted(url)?'<img src="'+E(url)+'" loading="lazy" alt="'+E(name)+'">':'<span class="tdm-team-avatar">'+E(String(name).slice(0,2).toUpperCase())+'</span>';
 const club=(n,l)=>'<div class="tdm-team">'+badge(n,l)+'<strong>'+E(n)+'</strong></div>';
 const UEFA_FILTERS=[['ucl','Champions League','UCL'],['uel','Europa League','UEL'],['uecl','Conference League','UECL']];
-const source=m=>({team:'Ιστορικό ομάδων',partial_team:'Μερικό ιστορικό',league:'Μέσοι όροι λίγκας',cross_league:'Γενική βάση · χαμηλή βεβαιότητα'})[m.prediction_tier]||(m.prediction_tier==='provider'?'SportMonks · 1X2':'Πειραματική ανάλυση');
+// Written in the header's language: the page translator only replaces whole strings, not "Tiki-Data · <label>".
+const source=m=>{const en=window.__tdLocale==='en';return ({team:en?'Team history':'Ιστορικό ομάδων',partial_team:en?'Partial history':'Μερικό ιστορικό',league:en?'League averages':'Μέσοι όροι λίγκας',cross_league:en?'General baseline · low confidence':'Γενική βάση · χαμηλή βεβαιότητα'})[m.prediction_tier]||(m.prediction_tier==='provider'?'SportMonks · 1X2':en?'Experimental analysis':'Πειραματική ανάλυση')};
 const valid123=p=>p&&[p.p1,p.px,p.p2].every(x=>typeof x==='number'&&Number.isFinite(x)&&x>=0&&x<=100)&&Math.abs(p.p1+p.px+p.p2-100)<1;
 const pr=m=>{if(live(m))return [m.live_outlook,m.live_prediction].find(valid123)||null;if(m.forecast_review?.status==='withheld')return valid123(m.experimental_preview)?m.experimental_preview:null;return valid123(m)?m:null};
 const is29=n=>/(omoni|ομον)/i.test(String(n||''))&&/29/.test(String(n||''))&&/(mai|may|μα[ιΐ]|maio)/i.test(String(n||''));
@@ -511,17 +512,20 @@ kpis()+liveUpdateLabel()+'<p class="tdm-note">Πηγή αγώνων: Football-AP
 dateChips()+searchInput()+'<div class="tdm-list">'+f.slice(0,state.visible).map(card).join('')+(f.length>state.visible?'<button class="tdm-more" data-more>Εμφάνιση περισσότερων ('+(f.length-state.visible)+') ↓</button>':'')+'</div>'+(f.length?'':empty(state.loading?'Φόρτωση πραγματικών αγώνων…':UEFA_FILTERS.some(([k])=>k===state.league)?'Δεν υπάρχουν διαθέσιμοι αγώνες από το Sportmonks στο τρέχον επταήμερο για αυτή τη διοργάνωση.':'Δεν υπάρχουν αγώνες με τα συγκεκριμένα φίλτρα.'))+'<p class="tdm-note">Οι αριθμητικές εκτιμήσεις είναι πειραματικές και δεν αποτελούν εγγυημένα αποτελέσματα.</p>'}
 const metric=(name,p)=>'<div class="tdm-prob"><small>'+E(name)+'</small><b>'+pct(p)+'</b><div class="tdm-bar"><i style="width:'+((typeof p==='number'&&p>=0&&p<=100)?p:0)+'%"></i></div></div>';
 function deepNote(d){
- if(!d)return '<div class="tdm-quiet">'+(deepLoading.has(state.id)?'Φόρτωση στοιχείων αγώνα…':'Τα επιπλέον στοιχεία δεν είναι διαθέσιμα για τον συγκεκριμένο αγώνα.')+'</div>';
- if(d.error)return '<div class="tdm-quiet">Ο πάροχος δεν διαθέτει αυτή τη στιγμή τα επιπλέον στοιχεία ή δεν περιλαμβάνονται στη συνδρομή.</div>';
+ if(!d)return '<div class="tdm-quiet">'+(deepLoading.has(state.id)?L('Φόρτωση στοιχείων αγώνα…','Loading match details…'):L('Τα επιπλέον στοιχεία δεν είναι διαθέσιμα για αυτόν τον αγώνα.','Further details are not available for this match.'))+'</div>';
+ if(d.error)return '<div class="tdm-quiet">'+L('Τα επιπλέον στοιχεία του αγώνα δεν είναι διαθέσιμα αυτή τη στιγμή.','Further match details are not available right now.')+'</div>';
  return '';
 }
 function historyTeamLogo(n){const game=state.matches.find(x=>norm(x.home)===norm(n)||norm(x.away)===norm(n));return game?(norm(game.home)===norm(n)?logoH(game):logoA(game)):null}
-function historicalRow(g){return '<div class="tdm-history-row"><time>'+E(g.date||'')+'</time><div class="tdm-history-match"><div class="tdm-history-team">'+badge(g.home,historyTeamLogo(g.home))+'<small>'+E(g.home)+'</small></div><div class="tdm-history-score"><b>'+E(g.home_score??'—')+'</b><span>:</span><b>'+E(g.away_score??'—')+'</b></div><div class="tdm-history-team">'+badge(g.away,historyTeamLogo(g.away))+'<small>'+E(g.away)+'</small></div></div>'+(g.result?'<em class="tdm-form-'+E(g.result)+'">'+E(g.result)+'</em>':'')+'</div>'}
+// "25 Οκτ" / "25 Oct"; the year is added only for another year's games.
+function matchDay(v){const t=new Date(String(v||'').slice(0,10)+'T12:00:00Z');if(!Number.isFinite(t.getTime()))return String(v||'');
+ return t.toLocaleDateString(matchLocale(),{timeZone:'UTC',day:'numeric',month:'short',...(t.getUTCFullYear()===new Date().getUTCFullYear()?{}:{year:'numeric'})})}
+function historicalRow(g){return '<div class="tdm-history-row"><time datetime="'+E(String(g.date||'').slice(0,10))+'">'+E(matchDay(g.date))+'</time><div class="tdm-history-match"><div class="tdm-history-team">'+badge(g.home,historyTeamLogo(g.home))+'<small>'+E(g.home)+'</small></div><div class="tdm-history-score"><b>'+E(g.home_score??'—')+'</b><span>:</span><b>'+E(g.away_score??'—')+'</b></div><div class="tdm-history-team">'+badge(g.away,historyTeamLogo(g.away))+'<small>'+E(g.away)+'</small></div></div>'+(g.result?'<em class="tdm-form-'+E(g.result)+'">'+E(({W:L('Ν','W'),D:L('Ι','D'),L:L('Η','L')})[g.result]||g.result)+'</em>':'')+'</div>'}
 
-function gameHistory(title,rows){return '<section class="tdm-panel"><h3>'+E(title)+'</h3>'+(rows?.length?rows.map(historicalRow).join(''):'<p class="tdm-lead">Δεν βρέθηκαν καταγεγραμμένες αναμετρήσεις στην επαληθευμένη ιστορική βάση.</p>')+'</section>'}
+function gameHistory(title,rows){return '<section class="tdm-panel"><h3>'+E(title)+'</h3>'+(rows?.length?rows.map(historicalRow).join(''):'<p class="tdm-lead">'+L('Δεν βρέθηκαν καταγεγραμμένοι αγώνες στο ιστορικό.','No recorded matches in the history.')+'</p>')+'</section>'}
 function currentSeasonFormBlock(m,d){
  const f=d?.current_season_form;if(!f)return '';
- const en=document.documentElement.lang==='en',t=(el,english)=>en?english:el;
+ const en=window.__tdLocale==='en',t=(el,english)=>en?english:el;
  const valid=x=>x&&Number.isInteger(x.played)&&x.played>0&&Number.isInteger(x.wins)&&Number.isInteger(x.draws)&&Number.isInteger(x.losses)&&x.wins+x.draws+x.losses===x.played;
  const panel=(x,name,venue)=>{
   if(!valid(x))return '<div class="tdm-team-form"><strong>'+E(name)+'</strong><p>'+t('Δεν υπάρχουν επιβεβαιωμένα αποτελέσματα 2026–27 στη συγκεκριμένη έδρα.','No verified 2026–27 results at this venue.')+'</p></div>';
@@ -530,15 +534,6 @@ function currentSeasonFormBlock(m,d){
  return '<section class="tdm-panel"><h3>'+t('Σεζόν 2026–27 · εντός / εκτός έδρας','2026–27 season · home / away form')+'</h3><div class="tdm-form-pair">'+panel(f.home,m.home,'home')+panel(f.away,m.away,'away')+'</div><p class="tdm-note">'+t('Επιβεβαιωμένα τελικά αποτελέσματα από όλες τις διαθέσιμες διοργανώσεις, μαζί με τα προκριματικά UEFA. Μόνο αγώνες πριν από το όριο των 3 ημερών. Δεν αποτελούν πιθανότητες 1Χ2. Η κάλυψη εξαρτάται από τα διαθέσιμα αποτελέσματα.','Verified finished games from all available competitions, including UEFA qualifiers, with a 3-day embargo. These are not 1X2 forecasts; coverage depends on the available results.')+'</p></section>';
 }
 
-function historicalSummaryBlock(m,d){
- const history=d?.history;if(!history)return '';
- const recent=(rows,team)=>{const all=(Array.isArray(rows)?rows:[]).filter(r=>r&&(r.home===team||r.away===team)&&Number.isFinite(Number(r.home_score))&&Number.isFinite(Number(r.away_score))).slice(0,5);
-  const n=all.length;if(!n)return '<div class="tdm-team-form"><strong>'+E(team)+'</strong><p>Δεν υπάρχει ιστορικό δείγμα.</p></div>';
-  let gf=0,ga=0,w=0,draw=0,loss=0;for(const r of all){const home=r.home===team,a=Number(home?r.home_score:r.away_score),b=Number(home?r.away_score:r.home_score);gf+=a;ga+=b;if(a>b)w++;else if(a===b)draw++;else loss++}
-  return '<div class="tdm-team-form"><strong>'+E(team)+'</strong><small>'+n+' τελευταίοι επαληθευμένοι αγώνες · '+w+'Ν '+draw+'Ι '+loss+'Η</small><div class="tdm-form-figures"><span>Γκολ/αγώνα <b>'+(gf/n).toFixed(2)+'</b></span><span>Δέχεται/αγώνα <b>'+(ga/n).toFixed(2)+'</b></span><span>Σύνολο γκολ <b>'+gf+' : '+ga+'</b></span></div></div>';
- };
- return '<section class="tdm-panel"><h3>Φόρμα και γκολ · προηγούμενοι αγώνες</h3><div class="tdm-form-pair">'+recent(history.home,m.home)+recent(history.away,m.away)+'</div><p class="tdm-note">Μόνο πραγματικά καταγεγραμμένα τελικά αποτελέσματα έως πέντε αγώνων ανά ομάδα.</p></section>';
-}
 function playerList(team,side,label){const people=team||{starters:[],bench:[]};return '<section class="tdm-panel tdm-lineup-side"><h3>'+E(label)+'</h3>'+
  '<div class="tdm-lineup-rows">'+(people.starters?.length?people.starters.map(p=>'<div class="tdm-player"><span class="tdm-shirt">'+E(p.number??'·')+'</span><b>'+E(p.name)+'</b>'+(p.position?'<small>'+E(p.position)+'</small>':'')+'</div>').join(''):'<p class="tdm-lead">Η ενδεκάδα δεν διατίθεται ακόμη.</p>')+'</div>'+
  (people.bench?.length?'<h4>Αναπληρωματικοί</h4>'+people.bench.map(p=>'<div class="tdm-player"><span class="tdm-shirt">'+E(p.number??'·')+'</span><b>'+E(p.name)+'</b></div>').join(''):'')+'</section>'}
@@ -582,6 +577,7 @@ function pitchField(name,shape,rows,keeper,token){
 // The usual formation is used when the players' lines fit it, otherwise the shape their positions make; within a line
 // players run from the team's left flank to its right.
 const PITCH_LINES=['Αμυντικός','Αμυντικός μέσος','Μέσος','Μεσοεπιθετικός','Επιθετικός'];
+const positionName=v=>window.__tdLocale==='en'?({'Τερματοφύλακας':'Goalkeeper','Αμυντικός':'Defender','Αμυντικός μέσος':'Defensive midfielder','Μέσος':'Midfielder','Μεσοεπιθετικός':'Attacking midfielder','Επιθετικός':'Forward'})[v]||v:v;
 function faPitchLayout(starters,formation){
  const keepers=(starters||[]).filter(p=>p.position==='Τερματοφύλακας');
  if(starters?.length!==11||keepers.length!==1)return null;
@@ -601,16 +597,16 @@ function lineupPitch(m,team,side,formation){
  if(faMatch(m)){
   const predicted=team?.source==='recent_historical_projection',announced=!!team?.starters?.length&&!predicted;
   // Same card as Sportmonks lineups; positions are labelled historical in the note, tag and footer.
-  const rows=ps=>ps.map(p=>'<div class="tdm-player"><span class="tdm-shirt">'+E(p.number??'·')+'</span><b>'+E(p.name)+'</b><small>'+E(p.position||'Θέση μη διαθέσιμη')+'</small></div>').join('');
-  const note=predicted?'Πιθανή ενδεκάδα Tiki-Data από τις προηγούμενες αγωνιστικές. Δεν είναι επιβεβαιωμένη.':announced?'Παίκτες όπως ανακοινώθηκαν στον πάροχο. Οι θέσεις προκύπτουν από πρόσφατες παλαιότερες συμμετοχές, όχι από επίσημη σημερινή διάταξη.':'Η ενδεκάδα δεν έχει ανακοινωθεί και δεν υπάρχουν αρκετοί πρόσφατοι αγώνες για αξιόπιστη εκτίμηση.';
+  const rows=ps=>ps.map(p=>'<div class="tdm-player"><span class="tdm-shirt">'+E(p.number??'·')+'</span><b>'+E(p.name)+'</b><small>'+E(positionName(p.position)||L('Θέση μη διαθέσιμη','Position unknown'))+'</small></div>').join('');
+  const note=predicted?L('Πιθανή ενδεκάδα Tiki-Data από τις προηγούμενες αγωνιστικές. Δεν είναι επιβεβαιωμένη.','Probable Tiki-Data lineup from recent matches. Not confirmed.'):announced?L('Παίκτες όπως τους ανακοίνωσε ο πάροχος. Οι θέσεις προκύπτουν από προηγούμενους αγώνες, όχι από επίσημη σημερινή διάταξη.','Players as announced by the provider. Positions come from previous matches, not an official line-up for today.'):L('Η ενδεκάδα δεν έχει ανακοινωθεί και δεν υπάρχουν αρκετοί πρόσφατοι αγώνες για αξιόπιστη εκτίμηση.','The lineup has not been announced and there are not enough recent matches for a reliable estimate.');
   const layout=faPitchLayout(team?.starters,formation),shape=layout?.shape||formation;
-  const kitNote=kit?'Χρώματα συλλόγου'+(team.kit.source==='club_colours_alternate'?', στο δεύτερο χρώμα για να ξεχωρίζουν οι ομάδες':'')+' — όχι απαραίτητα η φανέλα του αγώνα.':'Ουδέτερη εμφάνιση — δεν υπάρχουν χρώματα για αυτόν τον σύλλογο.';
-  return '<section class="tdm-panel tdm-pitch-card"><div class="tdm-pitch-title">'+badge(name,side==='home'?logoH(m):logoA(m))+'<div><h3>'+E(name)+'</h3>'+(shape?'<span class="tdm-formation-chip">'+E(shape)+' · εκτίμηση</span>':'')+'</div></div>'+
+  const kitNote=kit?L('Χρώματα συλλόγου','Club colours')+(team.kit.source==='club_colours_alternate'?L(', στο δεύτερο χρώμα για να ξεχωρίζουν οι ομάδες',', in the second colour so the teams stand apart'):'')+' — '+L('όχι απαραίτητα η φανέλα του αγώνα.','not necessarily the match kit.'):L('Ουδέτερη εμφάνιση — δεν υπάρχουν χρώματα για αυτόν τον σύλλογο.','Neutral shirts — no colours on file for this club.');
+  return '<section class="tdm-panel tdm-pitch-card"><div class="tdm-pitch-title">'+badge(name,side==='home'?logoH(m):logoA(m))+'<div><h3>'+E(name)+'</h3>'+(shape?'<span class="tdm-formation-chip">'+E(shape)+' · '+L('εκτίμηση','estimate')+'</span>':'')+'</div></div>'+
    '<p class="tdm-note">'+note+'</p>'+
    (layout?(kit?kitDefs(kit,kitId):'')+pitchField(name,layout.shape,layout.rows,layout.keeper,pitchToken(kit,kitId,'#365a6b',plateNames(team.starters)))+'<p class="tdm-kit-note">'+kitNote+'</p>'+
-    '<details class="tdm-bench"><summary>'+(predicted?'Πιθανή ενδεκάδα':'Ενδεκάδα')+' με θέσεις</summary>'+rows(team.starters)+'</details>'
-   :team?.starters?.length?'<h4>'+(predicted?'Πιθανή αρχική ενδεκάδα':'Διαθέσιμη αρχική ενδεκάδα')+'</h4>'+rows(team.starters):'')+
-   (team?.bench?.length?'<details class="tdm-bench"><summary>Αναπληρωματικοί ('+team.bench.length+')</summary>'+rows(team.bench)+'</details>':'')+'</section>';
+    '<details class="tdm-bench"><summary>'+(predicted?L('Πιθανή ενδεκάδα με θέσεις','Probable lineup with positions'):L('Ενδεκάδα με θέσεις','Lineup with positions'))+'</summary>'+rows(team.starters)+'</details>'
+   :team?.starters?.length?'<h4>'+(predicted?L('Πιθανή αρχική ενδεκάδα','Probable starting XI'):L('Ανακοινωμένη αρχική ενδεκάδα','Announced starting XI'))+'</h4>'+rows(team.starters):'')+
+   (team?.bench?.length?'<details class="tdm-bench"><summary>'+L('Αναπληρωματικοί','Substitutes')+' ('+team.bench.length+')</summary>'+rows(team.bench)+'</details>':'')+'</section>';
  }
  const people=team||{starters:[],bench:[]},players=Array.isArray(people.starters)?people.starters:[],bench=Array.isArray(people.bench)?people.bench:[];
  const lines=String(formation||'').split('-').map(Number);
@@ -651,11 +647,11 @@ function uefaFormBlock(m){
 
 function allStatisticsBlock(m,d){
  const e=m.statistical_evidence||d?.statistical_evidence;if(!e)return '';
- const en=document.documentElement.lang==='en',t=(el,eng)=>en?eng:el;
+ const en=window.__tdLocale==='en',t=(el,eng)=>en?eng:el;
  const h=e.home||{},a=e.away||{},codes=[...new Set([...Object.keys(h.for||{}),...Object.keys(a.for||{}),...Object.keys(h.against||{}),...Object.keys(a.against||{})])].sort();
  const names={'expected-goals':t('Αναμενόμενα γκολ (xG)','Expected goals (xG)'),'shots-total':t('Συνολικά σουτ','Total shots'),'shots-on-target':t('Σουτ στην εστία','Shots on target'),'ball-possession':t('Κατοχή (%)','Possession (%)'),'corners':t('Κόρνερ','Corners'),'key-passes':t('Πάσες κλειδιά','Key passes'),'goals':t('Γκολ','Goals'),'passes':t('Πάσες','Passes'),'fouls':t('Φάουλ','Fouls'),'offsides':t('Οφσάιντ','Offsides'),'yellowcards':t('Κίτρινες κάρτες','Yellow cards'),'redcards':t('Κόκκινες κάρτες','Red cards'),'saves':t('Αποκρούσεις','Saves')};
- const value=v=>typeof v==='number'&&Number.isFinite(v)?v.toLocaleString(en?'en-GB':'el-GR',{maximumFractionDigits:2}):'—';
- const metrics=ks=>'<div class="tdm-stat-scroll"><table class="tdm-stat-table"><thead><tr><th>'+t('Στατιστικό','Statistic')+'</th><th>'+E(m.home)+'</th><th>'+E(m.away)+'</th></tr></thead><tbody>'+ks.map(k=>'<tr><th>'+E(names[k]||k.replaceAll('-',' '))+'</th><td>'+value(h.for?.[k])+'</td><td>'+value(a.for?.[k])+'</td></tr>').join('')+'</tbody></table></div>';
+ const value=(v,k)=>k==='expected-goals'?xg3(v):typeof v==='number'&&Number.isFinite(v)?v.toLocaleString(en?'en-GB':'el-GR',{maximumFractionDigits:2}):'—';
+ const metrics=ks=>'<div class="tdm-stat-scroll"><table class="tdm-stat-table"><thead><tr><th>'+t('Στατιστικό','Statistic')+'</th><th>'+E(m.home)+'</th><th>'+E(m.away)+'</th></tr></thead><tbody>'+ks.map(k=>'<tr><th>'+E(names[k]||k.replaceAll('-',' '))+'</th><td>'+value(h.for?.[k],k)+'</td><td>'+value(a.for?.[k],k)+'</td></tr>').join('')+'</tbody></table></div>';
  const main=['expected-goals','shots-total','shots-on-target','ball-possession','corners'].filter(k=>codes.includes(k));
  return '<section class="tdm-panel tdm-stat-evidence"><h3>'+t('Στατιστικά από όλες τις διοργανώσεις','Statistics across all competitions')+'</h3><p class="tdm-note">'+E(m.home)+': '+(h.n||0)+' · '+E(m.away)+': '+(a.n||0)+' '+t('προηγούμενοι αγώνες. Πρόσφατοι σταθμισμένοι μέσοι όροι, έως 12 αγώνες στο τελευταίο 120ήμερο.','prior matches. Recency-weighted averages from up to 12 games in the last 120 days.')+'</p>'+
  metrics(main)+'<details><summary>'+t('Όλα τα διαθέσιμα στατιστικά','All available statistics')+' ('+codes.length+')</summary>'+metrics(codes)+'<h4>'+t('Τι επιτρέπει ο έλεγχος','Evaluation status')+'</h4><p class="tdm-note">'+
@@ -672,50 +668,119 @@ function detailProbRail(m,p,is){
 }
 
 function matchCenterForm(m,d,side){
- const team=m[side],rows=(Array.isArray(d?.history?.[side])?d.history[side]:[]).filter(g=>g&&(g.home===team||g.away===team)&&Number.isInteger(g.home_score)&&Number.isInteger(g.away_score)&&Date.parse(g.date)<Date.parse(m.date)).slice(0,5);
+ const rows=recentRows(m,d,side);
  if(!rows.length)return '';
- return '<div class="tdm-match-form"><small>Πρόσφατη φόρμα</small>'+rows.map(g=>{const home=g.home===team,a=home?g.home_score:g.away_score,b=home?g.away_score:g.home_score,result=a>b?'W':a===b?'D':'L';return '<span class="tdm-form-token '+result+'" title="'+E(g.home+' '+g.home_score+' – '+g.away_score+' '+g.away)+'">'+result+'</span>'}).join('')+'</div>';
+ return '<div class="tdm-match-form"><small>'+L('Πρόσφατη φόρμα','Recent form')+'</small>'+rows.map(g=>formToken(g,m[side])).join('')+'</div>';
+}
+// Match-page text in the language chosen in the header, written directly instead of left to the page translator,
+// so a match page never mixes Greek and English.
+function L(el,en){return window.__tdLocale==='en'?en:el}
+const matchLocale=()=>window.__tdLocale==='en'?'en-GB':'el-GR';
+// Expected goals always to three decimals, with the reader's decimal separator.
+function xg3(v){return typeof v==='number'&&Number.isFinite(v)?v.toLocaleString(matchLocale(),{minimumFractionDigits:3,maximumFractionDigits:3}):'—'}
+const isFinal=m=>['FT','FULL_TIME','FINISHED','AET','FT_PEN','PEN'].includes(String(m.status||'').toUpperCase());
+// A team's own recent games with a final score, newest first and strictly before this match.
+function recentRows(m,d,side){
+ const all=Array.isArray(d?.history?.[side])?d.history[side]:[];
+ return all.filter(g=>g&&Number.isFinite(Number(g.home_score))&&Number.isFinite(Number(g.away_score))&&Date.parse(g.date)<Date.parse(m.date)).slice(0,5);
+}
+// Goals for and against from the team's side. History rows give the result from the team's point of view, which with
+// the score tells the side; team names differ between sources ("Karmiotissa" against "Karmiotissa Pano Polemidion").
+function teamScore(g,team){
+ const h=Number(g.home_score),a=Number(g.away_score);
+ if((g.result==='W'||g.result==='L')&&h!==a)return (g.result==='W')===(h>a)?[h,a]:[a,h];
+ if(g.result==='D'||h===a)return [h,a];
+ return g.home===team?[h,a]:g.away===team?[a,h]:null;
+}
+function formToken(g,team){
+ const s=teamScore(g,team),r=g.result||(s?s[0]>s[1]?'W':s[0]===s[1]?'D':'L':null);
+ return r?'<span class="tdm-form-token '+r+'" title="'+E(g.home+' '+g.home_score+' – '+g.away_score+' '+g.away)+'">'+({W:L('Ν','W'),D:L('Ι','D'),L:L('Η','L')})[r]+'</span>':'';
 }
 function matchCenterLineups(m,d){
  const hasPlayers=['home','away'].some(side=>d?.lineups?.[side]?.starters?.length);
  const confirmed=hasPlayers&&d.lineup_status==='confirmed',predicted=hasPlayers&&['predicted_by_provider','historical_projection'].includes(d.lineup_status);
- const label=confirmed?'Επιβεβαιωμένες ενδεκάδες':predicted?'Πιθανή ενδεκάδα βάσει προηγούμενων αγώνων · όχι επιβεβαιωμένη':hasPlayers?'Διαθέσιμες ενδεκάδες · μη επιβεβαιωμένες':'Οι ενδεκάδες δεν έχουν δημοσιευθεί';
- return '<section class="tdm-tactical-section"><div class="tdm-tactical-heading"><div><h2>Ενδεκάδες & διάταξη ομάδων</h2><p>'+E(label)+'</p></div><span class="tdm-tactical-tag '+(confirmed?'confirmed':'')+'">'+(faMatch(m)?'Ιστορικές θέσεις':hasPlayers?'2D · Σχηματισμός':'Πριν από τη σέντρα')+'</span></div>'+
+ const label=confirmed?L('Επιβεβαιωμένες ενδεκάδες','Confirmed lineups'):predicted?L('Πιθανή ενδεκάδα βάσει προηγούμενων αγώνων · όχι επιβεβαιωμένη','Probable lineup from previous matches · not confirmed'):hasPlayers?L('Ανακοινωμένες ενδεκάδες · μη επιβεβαιωμένες','Announced lineups · not confirmed'):L('Οι ενδεκάδες δεν έχουν ανακοινωθεί','Lineups have not been announced');
+ return '<section class="tdm-tactical-section"><div class="tdm-tactical-heading"><div><h2>'+L('Ενδεκάδες & διάταξη','Lineups & shape')+'</h2><p>'+E(label)+'</p></div><span class="tdm-tactical-tag '+(confirmed?'confirmed':'')+'">'+(faMatch(m)?L('Ιστορικές θέσεις','Historical positions'):hasPlayers?L('Σχηματισμός','Formation'):L('Πριν από τη σέντρα','Before kick-off'))+'</span></div>'+
  (d&&!d.error?'<div class="tdm-pitch-grid">'+lineupPitch(m,d.lineups?.home,'home',d.historical_formations?.home??d.formations?.home)+lineupPitch(m,d.lineups?.away,'away',d.historical_formations?.away??d.formations?.away)+'</div>':deepNote(d))+
- '<p class="tdm-note">'+(faMatch(m)?'Οι ιστορικές θέσεις αποτελούν εκτίμηση, όχι επαλήθευση του σημερινού σχηματισμού.':'Διάταξη βάσει του δημοσιευμένου σχηματισμού. Δεν διατίθενται δεδομένα παρακολούθησης θέσεων ή heatmap.')+'</p></section>';
+ '<p class="tdm-note">'+(faMatch(m)?L('Οι θέσεις προέρχονται από προηγούμενους αγώνες και είναι εκτίμηση, όχι ο σημερινός σχηματισμός.','Positions come from previous matches; they are an estimate, not today\'s formation.'):L('Διάταξη βάσει του δημοσιευμένου σχηματισμού.','Layout based on the published formation.'))+'</p></section>';
 }
 function matchCenterHero(m,d,p,is){
- const final=['FT','FULL_TIME','FINISHED','AET','FT_PEN','PEN'].includes(String(m.status||'').toUpperCase());
+ const final=isFinal(m);
  const hasScore=Number.isInteger(m.home_score)&&Number.isInteger(m.away_score);
  const result=(is||final)&&hasScore?m.home_score+' : '+m.away_score:'VS';
- const status=is?'● LIVE'+(m.status==='HT'?' · ΗΜΙΧΡΟΝΟ':Number.isInteger(m.minute)?' · '+m.minute+'′':''):final?'Τελικό αποτέλεσμα':({POSTP:'Αναβολή',POSTPONED:'Αναβολή',CANC:'Ακύρωση',CANCELLED:'Ακύρωση'}[m.status]||'Πριν από τη σέντρα');
- const kickoff=new Date(m.date).toLocaleString(window.__tdLocale==='el'?'el-GR':'en-GB',{timeZone:'Asia/Nicosia',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+ const status=is?'● LIVE'+(m.status==='HT'?' · '+L('ΗΜΙΧΡΟΝΟ','HALF-TIME'):Number.isInteger(m.minute)?' · '+m.minute+'′':''):final?L('Τελικό αποτέλεσμα','Full time'):({POSTP:L('Αναβολή','Postponed'),POSTPONED:L('Αναβολή','Postponed'),CANC:L('Ακύρωση','Cancelled'),CANCELLED:L('Ακύρωση','Cancelled')}[m.status]||L('Πριν από τη σέντρα','Before kick-off'));
+ const kickoff=new Date(m.date).toLocaleString(matchLocale(),{timeZone:'Asia/Nicosia',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
  const team=side=>'<div class="tdm-match-team '+side+'">'+badge(m[side],side==='home'?logoH(m):logoA(m))+'<div><h1>'+E(m[side])+'</h1>'+matchCenterForm(m,d,side)+'</div></div>';
- const bar=valid123(p)?'<div class="tdm-match-odds"><div class="tdm-match-odds-labels">'+[['1',p.p1],['Χ',p.px],['2',p.p2]].map(([k,v])=>'<span>'+k+': <b>'+pct(v)+'</b></span>').join('')+'</div><div class="tdm-match-prob-meter" role="img" aria-label="1: '+pct(p.p1)+', Χ: '+pct(p.px)+', 2: '+pct(p.p2)+'">'+[p.p1,p.px,p.p2].map(v=>'<span style="width:'+v+'%"></span>').join('')+'</div></div>':'<p class="tdm-detail-prob-empty">Δεν υπάρχουν διαθέσιμες πιθανότητες 1Χ2.</p>';
- return '<div class="tdm-match-breadcrumb"><button data-back>← Αγώνες</button><span>/</span><span>'+E(m.league||'')+'</span><span>/</span><strong>'+E(m.home)+' vs '+E(m.away)+'</strong></div>'+
- '<section class="tdm-scoreboard tdm-match-hero" aria-label="Κέντρο αγώνα"><div class="tdm-match-meta"><span>'+E(m.league||m.league_key)+'</span>'+(stageLabel(m)?'<span>'+E(stageLabel(m))+'</span>':'')+'<time datetime="'+E(m.date)+'">'+E(kickoff)+' · ώρα Κύπρου</time>'+(d?.venue?'<span class="tdm-match-venue">⌖ '+E(d.venue)+'</span>':'')+'</div>'+
- '<div class="tdm-match-main">'+team('home')+'<div class="tdm-match-center"><span class="tdm-match-state">'+E(status)+'</span><div class="tdm-versus">'+E(result)+'</div><small>Match intelligence</small>'+bar+'</div>'+team('away')+'</div>'+
- '<div class="tdm-match-toolbar"><span>Tiki-Data · '+E(source(m))+'</span><div><button data-tab="info">Στοιχεία αγώνα ↗</button><button data-match-share>Κοινοποίηση ↗</button></div></div></section><p class="tdm-match-caption">'+(is?'Οι πιθανότητες είναι η τελευταία διαθέσιμη εκτίμηση για τον live αγώνα.':'Πιθανότητες 1Χ2 πριν από τη σέντρα.')+' Πειραματικές στατιστικές εκτιμήσεις · δεν αποτελούν εγγυημένα αποτελέσματα.</p>';
+ const X=L('Χ','X'),bar=valid123(p)?'<div class="tdm-match-odds"><div class="tdm-match-odds-labels">'+[['1',p.p1],[X,p.px],['2',p.p2]].map(([k,v])=>'<span>'+k+': <b>'+pct(v)+'</b></span>').join('')+'</div><div class="tdm-match-prob-meter" role="img" aria-label="1: '+pct(p.p1)+', '+X+': '+pct(p.px)+', 2: '+pct(p.p2)+'">'+[p.p1,p.px,p.p2].map(v=>'<span style="width:'+v+'%"></span>').join('')+'</div></div>':'<p class="tdm-detail-prob-empty">'+L('Δεν υπάρχουν διαθέσιμες πιθανότητες 1Χ2.','No 1X2 probabilities available.')+'</p>';
+ return '<div class="tdm-match-breadcrumb"><button data-back>← '+L('Αγώνες','Matches')+'</button><span>/</span><span>'+E(m.league||'')+'</span><span>/</span><strong>'+E(m.home)+' vs '+E(m.away)+'</strong></div>'+
+ '<section class="tdm-scoreboard tdm-match-hero" aria-label="'+L('Κέντρο αγώνα','Match centre')+'"><div class="tdm-match-meta"><span>'+E(m.league||m.league_key)+'</span>'+(stageLabel(m)?'<span>'+E(stageLabel(m))+'</span>':'')+'<time datetime="'+E(m.date)+'">'+E(kickoff)+' · '+L('ώρα Κύπρου','Cyprus time')+'</time>'+(d?.venue?'<span class="tdm-match-venue">⌖ '+E(d.venue)+'</span>':'')+'</div>'+
+ '<div class="tdm-match-main">'+team('home')+'<div class="tdm-match-center"><span class="tdm-match-state">'+E(status)+'</span><div class="tdm-versus">'+E(result)+'</div><small>'+L('Πιθανότητες 1Χ2','1X2 probabilities')+'</small>'+bar+'</div>'+team('away')+'</div>'+
+ '<div class="tdm-match-toolbar"><span>Tiki-Data · '+E(source(m))+'</span><div><button data-match-share>'+L('Κοινοποίηση','Share')+' ↗</button></div></div></section><p class="tdm-match-caption">'+(is?L('Οι πιθανότητες είναι η τελευταία διαθέσιμη εκτίμηση για τον live αγώνα.','Probabilities are the latest estimate for the live match.'):L('Πιθανότητες πριν από τη σέντρα.','Probabilities before kick-off.'))+' '+L('Πειραματικές στατιστικές εκτιμήσεις, όχι εγγυημένα αποτελέσματα.','Experimental statistical estimates, not guaranteed outcomes.')+'</p>';
 }
-
+// Overview cards. 1X2 lives in the header only; these add what it does not show.
+const kv=(k,v)=>'<div class="tdm-kv"><small>'+E(k)+'</small><b>'+E(v??'—')+'</b></div>';
+function forecastPanel(m,p,g,is){
+ const withheld=m.forecast_review?.status==='withheld',mu=is?m.live_outlook?.remaining_expected_goals:{home:m.mu_home,away:m.mu_away};
+ const score=is?g?.most_likely_final?.score:m.most_likely_score?.score,next=is?m.live_outlook?.next_goal:null;
+ const scenarios=[g?.over25,g?.under25,g?.btts].some(Number.isFinite)||!!score,goals=Number.isFinite(mu?.home)||Number.isFinite(mu?.away);
+ return '<section class="tdm-panel tdm-forecast"><h3>'+L('Πρόβλεψη Tiki-Data','Tiki-Data forecast')+'</h3>'+
+  (withheld&&p?'<p class="tdm-older-estimate">'+L('Πειραματική εκτίμηση · η ακρίβειά της δεν έχει πιστοποιηθεί.','Experimental estimate · its accuracy is not yet certified.')+'</p>':'')+
+  (scenarios?'<div class="tdm-kv-grid">'+kv('Over 2.5',pct(g?.over25))+kv('Under 2.5',pct(g?.under25))+kv(L('Γκολ-Γκολ','Both teams score'),pct(g?.btts))+kv(L('Πιθανότερο σκορ','Most likely score'),score)+'</div>':'')+
+  (goals?'<h4>'+(is?L('Αναμενόμενα γκολ έως το τέλος · xG μοντέλου','Expected goals still to come · model xG'):L('Αναμενόμενα γκολ · xG μοντέλου','Expected goals · model xG'))+'</h4><div class="tdm-xg"><div><small>'+E(m.home)+'</small><b>'+xg3(mu.home)+'</b></div><span>xG</span><div><small>'+E(m.away)+'</small><b>'+xg3(mu.away)+'</b></div></div>':'')+
+  (next?'<h4>'+L('Επόμενο γκολ','Next goal')+'</h4><div class="tdm-kv-grid">'+kv(m.home,pct(next.home))+kv(m.away,pct(next.away))+kv(L('Κανένα','None'),pct(next.none))+'</div>':'')+
+  (!scenarios&&!goals?'<p class="tdm-lead">'+(withheld?L('Οι πιθανότητες βρίσκονται υπό επανέλεγχο.','Probabilities are under review.'):L('Δεν υπάρχει ακόμη εκτίμηση για αυτόν τον αγώνα.','No forecast is available for this match yet.'))+'</p>':'')+
+  '<p class="tdm-note">'+L('Τα αναμενόμενα γκολ είναι ο μέσος αριθμός γκολ που προβλέπει το μοντέλο για κάθε ομάδα, όχι xG από τις φάσεις του αγώνα.','Expected goals are the average goals the model expects from each team, not shot-based xG from the match.')+'</p></section>';
+}
+function formPanel(m,d){
+ const team=side=>{
+  const name=m[side],rows=recentRows(m,d,side),scores=rows.map(g=>teamScore(g,name)).filter(Boolean),s=d?.current_season_form?.[side];
+  const gf=scores.reduce((n,x)=>n+x[0],0),ga=scores.reduce((n,x)=>n+x[1],0),per=v=>(v/scores.length).toLocaleString(matchLocale(),{maximumFractionDigits:2});
+  const season=s&&Number.isInteger(s.played)&&s.played>0?'<small>'+(side==='home'?L('2026–27 εντός έδρας','2026–27 at home'):L('2026–27 εκτός έδρας','2026–27 away'))+': '+s.played+' '+(s.played===1?L('αγώνας','game'):L('αγώνες','games'))+' · '+s.wins+L('Ν','W')+' '+s.draws+L('Ι','D')+' '+s.losses+L('Η','L')+' · '+s.goals_for+':'+s.goals_against+'</small>':'';
+  return '<div class="tdm-team-form"><strong>'+E(name)+'</strong>'+(rows.length?'<div class="tdm-match-form">'+rows.map(g=>formToken(g,name)).join('')+'</div>'+
+   (scores.length?'<div class="tdm-form-figures"><span>'+L('Γκολ','Goals')+' <b>'+gf+' : '+ga+'</b></span><span>'+L('Ανά αγώνα','Per match')+' <b>'+per(gf)+' : '+per(ga)+'</b></span></div>':''):'<p>'+L('Δεν υπάρχουν καταγεγραμμένοι πρόσφατοι αγώνες.','No recorded recent matches.')+'</p>')+season+'</div>';
+ };
+ return '<section class="tdm-panel tdm-form-compact"><h3>'+L('Φόρμα','Form')+'</h3><div class="tdm-form-pair">'+team('home')+team('away')+'</div><p class="tdm-note">'+L('Οι τελευταίοι έως 5 αγώνες σε όλες τις διοργανώσεις, πριν από αυτόν.','The last up to 5 matches in all competitions before this one.')+'</p></section>';
+}
+function meetingsPanel(d,limit){
+ const rows=(Array.isArray(d?.history?.head_to_head)?d.history.head_to_head:[]).slice(0,limit);
+ return '<section class="tdm-panel"><h3>'+L('Μεταξύ τους','Head to head')+'</h3>'+(rows.length?rows.map(historicalRow).join(''):'<p class="tdm-lead">'+L('Δεν υπάρχουν προηγούμενες αναμετρήσεις στο ιστορικό.','No previous meetings in the records.')+'</p>')+'</section>';
+}
+function factsPanel(m,d){
+ const r=(k,v)=>v==null||v===''?'':row(k,v),sample=[m.analysis?.home_venue_matches??m.historical_sample?.home,m.analysis?.away_venue_matches??m.historical_sample?.away];
+ const kickoff=new Date(m.date).toLocaleString(matchLocale(),{timeZone:'Asia/Nicosia',weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+ return '<section class="tdm-panel"><h3>'+L('Στοιχεία αγώνα','Match facts')+'</h3>'+r(L('Διοργάνωση','Competition'),m.league||m.league_key)+r(L('Φάση','Stage'),stageLabel(m))+
+  r(L('Έναρξη','Kick-off'),kickoff+' · '+L('ώρα Κύπρου','Cyprus time'))+r(L('Γήπεδο','Venue'),d&&!d.error?d.venue:null)+r(L('Μοντέλο','Model'),source(m))+
+  (sample.some(Number.isFinite)?row(L('Δείγμα μοντέλου','Model sample'),(sample[0]??'—')+' '+L('εντός','home')+' · '+(sample[1]??'—')+' '+L('εκτός έδρας','away')):'')+'</section>';
+}
+// Statistics tab: every expected-goals figure in one place, each labelled by where it comes from.
+function xgPanel(m,d,is){
+ const valid=d&&!d.error,match=valid&&d.xg?.available?d.xg:null,mu=is?m.live_outlook?.remaining_expected_goals:{home:m.mu_home,away:m.mu_away};
+ const past=valid?d.context_prediction?.context?.observed_xg:null,players=valid&&Array.isArray(d.player_xg)?d.player_xg.filter(x=>Number.isFinite(x?.xg)).slice(0,15):[];
+ const has=x=>Number.isFinite(x?.home)||Number.isFinite(x?.away);
+ const pair=(title,x,note)=>'<h4>'+title+'</h4><div class="tdm-xg"><div><small>'+E(m.home)+'</small><b>'+xg3(x.home)+'</b></div><span>xG</span><div><small>'+E(m.away)+'</small><b>'+xg3(x.away)+'</b></div></div>'+(note?'<p class="tdm-note">'+note+'</p>':'');
+ return '<section class="tdm-panel"><h3>'+L('Αναμενόμενα γκολ (xG)','Expected goals (xG)')+'</h3>'+
+  (match?pair(L('xG αγώνα · από τις φάσεις','Match xG · from the chances'),match,L('Η ποιότητα των ευκαιριών που δημιούργησε κάθε ομάδα σε αυτόν τον αγώνα.','The quality of the chances each team created in this match.')):'')+
+  (has(mu)?pair(is?L('Αναμενόμενα γκολ έως το τέλος · μοντέλο Tiki-Data','Expected goals still to come · Tiki-Data model'):L('Αναμενόμενα γκολ · μοντέλο Tiki-Data','Expected goals · Tiki-Data model'),mu,L('Ο μέσος αριθμός γκολ που προβλέπει το μοντέλο για κάθε ομάδα.','The average number of goals the model expects from each team.')):'')+
+  (has(past)?pair(L('xG προηγούμενων αγώνων','xG in previous matches'),past,''):'')+
+  (players.length?'<h4>'+L('xG παικτών','Player xG')+'</h4>'+players.map(x=>row(x.player_name||L('Παίκτης','Player')+' #'+(x.player_id||'—'),xg3(x.xg))).join(''):'')+
+  (!match&&!has(mu)&&!has(past)?'<p class="tdm-lead">'+L('Δεν υπάρχουν αναμενόμενα γκολ για αυτόν τον αγώνα.','No expected goals are available for this match.')+'</p>':'')+'</section>';
+}
+function newsPanel(d){
+ const news=d&&!d.error&&Array.isArray(d.news)?d.news:[];if(!news.length)return '';
+ return '<section class="tdm-panel"><h3>'+L('Νέα ομάδων','Team news')+'</h3>'+news.map(n=>'<article class="tdm-news-item"><h4>'+E(n.title)+'</h4><p>'+E(n.preview||'')+'</p>'+(n.important?'<small class="tdm-news-alert">'+L('Πιθανή σημασία για τον αγώνα · προς επιβεβαίωση','May matter for the match · unconfirmed')+'</small>':'')+'</article>').join('')+
+  '<p class="tdm-note">'+L('Οι ειδήσεις δεν αλλάζουν τις πιθανότητες χωρίς επιβεβαιωμένη επίδραση.','News does not change the probabilities without a confirmed effect.')+'</p></section>';
+}
 function details(){
- const m=state.matches.find(x=>String(x.id)===String(state.id));if(!m)return empty('Ο αγώνας δεν βρέθηκε');
+ const m=state.matches.find(x=>String(x.id)===String(state.id));if(!m)return empty(L('Ο αγώνας δεν βρέθηκε','Match not found'));
  const is=live(m),d=deepCache.get(state.id),valid=d&&!d.error;
  const p=m.forecast_review?.status==='withheld'?pr(m):(!is&&valid&&valid123(d.context_prediction)?d.context_prediction:pr(m)),g=is?m.live_outlook:p||m;
+ // Five tabs; links to the tabs this page used to have (analysis, info, news) open the overview.
+ const tabs=[['summary',L('Επισκόπηση','Overview')],...(faMatch(m)&&(is||isFinal(m))?[['events',L('Γεγονότα','Events')]]:[]),['lineups',L('Ενδεκάδες','Lineups')],['stats',L('Στατιστικά','Statistics')],['history',L('Φόρμα & H2H','Form & H2H')]];
+ if(!tabs.some(([k])=>k===state.tab))state.tab='summary';
  let content='';
- if(state.tab==='info')content='<section class="tdm-panel"><h3>Πληροφορίες αγώνα</h3>'+row('Διοργάνωση',m.league||m.league_key)+(stageLabel(m)?row('Φάση UEFA',stageLabel(m)):'')+row('Ημερομηνία',when(m.date))+row('Κατάσταση',is?'LIVE':m.status)+row('Παρουσίαση','Tiki-Data Lab')+row('Ποιότητα μοντέλου',source(m))+(valid&&d.venue?row('Γήπεδο',d.venue):'')+'</section>'+
- uefaFormBlock(m)+'<section class="tdm-panel"><h3>Ιστορικό τεκμηρίωσης</h3>'+row('Γηπεδούχος εντός',m.analysis?.home_venue_matches??m.historical_sample?.home)+row('Φιλοξενούμενη εκτός',m.analysis?.away_venue_matches??m.historical_sample?.away)+'</section>';
- if(state.tab==='summary')content=currentSeasonFormBlock(m,d)+historicalSummaryBlock(m,d)+allStatisticsBlock(m,d)+liveStatsBlock(m)+liveMethodNote(m)+prematchReferenceBlock(m)+recentFormBlock(m)+'<section class="tdm-panel"><h3>Πιθανότητες τελικού αποτελέσματος</h3>'+(m.forecast_review?.status==='withheld'&&p?'<p class="tdm-older-estimate">Πειραματική στατιστική εκτίμηση Tiki-Data · Δεν έχει πιστοποιηθεί η προγνωστική της ακρίβεια. Συνυπολογίζονται ιστορικά εντός/εκτός έδρας, όχι μόνο UEFA.</p>':'')+(p?'<div class="tdm-probs tdm-probs-featured">'+metric('1 · '+m.home,p.p1)+metric('Χ · Ισοπαλία',p.px)+metric('2 · '+m.away,p.p2)+'</div>':empty(m.forecast_review?.status==='withheld'?'Οι πιθανότητες βρίσκονται υπό επανέλεγχο. Τα διαθέσιμα στατιστικά εμφανίζονται παραπάνω.':'Δεν υπάρχουν διαθέσιμες πιθανότητες.'))+'</section>'+
- uefaFormBlock(m)+'<section class="tdm-panel"><h3>Σενάρια γκολ</h3><div class="tdm-large-stats">'+row('Over 2.5',pct(g?.over25))+row('Under 2.5',pct(g?.under25))+row('GG / BTTS',pct(g?.btts))+row('Πιθανότερο σκορ',is?g?.most_likely_final?.score:m.most_likely_score?.score)+'</div></section>'+
- '<section class="tdm-panel"><h3>Expected Goals (xG)</h3>'+
- (valid&&d.xg?.available?'<div class="tdm-xg"><div><small>'+E(m.home)+'</small><b>'+E(d.xg.home===null?'—':d.xg.home.toFixed(2))+'</b></div><span>xG</span><div><small>'+E(m.away)+'</small><b>'+E(d.xg.away===null?'—':d.xg.away.toFixed(2))+'</b></div></div>':deepNote(d)||'<p class="tdm-lead">Δεν υπάρχουν xG για τον αγώνα ή δεν περιλαμβάνονται στη συνδρομή.</p>')+
- '<p class="tdm-note">Το xG αφορά ποιότητα ευκαιριών, όχι πρόβλεψη τελικών γκολ. Διαθεσιμότητα ανά διοργάνωση και πακέτο.</p></section>';
- if(state.tab==='lineups')content=deepNote(d)+(valid?'<div class="tdm-confirmation '+(d.lineup_status==='confirmed'?'confirmed':'')+'">'+
- (d.lineup_status==='confirmed'?'✓ Επίσημες ενδεκάδες – επιβεβαιωμένες':d.lineup_status==='predicted_by_provider'?'◇ Πιθανές ενδεκάδες – όχι επιβεβαιωμένες':d.lineup_status==='historical_projection'?'Πιθανή ενδεκάδα από προηγούμενα παιχνίδια – όχι επιβεβαιωμένη':d.lineup_status==='unconfirmed'?'Η επιβεβαίωση της ενδεκάδας δεν είναι διαθέσιμη':'Δεν έχουν δημοσιευτεί ενδεκάδες')+'</div>'+
- '<div class="tdm-pitch-grid">'+lineupPitch(m,d.lineups?.home,'home',d.historical_formations?.home??d.formations?.home)+lineupPitch(m,d.lineups?.away,'away',d.historical_formations?.away??d.formations?.away)+'</div>':'')+
- '<p class="tdm-note">Η ένδειξη επιβεβαίωσης προέρχεται αποκλειστικά από το metadata του παρόχου. Προβλεπόμενες ενδεκάδες ενδέχεται να αλλάξουν.</p>';
- if(state.tab==='history')content=deepNote(d)+(valid?gameHistory('Πρόσφατοι αγώνες · '+m.home,d.history?.home)+gameHistory('Πρόσφατοι αγώνες · '+m.away,d.history?.away)+gameHistory('Μεταξύ τους αναμετρήσεις',d.history?.head_to_head):'')+
- '<p class="tdm-note">Αποτελέσματα προηγούμενων αγώνων από το ιστορικό Tiki-Data Lab· τα φιλτράρουμε ώστε να προηγούνται χρονικά από τον αγώνα.</p>';
+ if(state.tab==='summary')content=liveStatsBlock(m)+liveMethodNote(m)+prematchReferenceBlock(m)+forecastPanel(m,p,g,is)+deepNote(d)+(valid?formPanel(m,d)+meetingsPanel(d,3):'')+factsPanel(m,d)+newsPanel(d);
+ if(state.tab==='lineups')content=matchCenterLineups(m,d);
+ if(state.tab==='history')content=deepNote(d)+currentSeasonFormBlock(m,d)+(valid?gameHistory(L('Πρόσφατοι αγώνες · ','Recent matches · ')+m.home,d.history?.home)+gameHistory(L('Πρόσφατοι αγώνες · ','Recent matches · ')+m.away,d.history?.away)+meetingsPanel(d,5):'')+uefaFormBlock(m)+recentFormBlock(m);
  if(state.tab==='stats'){
   const arr=valid&&Array.isArray(d.statistics)&&d.statistics.length?d.statistics:
    (Array.isArray(m.statistics)?m.statistics:[]).map(x=>({type:x.type,side:Number(x.participant_id)===Number(m.home_id)?'home':Number(x.participant_id)===Number(m.away_id)?'away':null,value:x.value}));
@@ -725,36 +790,14 @@ function details(){
    if(!types.has(name))types.set(name,{home:null,away:null});
    types.get(name)[x.side]=x.value;
   }
-  const heading='<div class="tdm-stat-grid-row tdm-stat-grid-head"><strong>ΣΤΑΤΙΣΤΙΚΟ</strong><div>'+badge(m.home,logoH(m))+'<small>'+E(m.home)+'</small></div><div>'+badge(m.away,logoA(m))+'<small>'+E(m.away)+'</small></div></div>';
-  const table='<section class="tdm-panel"><h3>Στατιστικά αναμέτρησης</h3>'+
+  const heading='<div class="tdm-stat-grid-row tdm-stat-grid-head"><strong>'+L('Στατιστικό','Statistic')+'</strong><div>'+badge(m.home,logoH(m))+'<small>'+E(m.home)+'</small></div><div>'+badge(m.away,logoA(m))+'<small>'+E(m.away)+'</small></div></div>';
+  const table='<section class="tdm-panel"><h3>'+L('Στατιστικά αγώνα','Match statistics')+'</h3>'+
    (types.size?'<div class="tdm-stat-grid">'+heading+[...types].slice(0,42).map(([name,x])=>'<div class="tdm-stat-grid-row"><strong>'+E(name)+'</strong><b>'+E(x.home??'—')+'</b><b>'+E(x.away??'—')+'</b></div>').join('')+'</div>':
-   '<p class="tdm-lead">Δεν υπάρχουν επιβεβαιωμένα στατιστικά τρέχοντος αγώνα. Για μελλοντικούς αγώνες εμφανίζεται η παραπάνω ιστορική φόρμα, όχι υποθετικά live νούμερα.</p>')+'</section>';
-  // Statistics of the match itself lead the tab; without them the historical form comes first, as before.
-  content=(types.size?table:'')+currentSeasonFormBlock(m,d)+allStatisticsBlock(m,d)+historicalSummaryBlock(m,d)+liveStatsBlock(m)+uefaFormBlock(m)+recentFormBlock(m)+(types.size?'':table)+
-   (valid&&d.history?gameHistory('Πρόσφατα αποτελέσματα · '+m.home,d.history.home)+gameHistory('Πρόσφατα αποτελέσματα · '+m.away,d.history.away):'');
+   '<p class="tdm-lead">'+(is||isFinal(m)?L('Ο πάροχος δεν έχει δώσει στατιστικά για αυτόν τον αγώνα.','The provider has not published statistics for this match.'):L('Τα στατιστικά του αγώνα εμφανίζονται όταν αρχίσει.','Match statistics appear once it kicks off.'))+'</p>')+'</section>';
+  content=deepNote(d)+table+xgPanel(m,d,is)+allStatisticsBlock(m,d)+liveStatsBlock(m);
  }
- if(state.tab==='events'){const es=valid?d.events||[]:[];content=deepNote(d)+'<section class="tdm-panel"><h3>Γεγονότα αγώνα · Football-API</h3>'+(es.length?es.map(e=>row(e.minute+'′ · '+(e.label||e.type),[e.player,e.related_player].filter(Boolean).join(' / '))).join(''):'<p>Δεν έχουν δοθεί γεγονότα.</p>')+'</section>';}
- if(state.tab==='news'){
-  const news=valid&&Array.isArray(d.news)?d.news:[],impact=news.filter(n=>n.important);
-  content='<section class="tdm-panel"><h3>Νέα ομάδων · Tiki-Data Lab</h3>'+
-   (news.length?news.map(n=>'<article class="tdm-news-item"><h4>'+E(n.title)+'</h4><p>'+E(n.preview||'')+'</p>'+(n.important?'<small class="tdm-news-alert">Πιθανή σημασία για την προετοιμασία · προς επιβεβαίωση</small>':'<small>Αγωνιστική ενημέρωση</small>')+'</article>').join(''):'<p class="tdm-lead">Δεν υπάρχουν επαληθευμένες διαθέσιμες ειδήσεις για αυτόν τον αγώνα ή δεν υπάρχει πρόσβαση σε ειδησεογραφική τροφοδοσία.</p>')+
-   '<p class="tdm-note">Πιθανές απουσίες και αλλαγές ενδεκάδας επισημαίνονται ως κίνδυνος αβεβαιότητας, δεν αλλάζουν αυτόματα τα ποσοστά 1Χ2 χωρίς επιβεβαιωμένη επίδραση και έλεγχο ακρίβειας.</p></section>'+
-   (impact.length?'<section class="tdm-panel"><h3>Επίδραση στην αξιολόγηση</h3>'+row('Σημαντικές αναφορές',impact.length)+row('Προσαρμογή πιθανοτήτων','Όχι χωρίς επαλήθευση')+'</section>':'');
- }
- if(state.tab==='analysis'){
-  const n=m.live_outlook?.next_goal;
-  content=recentFormBlock(m)+liveStatsBlock(m)+'<section class="tdm-panel"><h3>Tiki-Data · Στατιστική ανάλυση</h3><p class="tdm-lead">'+E(m.analysis?.explanation||'Στατιστική εκτίμηση με βάση επαληθευμένα ιστορικά αποτελέσματα.')+'</p>'+
- row('Μοντέλο',is?(m.live_outlook?.source==='recent_form_live_poisson'?'Πειραματικό Poisson βάσει φόρμας':m.live_outlook?'Live Poisson':m.live_prediction?'Sportmonks Live':'Χωρίς ποσοστά'):source(m))+
- row('Αναμενόμενα γκολ γηπεδούχου',m.mu_home??m.live_outlook?.remaining_expected_goals?.home)+
- row('Αναμενόμενα γκολ φιλοξενούμενης',m.mu_away??m.live_outlook?.remaining_expected_goals?.away)+'</section>'+
- (n?'<section class="tdm-panel"><h3>Επόμενο γκολ</h3><div class="tdm-probs">'+metric(m.home,n.home)+metric(m.away,n.away)+metric('Κανένα',n.none)+'</div></section>':'')+
- (valid&&d.player_xg?.length?'<section class="tdm-panel"><h3>xG παικτών</h3>'+d.player_xg.slice(0,15).map(x=>row(x.player_name||'Παίκτης #'+(x.player_id||'—'),x.xg.toFixed(2))).join('')+'</section>':'')+
- '<p class="tdm-note">Το ιστορικό καλύπτει όλες τις διαθέσιμες διοργανώσεις. Πρόσθετα στατιστικά αλλάζουν τις πιθανότητες μόνο όταν η νέα έκδοση περάσει ξεχωριστό χρονικό έλεγχο. Δεν πρόκειται για επικυρωμένη live ακρίβεια.</p>'+((!is&&d?.context_prediction)?'<section class="tdm-panel"><h3>Πραγματικά δεδομένα που επηρέασαν την εκτίμηση</h3>'+row('xG ιστορικών αγώνων – γηπεδούχος',d.context_prediction.context?.observed_xg?.home)+row('xG ιστορικών αγώνων – φιλοξενούμενη',d.context_prediction.context?.observed_xg?.away)+row('Ευρωπαϊκοί αγώνες στο δείγμα – γηπεδούχος',d.context_prediction.context?.european_matches?.home)+row('Ευρωπαϊκοί αγώνες στο δείγμα – φιλοξενούμενη',d.context_prediction.context?.european_matches?.away)+'</section>':'');
- }
- if(state.tab==='summary')content=matchCenterLineups(m,d)+content;
- if(state.tab==='lineups')content=matchCenterLineups(m,d);
- const tabs=[...(faMatch(m)?[['events','Γεγονότα']]:[]),['summary','Ανάλυση / Overview'],['lineups','Ενδεκάδες / Lineups'],['history','Ιστορικό / H2H'],['stats','Stats & Metrics'],['analysis','Στατιστική ανάλυση'],['news','Νέα ομάδων'],['info','Info & Venue']];
- return '<div class="tdm-match-page">'+matchCenterHero(m,d,p,is)+olderEstimateTag(m)+'<div class="tdm-tabs tdm-match-tabs" role="tablist" aria-label="Στοιχεία αγώνα">'+tabs.map(([x,y])=>'<button data-tab="'+x+'" role="tab" aria-selected="'+(state.tab===x)+'" class="tdm-tab '+(state.tab===x?'active':'')+'">'+y+'</button>').join('')+'</div><div class="tdm-match-content" role="tabpanel">'+content+'</div></div>';
+ if(state.tab==='events'){const es=valid?d.events||[]:[];content=deepNote(d)+'<section class="tdm-panel"><h3>'+L('Γεγονότα αγώνα','Match events')+'</h3>'+(es.length?es.map(e=>row(e.minute+'′ · '+(e.label||e.type),[e.player,e.related_player].filter(Boolean).join(' / '))).join(''):'<p class="tdm-lead">'+L('Δεν έχουν δοθεί γεγονότα.','No events published yet.')+'</p>')+'</section>';}
+ return '<div class="tdm-match-page">'+matchCenterHero(m,d,p,is)+olderEstimateTag(m)+'<div class="tdm-tabs tdm-match-tabs" role="tablist" aria-label="'+L('Στοιχεία αγώνα','Match sections')+'">'+tabs.map(([x,y])=>'<button data-tab="'+x+'" role="tab" aria-selected="'+(state.tab===x)+'" class="tdm-tab '+(state.tab===x?'active':'')+'">'+y+'</button>').join('')+'</div><div class="tdm-match-content" role="tabpanel">'+content+'</div></div>';
 }
 async function fetchDeep(id){
  if(!/^(?:sportmonks|football-api(?:-fixture)?)-[1-9]\d{0,13}$/.test(id)||deepCache.has(id)||deepLoading.has(id))return;
