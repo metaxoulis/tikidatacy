@@ -544,23 +544,78 @@ function playerList(team,side,label){const people=team||{starters:[],bench:[]};r
  (people.bench?.length?'<h4>Αναπληρωματικοί</h4>'+people.bench.map(p=>'<div class="tdm-player"><span class="tdm-shirt">'+E(p.number??'·')+'</span><b>'+E(p.name)+'</b></div>').join(''):'')+'</section>'}
 
 const shortSurname=n=>String(n||'').trim().split(/\s+/).filter(Boolean).slice(-1)[0]||'—';
+// Club colours as SVG shirts: plain, stripes, hoops, halves or a centre band. Unknown clubs keep the neutral disc.
+const kitHex=v=>typeof v==='string'&&/^#[a-f0-9]{6}$/i.test(v)?v:null;
+const kitLight=hex=>{const [r,g,b]=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255);return .2126*r+.7152*g+.0722*b>.6};
+function teamKit(k){const p=kitHex(k?.primary);return p&&['plain','stripes','hoops','halves','band'].includes(k.pattern)?{primary:p,secondary:kitHex(k.secondary)||p,pattern:k.pattern}:null}
+function kitDefs(kit,id){
+ const a=kit.primary,b=kit.secondary,stop=(o,c)=>'<stop offset="'+o+'" stop-color="'+c+'"/>';
+ const body=kit.pattern==='stripes'?'<pattern id="'+id+'" width="8" height="40" patternUnits="userSpaceOnUse"><rect width="4" height="40" fill="'+a+'"/><rect x="4" width="4" height="40" fill="'+b+'"/></pattern>'
+  :kit.pattern==='hoops'?'<pattern id="'+id+'" width="40" height="8" patternUnits="userSpaceOnUse"><rect width="40" height="4" fill="'+a+'"/><rect y="4" width="40" height="4" fill="'+b+'"/></pattern>'
+  :kit.pattern==='halves'?'<linearGradient id="'+id+'">'+stop(.5,a)+stop(.5,b)+'</linearGradient>'
+  :kit.pattern==='band'?'<linearGradient id="'+id+'">'+stop(.38,b)+stop(.38,a)+stop(.62,a)+stop(.62,b)+'</linearGradient>':'';
+ return body?'<svg class="tdm-kit-defs" width="0" height="0" aria-hidden="true" focusable="false"><defs>'+body+'</defs></svg>':'';
+}
+const KIT_SHIRT='M13 3 7 5.5 1.5 12l5 5.5L10 15v22h20V15l3.5 2.5 5-5.5L33 5.5 27 3c-1.5 3-4 4.5-7 4.5S14.5 6 13 3z';
+function kitShirt(kit,id,number,keeper){
+ // Keepers wear a dark shirt trimmed in the club colour, as on the existing keeper disc.
+ const fill=keeper?'#14181f':kit.pattern==='plain'?kit.primary:'url(#'+id+')',light=!keeper&&kit.pattern==='plain'&&kitLight(kit.primary);
+ return '<svg viewBox="0 0 40 40" aria-hidden="true" focusable="false"><path d="'+KIT_SHIRT+'" fill="'+fill+'" stroke="'+(keeper?kit.primary:'rgba(0,0,0,.5)')+'" stroke-width="'+(keeper?2:1.2)+'" stroke-linejoin="round"/>'+
+  '<text x="20" y="27" text-anchor="middle" fill="'+(light?'#0b0d12':'#fff')+'" stroke="'+(light?'rgba(255,255,255,.85)':'rgba(0,0,0,.75)')+'" stroke-width="2.6" paint-order="stroke">'+E(number??'')+'</text></svg>';
+}
+// Name plates use the surname, with the first initial when two starters share it (N. Williams, I. Williams).
+function plateNames(players){
+ const count=new Map();for(const p of players)count.set(shortSurname(p.name),(count.get(shortSurname(p.name))||0)+1);
+ return p=>{const s=shortSurname(p.name),first=String(p.name||'').trim().split(/\s+/)[0]||'';return count.get(s)>1&&first&&first!==s?first[0]+'. '+s:s};
+}
+function pitchToken(kit,id,colour,plate=p=>shortSurname(p.name)){
+ return (p,keeper)=>'<div class="tdm-pitch-player" title="'+E(p.name)+'">'+(kit?'<span class="tdm-jersey tdm-kit">'+kitShirt(kit,id,p.number,keeper)+'</span>':'<span class="tdm-jersey" style="--kit:'+colour+'"><b>'+E(p.number??'·')+'</b></span>')+
+  '<strong>'+E(plate(p))+'</strong>'+(typeof p.xg==='number'&&Number.isFinite(p.xg)?'<small class="tdm-pitch-xg">xG '+E(p.xg.toFixed(2))+'</small>':'')+'</div>';
+}
+// rows run from defence to attack; the half-pitch draws attack at the top and the keeper on the goal line.
+function pitchField(name,shape,rows,keeper,token){
+ const parts=[...rows].reverse();parts.push([keeper]);
+ return '<div class="tdm-pitch" role="group" aria-label="Σχηματισμός '+E(name)+' '+E(shape)+'"><div class="tdm-pitch-mid"></div><div class="tdm-pitch-circle"></div><div class="tdm-pitch-area top"></div><div class="tdm-pitch-area bottom"></div><div class="tdm-pitch-players">'+
+  parts.map((row,i)=>'<div class="tdm-pitch-row'+(i===parts.length-1?' gk-row':'')+'">'+row.map(p=>token(p,i===parts.length-1)).join('')+'</div>').join('')+'</div></div>';
+}
+// Football-API lineups only carry historical positions: draw them when all eleven have one and exactly one is a keeper.
+// The usual formation is used when the players' lines fit it, otherwise the shape their positions make; within a line
+// players run from the team's left flank to its right.
+const PITCH_LINES=['Αμυντικός','Αμυντικός μέσος','Μέσος','Μεσοεπιθετικός','Επιθετικός'];
+function faPitchLayout(starters,formation){
+ const keepers=(starters||[]).filter(p=>p.position==='Τερματοφύλακας');
+ if(starters?.length!==11||keepers.length!==1)return null;
+ const outfield=starters.filter(p=>p!==keepers[0]);
+ if(outfield.some(p=>!PITCH_LINES.includes(p.position)))return null;
+ outfield.sort((a,b)=>PITCH_LINES.indexOf(a.position)-PITCH_LINES.indexOf(b.position));
+ const line=p=>p.position==='Αμυντικός'?'D':p.position==='Επιθετικός'?'F':'M',count=k=>outfield.filter(p=>line(p)===k).length;
+ const usual=/^([1-5]-){1,4}[1-5]$/.test(formation||'')?formation.split('-').map(Number):null;
+ let rows;
+ if(usual&&usual.reduce((a,b)=>a+b,0)===10&&count('D')===usual[0]&&count('F')===usual.at(-1)){let at=0;rows=usual.map(n=>outfield.slice(at,at+=n))}
+ else{rows=PITCH_LINES.map(r=>outfield.filter(p=>p.position===r)).filter(r=>r.length);if(rows.length<2||rows.length>5||rows.some(r=>r.length>5))return null}
+ const flank=p=>typeof p.lateral==='number'?p.lateral:.5;
+ return {shape:rows.map(r=>r.length).join('-'),keeper:keepers[0],rows:rows.map(r=>[...r].sort((a,b)=>flank(a)-flank(b)))};
+}
 function lineupPitch(m,team,side,formation){
+ const name=side==='home'?m.home:m.away,kit=teamKit(team?.kit),kitId='tdk-'+side;
  if(faMatch(m)){
-  const predicted=team?.source==='recent_historical_projection',announced=!!team?.starters?.length&&!predicted,name=side==='home'?m.home:m.away;
+  const predicted=team?.source==='recent_historical_projection',announced=!!team?.starters?.length&&!predicted;
   // Same card as Sportmonks lineups; positions are labelled historical in the note, tag and footer.
   const rows=ps=>ps.map(p=>'<div class="tdm-player"><span class="tdm-shirt">'+E(p.number??'·')+'</span><b>'+E(p.name)+'</b><small>'+E(p.position||'Θέση μη διαθέσιμη')+'</small></div>').join('');
   const note=predicted?'Πιθανή ενδεκάδα Tiki-Data από τις προηγούμενες αγωνιστικές. Δεν είναι επιβεβαιωμένη.':announced?'Παίκτες όπως ανακοινώθηκαν στον πάροχο. Οι θέσεις προκύπτουν από πρόσφατες παλαιότερες συμμετοχές, όχι από επίσημη σημερινή διάταξη.':'Η ενδεκάδα δεν έχει ανακοινωθεί και δεν υπάρχουν αρκετοί πρόσφατοι αγώνες για αξιόπιστη εκτίμηση.';
-  return '<section class="tdm-panel tdm-pitch-card"><div class="tdm-pitch-title">'+badge(name,side==='home'?logoH(m):logoA(m))+'<div><h3>'+E(name)+'</h3>'+(formation?'<span class="tdm-formation-chip">'+E(formation)+' · εκτίμηση</span>':'')+'</div></div>'+
+  const layout=faPitchLayout(team?.starters,formation),shape=layout?.shape||formation;
+  const kitNote=kit?'Χρώματα συλλόγου'+(team.kit.source==='club_colours_alternate'?', στο δεύτερο χρώμα για να ξεχωρίζουν οι ομάδες':'')+' — όχι απαραίτητα η φανέλα του αγώνα.':'Ουδέτερη εμφάνιση — δεν υπάρχουν χρώματα για αυτόν τον σύλλογο.';
+  return '<section class="tdm-panel tdm-pitch-card"><div class="tdm-pitch-title">'+badge(name,side==='home'?logoH(m):logoA(m))+'<div><h3>'+E(name)+'</h3>'+(shape?'<span class="tdm-formation-chip">'+E(shape)+' · εκτίμηση</span>':'')+'</div></div>'+
    '<p class="tdm-note">'+note+'</p>'+
-   (team?.starters?.length?'<h4>'+(predicted?'Πιθανή αρχική ενδεκάδα':'Διαθέσιμη αρχική ενδεκάδα')+'</h4>'+rows(team.starters):'')+
+   (layout?(kit?kitDefs(kit,kitId):'')+pitchField(name,layout.shape,layout.rows,layout.keeper,pitchToken(kit,kitId,'#365a6b',plateNames(team.starters)))+'<p class="tdm-kit-note">'+kitNote+'</p>'+
+    '<details class="tdm-bench"><summary>'+(predicted?'Πιθανή ενδεκάδα':'Ενδεκάδα')+' με θέσεις</summary>'+rows(team.starters)+'</details>'
+   :team?.starters?.length?'<h4>'+(predicted?'Πιθανή αρχική ενδεκάδα':'Διαθέσιμη αρχική ενδεκάδα')+'</h4>'+rows(team.starters):'')+
    (team?.bench?.length?'<details class="tdm-bench"><summary>Αναπληρωματικοί ('+team.bench.length+')</summary>'+rows(team.bench)+'</details>':'')+'</section>';
  }
  const people=team||{starters:[],bench:[]},players=Array.isArray(people.starters)?people.starters:[],bench=Array.isArray(people.bench)?people.bench:[];
  const lines=String(formation||'').split('-').map(Number);
  const validFormation=lines.length>=2&&lines.length<=5&&lines.every(n=>Number.isInteger(n)&&n>0&&n<=5)&&lines.reduce((a,b)=>a+b,0)===10;
  const raw=m?.team_colors?.[side]?.primary||m?.[side+'_color']||'',officialColor=typeof raw==='string'&&/^#[a-f0-9]{6}$/i.test(raw)?raw:null;
- const kit=officialColor||'#365a6b',name=side==='home'?m.home:m.away;
- const player=p=>'<div class="tdm-pitch-player" title="'+E(p.name)+'"><span class="tdm-jersey" style="--kit:'+kit+'"><b>'+E(p.number??'·')+'</b></span><strong>'+E(shortSurname(p.name))+'</strong>'+(typeof p.xg==='number'&&Number.isFinite(p.xg)?'<small class="tdm-pitch-xg">xG '+E(p.xg.toFixed(2))+'</small>':'')+'</div>';
  let field='';
  if(players.length===11&&validFormation){
   const sorted=[...players].sort((a,b)=>(a.order??50)-(b.order??50));
@@ -569,14 +624,13 @@ function lineupPitch(m,team,side,formation){
   const outfield=sorted.filter(p=>p!==keeper);
   let offset=0;const parts=[];
   for(const n of lines){parts.push(outfield.slice(offset,offset+n));offset+=n}
-  parts.reverse().push([keeper]);
-  field='<div class="tdm-pitch" role="group" aria-label="Σχηματισμός '+E(name)+' '+E(formation)+'"><div class="tdm-pitch-mid"></div><div class="tdm-pitch-circle"></div><div class="tdm-pitch-area top"></div><div class="tdm-pitch-area bottom"></div><div class="tdm-pitch-players">'+parts.map((row,i)=>'<div class="tdm-pitch-row'+(i===parts.length-1?' gk-row':'')+'">'+row.map(player).join('')+'</div>').join('')+'</div></div>';
+  field=(kit?kitDefs(kit,kitId):'')+pitchField(name,formation,parts,keeper,pitchToken(kit,kitId,officialColor||'#365a6b',plateNames(players)));
  }else field='<div class="tdm-pitch-pending">Δεν διατίθενται και οι 11 παίκτες με έγκυρο σχηματισμό, ώστε να εμφανιστούν αξιόπιστα στο γήπεδο.</div>';
  const rows=p=>'<div class="tdm-player"><span class="tdm-shirt">'+E(p.number??'·')+'</span><b>'+E(p.name)+'</b></div>';
  return '<section class="tdm-panel tdm-pitch-card"><div class="tdm-pitch-title">'+badge(name,side==='home'?logoH(m):logoA(m))+'<div><h3>'+E(name)+'</h3><span class="tdm-formation-chip">'+E(formation||'Σχηματισμός μη διαθέσιμος')+'</span></div></div>'+field+
  (players.length&&!(players.length===11&&validFormation)?'<div class="tdm-lineup-rows">'+players.map(rows).join('')+'</div>':'')+
  (bench.length?'<details class="tdm-bench"><summary>Αναπληρωματικοί ('+bench.length+')</summary><div class="tdm-lineup-rows">'+bench.map(rows).join('')+'</div></details>':'')+
- (!officialColor?'<p class="tdm-kit-note">Ουδέτερη εμφάνιση — δεν υπάρχει επαληθευμένο χρώμα φανέλας.</p>':'')+'</section>';
+ (!officialColor&&!kit?'<p class="tdm-kit-note">Ουδέτερη εμφάνιση — δεν υπάρχει επαληθευμένο χρώμα φανέλας.</p>':'')+'</section>';
 }
 function uefaFormBlock(m){
  if(!['ucl','uel','uecl'].includes(m.league_key))return '';

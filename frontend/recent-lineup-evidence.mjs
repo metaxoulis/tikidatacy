@@ -132,15 +132,24 @@ export function faAnalyzeLineupEvidence(fixtures,players,teamId,kickoff){
  const people=new Map(),forms=new Map();
  const person=(p,f)=>{
   const norm=faLineupName(p.player_name),key=p.player_id?'id:'+p.player_id:'name:'+norm;
-  if(!people.has(key))people.set(key,{norm,tokens:norm.split(' '),name:p.player_name,number:null,seen:'',score:0,starts:0,roles:new Map(),benchRoles:new Map()});
+  if(!people.has(key))people.set(key,{norm,tokens:norm.split(' '),name:p.player_name,number:null,seen:'',score:0,starts:0,roles:new Map(),benchRoles:new Map(),side:0,sideWeight:0});
   const x=people.get(key),at=String(f.starting_at);
   if(at>x.seen){x.seen=at;if(Number.isInteger(p.jersey_number))x.number=p.jersey_number}
   return x;
  };
  const add=(m,role,w)=>{if(role)m.set(role,(m.get(role)||0)+w)};
  archived.forEach((f,index)=>{
-  const formation=f.home_id===teamId?f.home_formation:f.away_formation,weight=Math.pow(.78,index),counted=new Set();
-  for(const p of starters.get(f.id)){const x=person(p,f);if(!counted.has(x)){counted.add(x);add(x.roles,faHistoricalRole(p.formation_field,formation,p.position_id),weight)}}
+  const home=f.home_id===teamId,formation=home?f.home_formation:f.away_formation,weight=Math.pow(.78,index),counted=new Set();
+  // Sportmonks numbers each row's columns from the opposite touchline for the home side (the home right-back is
+  // column 1, the away left-back is column 1), so 0 = the team's left flank and 1 = its right.
+  const cell=p=>/^([1-9]):(\d{1,2})$/.exec(String(p.formation_field||'')),size=new Map();
+  for(const p of starters.get(f.id)){const c=cell(p);if(c)size.set(c[1],(size.get(c[1])||0)+1)}
+  for(const p of starters.get(f.id)){
+   const x=person(p,f);if(counted.has(x))continue;counted.add(x);
+   add(x.roles,faHistoricalRole(p.formation_field,formation,p.position_id),weight);
+   const c=cell(p),n=c?size.get(c[1]):0,col=c?Number(c[2]):0;
+   if(c&&c[1]!=='1'&&col>=1&&col<=n){x.side+=weight*(n<2?.5:home?(n-col)/(n-1):(col-1)/(n-1));x.sideWeight+=weight}
+  }
  });
  games.filter(f=>f.source!=='football-api').forEach((f,index)=>{for(const p of bench.get(f.id))add(person(p,f).benchRoles,faHistoricalRole(null,null,p.position_id),Math.pow(.78,index))});
  // A Football-API player ("M. Sannadi") joins the archived player he matches ("Maroan Sannadi") so he keeps his
@@ -159,7 +168,8 @@ export function faAnalyzeLineupEvidence(fixtures,players,teamId,kickoff){
   for(const p of starters.get(f.id)){const x=resolve(p,f);if(!counted.has(x)){counted.add(x);x.score+=weight;x.starts++}}
  });
  const top=m=>[...m].sort((a,b)=>b[1]-a[1]||faLineupRoleRank(a[0])-faLineupRoleRank(b[0]))[0]?.[0]||null;
- const list=[...new Set(people.values())].map(x=>{const position=top(x.roles)||top(x.benchRoles);return {...x,position,is_goalkeeper:position==='Τερματοφύλακας'}})
+ const list=[...new Set(people.values())].map(x=>{const position=top(x.roles)||top(x.benchRoles);
+  return {...x,position,is_goalkeeper:position==='Τερματοφύλακας',lateral:x.sideWeight?Math.round(100*x.side/x.sideWeight)/100:null}})
   .sort((a,b)=>b.score-a.score||b.starts-a.starts||a.name.localeCompare(b.name));
  const regulars=list.filter(x=>x.starts>0);
  const common=[...forms].sort((a,b)=>b[1]-a[1]);
@@ -179,12 +189,12 @@ export function faAnalyzeLineupEvidence(fixtures,players,teamId,kickoff){
   for(const x of outfield)if(chosen.size<10)chosen.add(x);
   if(chosen.size===10)projected=[keeper,...chosen].sort((a,b)=>faLineupRoleRank(a.position)-faLineupRoleRank(b.position)||b.score-a.score)
    .map(x=>({name:x.name,number:x.number,position:x.position,position_source:x.position?'recent_historical_lineups':null,
-    is_goalkeeper:x.is_goalkeeper,id:null,order:null,role:x.position,source:'recent_historical_projection'}));
+    is_goalkeeper:x.is_goalkeeper,lateral:x.lateral,id:null,order:null,role:x.position,source:'recent_historical_projection'}));
  }
  // Team + name (surname and initial at least) + one Sportmonks player ID, never cross-provider numeric player IDs.
  function positionFor(currentName,number){
   const x=faLineupNameMatch(currentName,number,list);
-  return x?.position?{position:x.position,position_source:'recent_historical_lineups',is_goalkeeper:x.is_goalkeeper}:null;
+  return x?.position?{position:x.position,position_source:'recent_historical_lineups',is_goalkeeper:x.is_goalkeeper,lateral:x.lateral}:null;
  }
  return {matches_observed:recent.length,formation,projected,positionFor,oldest:recent.at(-1).starting_at,
   newest:recent[0].starting_at,verified:false,source:'archived_previous_lineups',

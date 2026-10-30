@@ -1684,6 +1684,13 @@ html #td-mobile-root .tdm-pitch-card .tdm-jersey b{
   color:var(--shirt-ink)!important;text-shadow:none!important;
 }
 html #td-mobile-root .tdm-pitch-card .tdm-jersey:not([style*="365a6b"]) b{text-shadow:0 0 2px rgba(0,0,0,.7)!important}
+/* Club-colour shirts: an SVG shirt (plain, stripes, hoops, halves or band) replaces the disc when the club's colours are known */
+html #td-mobile-root .tdm-pitch-card .tdm-kit-defs{position:absolute;width:0;height:0;overflow:hidden}
+html #td-mobile-root .tdm-pitch-card .tdm-jersey.tdm-kit,html #td-mobile-root .tdm-pitch-card .gk-row .tdm-jersey.tdm-kit{
+  background:none!important;box-shadow:none!important;border-radius:0!important;filter:drop-shadow(0 4px 6px rgba(0,0,0,.45));
+}
+html #td-mobile-root .tdm-pitch-card .tdm-jersey.tdm-kit svg{display:block;width:100%;height:100%;overflow:visible}
+html #td-mobile-root .tdm-pitch-card .tdm-jersey.tdm-kit text{font-family:var(--mx-display);font-weight:800;font-size:13px;letter-spacing:0}
 html #td-mobile-root .tdm-pitch-card .tdm-pitch-player strong{
   max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:2px 6px;border-radius:3px;background:rgba(4,10,7,.68);
   font-family:var(--mx-cond)!important;font-size:11px!important;font-weight:600!important;line-height:1.3!important;letter-spacing:.05em!important;color:#fff!important;text-shadow:none!important;

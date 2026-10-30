@@ -8,6 +8,8 @@ on:
       - 'frontend-v13/mobile-ui.js'
       - 'tests/recent-lineup-evidence.test.mjs'
       - 'tests/football-lineups.test.mjs'
+      - 'frontend/team-kits.mjs'
+      - 'tests/team-kits.test.mjs'
       - 'migrations/20261030_*.sql'
       - 'frontend/worker.js'
       - '.github/workflows/recent-lineup-evidence.yml'
@@ -29,4 +31,4 @@ jobs:
           node --check frontend/football-primary.mjs
           node --check frontend-v13/mobile-ui.js
       - name: Run lineup and provider regression
-        run: node --test tests/recent-lineup-evidence.test.mjs tests/football-lineups.test.mjs tests/football-primary.test.mjs tests/worker-bundle-parity.test.mjs
+        run: node --test tests/recent-lineup-evidence.test.mjs tests/football-lineups.test.mjs tests/team-kits.test.mjs tests/football-primary.test.mjs tests/worker-bundle-parity.test.mjs

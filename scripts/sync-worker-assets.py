@@ -30,7 +30,7 @@ module = (ROOT / 'frontend/football-trial.mjs').read_text().replace('export ', '
 text, count = re.subn(r'/\* football-trial:start \*/.*?/\* football-trial:end \*/', lambda _: '/* football-trial:start */\n' + module + '\n/* football-trial:end */', text, flags=re.S)
 if count != 1:
     raise RuntimeError('Missing football-trial module markers')
-module = (ROOT / 'frontend/recent-lineup-evidence.mjs').read_text() + '\n' + (ROOT / 'frontend/football-primary.mjs').read_text()
+module = '\n'.join((ROOT / ('frontend/' + name)).read_text() for name in ('team-kits.mjs', 'recent-lineup-evidence.mjs', 'football-primary.mjs'))
 module = re.sub(r'^import .*?;\n', '', module, flags=re.M).replace('export ', '')
 text, count = re.subn(r'/\* football-primary:start \*/.*?/\* football-primary:end \*/', lambda _: '/* football-primary:start */\n' + module + '\n/* football-primary:end */', text, flags=re.S)
 if count != 1:
