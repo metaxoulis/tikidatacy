@@ -93,6 +93,16 @@ class ArchiveStatsShadowTests(unittest.TestCase):
         self.assertEqual(_recent_history(stale, kickoff), [])
         self.assertTrue(__import__("math").isnan(_averages(stale, ["stat:shots-total"], kickoff)[2]))
 
+    def test_training_samples_are_from_only_current_and_previous_season(self):
+        with synthetic_archive() as db:
+            db.execute("INSERT INTO sm_fixtures VALUES (?,?,?,?,?,?,?,?)",
+                       (555, 1, "2024-09-20 19:00:00", 10, 20, 1, 0, "FT"))
+            db.executemany("INSERT INTO sm_statistics VALUES (?,?,?,?)",
+                           [(555, 10, "shots-total", 9999), (555, 20, "shots-total", 9999)])
+            archive = build_features(db, "2026-10-30", min_observed=1)
+        self.assertNotIn(555, {row["fixture_id"] for row in archive["rows"]})
+        self.assertGreater(archive["exclusions"]["older_than_previous_season"], 0)
+
     def test_train_validation_test_dates_do_not_overlap(self):
         rows = [{"date": (datetime(2026,1,1)+timedelta(days=i)).isoformat()}
                 for i in range(200) for _ in range(10)]
