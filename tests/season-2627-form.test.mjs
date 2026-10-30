@@ -26,8 +26,9 @@ test('read-only venue form is associated by stable Sportmonks team IDs',()=>{
 });
 test('2026–27 results show in match analysis but do not override review gate',()=>{
  assert.match(ui,/function currentSeasonFormBlock\(m,d\)/);
- assert.match(ui,/currentSeasonFormBlock\(m,d\)\+historicalSummaryBlock/);
- assert.match(ui,/currentSeasonFormBlock\(m,d\)\+allStatisticsBlock/);
+ // Form & H2H tab carries the full season block; the overview's form card carries each side's season line.
+ assert.match(ui,/if\(state\.tab==='history'\)content=deepNote\(d\)\+currentSeasonFormBlock\(m,d\)/);
+ assert.match(ui,/s=d\?\.current_season_form\?\.\[side\]/);
  assert.match(ui,/const pr=m=>\{if\(live\(m\)\)return \[m\.live_outlook,m\.live_prediction\]\.find\(valid123\)/);
  const card=ui.slice(ui.indexOf('const card=m=>'),ui.indexOf('const empty=',ui.indexOf('const card=m=>')));
  assert.doesNotMatch(card,/currentSeasonFormBlock/);

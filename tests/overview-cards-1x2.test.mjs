@@ -15,8 +15,8 @@ test('match overview always uses compact 1-X-2 columns even when forecast is wit
 
 test('comparative team and match live statistics are reserved for match details', () => {
   assert.doesNotMatch(card, /liveStatsBlock\(m,true\)|liveMethodNote\(m\)/);
-  assert.match(ui, /if\(state\.tab==='summary'\)content=currentSeasonFormBlock\(m,d\)\+historicalSummaryBlock\(m,d\)\+allStatisticsBlock\(m,d\)\+liveStatsBlock\(m\)/);
-  assert.match(ui, /content=\(types\.size\?table:''\)\+currentSeasonFormBlock\(m,d\)\+allStatisticsBlock\(m,d\)\+/);
+  assert.match(ui, /if\(state\.tab==='summary'\)content=liveStatsBlock\(m\)\+liveMethodNote\(m\)\+prematchReferenceBlock\(m\)\+forecastPanel\(m,p,g,is\)/);
+  assert.match(ui, /content=deepNote\(d\)\+table\+xgPanel\(m,d,is\)\+allStatisticsBlock\(m,d\)\+liveStatsBlock\(m\)/);
 });
 
 test('live Football-API matches keep their provider features after the live feed merge', () => {
