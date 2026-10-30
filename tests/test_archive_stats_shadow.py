@@ -67,7 +67,10 @@ class ArchiveStatsShadowTests(unittest.TestCase):
             archive = build_features(db, "2026-03-15", min_observed=1)
         first = next(r for r in archive["rows"] if r["fixture_id"] == 99)
         second = next(r for r in archive["rows"] if r["fixture_id"] == 100)
-        self.assertEqual(first["x"], second["x"])
+        self.assertEqual(len(first["x"]), len(second["x"]))
+        for a, b in zip(first["x"], second["x"]):
+            # Same-day time weighting can differ at floating-point epsilon only.
+            self.assertAlmostEqual(a, b, places=10)
 
     def test_two_season_limit_and_recency_weighting(self):
         kickoff = datetime(2026, 10, 20)
