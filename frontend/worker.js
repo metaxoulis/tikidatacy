@@ -3869,7 +3869,7 @@ function faAnalyzeLineupEvidence(fixtures,players,teamId,kickoff){
  if(projectionReady){
   const keeper=people.find(p=>p.is_goalkeeper);
   if(keeper){
-   const chosen=[keeper,...people.filter(p=>p!==keeper).slice(0,10)];
+   const chosen=[keeper,...people.filter(p=>p!==keeper&&!p.is_goalkeeper).slice(0,10)];
    if(chosen.length===11)projected=chosen.map(({historical_player_id,score,starts,last_date,...p})=>({...p,id:null,order:null,role:p.position,source:'recent_historical_projection'}));
   }
  }
