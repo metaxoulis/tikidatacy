@@ -293,6 +293,7 @@ function auditOutcome(m){
 }
 const auditLeagueBadge=k=>{const url=auditArchive.matches.find(m=>m.league_key===k)?.league_logo;return url?'<img class="tdm-audit-league-logo" src="'+E(url)+'" loading="lazy" alt="">':''};
 function auditStatisticsPilot(){
+ const t=(el,en)=>window.__tdLocale==='el'?el:en;
  return '<section class="tdm-panel" aria-labelledby="pilot-stats-title"><span class="tdm-audit-date">'+t('Δοκιμαστική προβολή · 3 αγώνες','Pilot · 3 matches')+'</span><h2 id="pilot-stats-title">'+t('Στατιστικά μετά τον αγώνα','Post-match statistics')+'</h2><p>'+t('Δες τα διαθέσιμα στατιστικά σε νέα καρτέλα.','View available statistics in a new tab.')+'</p><div class="tdm-audit-grid">'+[
  [743353,'Everton','Newcastle United','EFL Cup'],[743354,'Fiorentina','Atalanta','Serie A'],[743356,'AE Prat','Athletic Bilbao','Copa del Rey']
  ].map(([id,home,away,league])=>'<article class="tdm-audit-card"><small>'+E(league)+' · 29/10/2026</small><h3>'+E(home)+' – '+E(away)+'</h3><a class="tdm-link" href="/transparency/statistics/'+id+'" target="_blank" rel="noopener noreferrer">'+t('Στατιστικά αγώνα ↗','Match statistics ↗')+'<span class="sr-only"> '+t('(νέα καρτέλα)','(new tab)')+'</span></a></article>').join('')+'</div></section>';

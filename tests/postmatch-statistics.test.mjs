@@ -1,4 +1,5 @@
 import test from 'node:test';
+import vm from 'node:vm';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {readFileSync} from 'node:fs';
@@ -39,4 +40,14 @@ test('public pages whitelist the three matches and render statistics without for
  const html=await postmatchPage(p.id).text();assert.match(html,/Στατιστικά αγώνα/);assert.doesNotMatch(html,/prediction|probabilit|Πρόβλεψη|1Χ2/i);
  const ui=readFileSync(new URL('../frontend-v13/mobile-ui.js',import.meta.url),'utf8');
  assert.match(ui,/target="_blank" rel="noopener noreferrer"/);
+});
+
+test('pilot section renders in both languages and has exactly three new-tab links',()=>{
+ const ui=readFileSync(new URL('../frontend-v13/mobile-ui.js',import.meta.url),'utf8');
+ const fn=ui.slice(ui.indexOf('function auditStatisticsPilot(){'),ui.indexOf('function transparency(){'));
+ for(const locale of ['el','en']){
+  const html=vm.runInNewContext(fn+';auditStatisticsPilot()',{window:{__tdLocale:locale},E:String});
+  assert.equal((html.match(/target="_blank"/g)||[]).length,3);
+  assert.match(html,locale==='el'?/Στατιστικά μετά τον αγώνα/:/Post-match statistics/);
+ }
 });
