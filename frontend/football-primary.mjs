@@ -1,4 +1,4 @@
-import {faTrialMatch,faTrialCached,faTrialRoute} from './football-trial.mjs';
+import {faTrialMatch,faTrialCached,faTrialRoute,faTrialLineups} from './football-trial.mjs';
 import {faRecentLineupEvidence,faEnrichProviderLineups} from './recent-lineup-evidence.mjs';
 /* Main provider adapter. Football-API and legacy Sportmonks IDs never share a namespace. */
 /* Covered: top-5 leagues, Greek and Cypriot top flights, UEFA, and the domestic cups of those seven countries.
@@ -257,11 +257,11 @@ export async function faPrimaryDetail(req,env,publicId){
   const players=side=>(data?.lineups?.[side]?.players||[]).map(p=>({id:p.id,name:p.name,number:Number(p.number)||null,position:null,role:null,is_goalkeeper:false,order:null,substitute:p.substitute}));
   const side=key=>{const p=players(key);return {starters:p.filter(p=>!p.substitute),bench:p.filter(p=>p.substitute)}};
   const announced={home:side('home'),away:side('away')};
-  // D1-only, read-only evidence: uses previously completed Sportmonks lineups.
-  // Numeric player identities never cross providers. This archive binding may be
-  // absent in preview; then the provider lineups continue working normally.
-  const archived=env.SPORTMONKS_ARCHIVE_DB&&legacy?await Promise.all(['home','away'].map(key=>
-   faRecentLineupEvidence(env.SPORTMONKS_ARCHIVE_DB,legacy[key+'_id'],game.date).catch(()=>null))):[null,null];
+  // D1-only, read-only evidence: archived Sportmonks lineups plus Football-API lineups stored since.
+  // Numeric player identities never cross providers. Either source may be absent (the archive binding is
+  // missing in preview); then the provider lineups continue working normally.
+  const archived=await Promise.all(['home','away'].map(key=>faRecentLineupEvidence(env.SPORTMONKS_ARCHIVE_DB,legacy?.[key+'_id'],game.date,
+   {db:env.TIKI_DB,teamId:game[key+'_id']}).catch(()=>null)));
   const evidence={home:archived[0],away:archived[1]};
   const lineups=faEnrichProviderLineups(announced,evidence);
   const projected=['home','away'].some(key=>lineups[key].source==='recent_historical_projection');
@@ -346,4 +346,41 @@ export async function faSyncResults(env,now=Date.now(),fetcher=fetch){
   acols.slice(1).map(c=>c+'=excluded.'+c).join(',');
  for(let i=0;i<audit.length;i+=50)await env.TIKI_DB.batch(audit.slice(i,i+50).map(r=>env.TIKI_DB.prepare(asql).bind(...acols.map(c=>r[c]))));
  return {status:partial?'partial':'ok',from,to,pages,stored:rows.length,audited:audit.length,skipped,unmapped_teams:[...unmapped].slice(0,20)};
+}
+/* Lineups of finished matches already stored as training results, so probable XIs keep using recent games after the
+   Sportmonks archive stopped. Newest first, at most `limit` matches per scheduled run (about 100 provider requests a
+   day of the shared budget) and about 20 seconds. Empty provider lineups are retried up to three times, 12 hours apart. */
+export async function faSyncLineups(env,now=Date.now(),fetcher=fetch,limit=16,clock=Date.now){
+ if(!env?.TIKI_DB||!env?.FOOTBALL_TRIAL_DB)return {status:'unavailable'};
+ const started=clock(),observed=new Date(now).toISOString();
+ const pending=(await env.TIKI_DB.prepare('SELECT r.fa_match_id,r.match_date,r.league_key,r.fa_home_id,r.fa_away_id FROM football_training_results r LEFT JOIN football_lineup_fetches f ON f.fa_match_id=r.fa_match_id WHERE (f.fa_match_id IS NULL OR (f.players=0 AND f.attempts<3 AND f.last_attempt_at<?1)) AND r.match_date>=?3 ORDER BY r.match_date DESC,r.fa_match_id DESC LIMIT ?2')
+  .bind(new Date(now-12*3600000).toISOString(),limit,new Date(now-60*86400000).toISOString().slice(0,10)).all()).results||[];
+ const report={status:'ok',pending:pending.length,stored:0,empty:0,errors:0};
+ const lineup='INSERT INTO football_lineups(fa_match_id,fa_team_id,match_date,league_key,starters_json,bench_json,observed_at) VALUES(?1,?2,?3,?4,?5,?6,?7) ON CONFLICT(fa_match_id,fa_team_id) DO UPDATE SET match_date=excluded.match_date,league_key=excluded.league_key,starters_json=excluded.starters_json,bench_json=excluded.bench_json,observed_at=excluded.observed_at';
+ const attempt='INSERT INTO football_lineup_fetches(fa_match_id,players,attempts,last_attempt_at,last_error) VALUES(?1,?2,1,?3,?4) ON CONFLICT(fa_match_id) DO UPDATE SET players=excluded.players,attempts=football_lineup_fetches.attempts+1,last_attempt_at=excluded.last_attempt_at,last_error=excluded.last_error';
+ for(let i=0;i<pending.length&&report.status==='ok';i+=4){
+  if(clock()-started>20000){report.status='partial';break}
+  // A cached lineup (from a match-page visit or an earlier try) is reused only if fetched on or after match day and
+  // within 12 hours, so a retry of an empty answer really asks the provider again.
+  const done=await Promise.all(pending.slice(i,i+4).map(async m=>({m,r:await faTrialCached(env,'lineups-'+m.fa_match_id,'/matches/lineups.json',
+   {match_id:m.fa_match_id},Math.max(60000,Math.min(12*3600000,now-Date.parse(m.match_date+'T00:00:00Z'))),faTrialLineups,fetcher,now)})));
+  const writes=[];
+  for(const {m,r} of done){
+   // Out of budget: leave the match unrecorded so a later run tries it again.
+   if(r.error==='trial_daily_limit_reached'){report.status='partial';continue}
+   let players=0;
+   for(const [side,team] of [['home',m.fa_home_id],['away',m.fa_away_id]]){
+    const list=(r.data?.[side]?.players||[]).filter(p=>p?.name).map(p=>({id:p.id||null,name:String(p.name).slice(0,80),
+     number:/^\d{1,2}$/.test(String(p.number))?Number(p.number):null,bench:!!p.substitute}));
+    if(!list.length)continue;
+    players+=list.length;
+    const pick=bench=>JSON.stringify(list.filter(p=>p.bench===bench).map(({bench,...p})=>p));
+    writes.push(env.TIKI_DB.prepare(lineup).bind(m.fa_match_id,team,m.match_date,m.league_key,pick(false),pick(true),observed));
+   }
+   if(players)report.stored++;else if(r.error)report.errors++;else report.empty++;
+   writes.push(env.TIKI_DB.prepare(attempt).bind(m.fa_match_id,players,observed,players?null:r.error||null));
+  }
+  if(writes.length)await env.TIKI_DB.batch(writes);
+ }
+ return report;
 }
