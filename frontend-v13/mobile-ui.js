@@ -374,9 +374,16 @@ const liveStatsLabels={on_target:'Σουτ στην εστία',shots:'Σουτ'
 function liveStatsModelNote(m,compact=false){
  if(!live(m)||!valid123(m.live_outlook))return '';
  if(faMatch(m)){
-  const p=m.live_outlook,label=({team_history:'Ιστορικό ομάδων',league_average:'Μέσος όρος λίγκας',global_average:'Γενικός ιστορικός μέσος όρος',generic_assumption:'Γενική υπόθεση γκολ'})[p.prior_basis]||'Ιστορικό';
-  const timing=p.time_basis==='halftime_45'?' · Ημίχρονο: υπολογισμός από 45′':p.time_basis==='one_minute_remaining_assumption'?' · Υπόθεση: απομένει τουλάχιστον 1′':'';
-  return '<div class="tdm-live-model-note"><strong>Live predictor · '+E(label)+'</strong>'+(compact?'':'<p>Σκορ '+E(p.observed_score?.join('–'))+' · '+E(label)+E(timing)+'. Πειραματική εκτίμηση χωρίς live στατιστικά κατοχής, σουτ ή επιθέσεων.</p>')+'</div>';
+  const p=m.live_outlook,label=({team_history:L('Ιστορικό ομάδων','Team history'),league_average:L('Μέσος όρος λίγκας','League average'),global_average:L('Γενικός ιστορικός μέσος όρος','Overall historical average'),generic_assumption:L('Γενική υπόθεση γκολ','Generic goal assumption')})[p.prior_basis]||L('Ιστορικό','History');
+  const timing=p.time_basis==='halftime_45'?L(' · Ημίχρονο: υπολογισμός από 45′',' · Half-time: calculated from 45′'):p.time_basis==='one_minute_remaining_assumption'?L(' · Υπόθεση: απομένει τουλάχιστον 1′',' · Assumes at least 1′ remaining'):'';
+  const ev=p.live_stats_applied?p.live_evidence:null,red=ev?.metrics?.includes('red_cards');
+  const names={shots_on_target:L('σουτ στην εστία','shots on target'),attempts_on_goal:L('σουτ','shots'),corners:L('κόρνερ','corners'),possesion:L('κατοχή','possession'),red_cards:L('κόκκινες κάρτες','red cards')};
+  // Live statistics move the historical scoring rates; the page says which ones and how.
+  const how=!ev?L('Πειραματική εκτίμηση από ιστορικό, σκορ και λεπτό· live στατιστικά δεν είναι ακόμη διαθέσιμα.','Experimental estimate from history, score and minute; live statistics are not available yet.')
+   :ev.method==='provider_xg_shrinkage'?L('Το ιστορικό αναμειγνύεται με το xG του αγώνα (','History is blended with the match xG (')+xg3(ev.xg.home)+'–'+xg3(ev.xg.away)+L('), που μετράει όλο και περισσότερο όσο περνά ο χρόνος',
+    '), which counts for more as the match goes on')+(red?L(', μαζί με τις κόκκινες κάρτες',', together with red cards'):'')+'. '+L('Πειραματικό.','Experimental.')
+   :L('Το ιστορικό διορθώνεται με ','History is adjusted by ')+ev.metrics.map(k=>names[k]).filter(Boolean).join(', ')+L(' του αγώνα (έως ±30%). Πειραματικό.',' in the match (up to ±30%). Experimental.');
+  return '<div class="tdm-live-model-note'+(ev?' is-active':'')+'"><strong>Live predictor · '+E(label)+(ev?' + live stats':'')+'</strong>'+(compact?'':'<p>'+L('Σκορ ','Score ')+E(p.observed_score?.join('–'))+E(timing)+'. '+E(how)+'</p>')+'</div>';
  }
  const p=m.live_outlook,active=p.live_stats_applied===true,stale=!!(m.live_probability_stale||state.livePending);
  const metrics=(p.live_stats_adjustment?.metrics_used||[]).filter(k=>Object.hasOwn(liveStatsLabels,k)).map(k=>liveStatsLabels[k]);

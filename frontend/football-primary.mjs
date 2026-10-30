@@ -107,7 +107,26 @@ async function faPrimaryScheduled(env){
  }}));
  return {games,partial:failures.length>0};
 }
-export function faLivePredictor(game,model,fitted=null){
+/* In-play evidence from the provider's match statistics. With xG, each team's remaining scoring rate is its
+   historical rate shrunk towards its xG rate in this match; the history counts as two matches of play, so the match
+   weighs 5% after ten minutes and a third at full time, and one early penalty cannot redefine a team. Without xG, shots on target, shots, corners and possession shift only the split between the
+   teams, as the earlier Sportmonks live model did: ramped in over 30 minutes, at most x1.30 either way. A red-card
+   difference shifts the split in both cases. */
+export function faLiveEvidence(stats,minute){
+ const v=new Map();
+ for(const s of Array.isArray(stats)?stats:[])if([s?.home,s?.away].every(n=>Number.isFinite(n)&&n>=0&&n<=200))v.set(s.type,{h:s.home,a:s.away});
+ const played=Math.max(1,Math.min(Number(minute)||0,120)),xg=v.get('expected_goals'),red=v.get('red_cards'),metrics=[];
+ const redShift=red&&red.h!==red.a&&red.h<=4&&red.a<=4?.16*Math.max(-2,Math.min(2,red.a-red.h)):0;
+ if(redShift)metrics.push('red_cards');
+ if(xg&&xg.h<=10&&xg.a<=10)return {method:'provider_xg_shrinkage',xg:{home:xg.h,away:xg.a},minutes_played:played,prior_minutes:180,split:redShift,metrics:['expected_goals',...metrics]};
+ const share=(k,w,smooth)=>{const p=v.get(k);if(!p)return 0;metrics.push(k);return w*(p.h-p.a)/(p.h+p.a+smooth)};
+ let pressure=v.has('shots_on_target')?share('shots_on_target',.5,3)+share('attempts_on_goal',.1,9):share('attempts_on_goal',.34,9);
+ pressure+=share('corners',.05,5);
+ const pos=v.get('possesion');if(pos&&pos.h+pos.a>=90&&pos.h+pos.a<=110){metrics.push('possesion');pressure+=.07*(pos.h-pos.a)/100}
+ pressure=Math.max(-.26,Math.min(.26,pressure*Math.min(1,played/30)+redShift));
+ return Math.abs(pressure)>1e-9?{method:'shot_share_shift',minutes_played:played,split:pressure,metrics}:null;
+}
+export function faLivePredictor(game,model,fitted=null,stats=null){
  if(!faPrimaryLiveStatus.has(game.status)||![game.home_score,game.away_score].every(n=>Number.isInteger(n)&&n>=0&&n<=30)||game.status==='PEN_LIVE')return null;
  const minute=game.status==='HT'?45:game.minute;
  if(!Number.isInteger(minute)||minute<0||minute>130)return null;
@@ -117,7 +136,12 @@ export function faLivePredictor(game,model,fitted=null){
  const prior=valid(league)?league:valid(global)?global:{hmean:1.45,amean:1.15};
  const basis=team?'team_history':valid(league)?'league_average':valid(global)?'global_average':'generic_assumption';
  const duration=game.status==='ET'?120:90,remaining=Math.max(1,duration-minute);
- const mh=(team?fitted.mu_home:prior.hmean)*remaining/90,ma=(team?fitted.mu_away:prior.amean)*remaining/90;
+ const base={home:team?fitted.mu_home:prior.hmean,away:team?fitted.mu_away:prior.amean},evidence=stats?faLiveEvidence(stats,minute):null;
+ let rh=base.home,ra=base.away;
+ if(evidence?.xg){const k=evidence.prior_minutes,t=evidence.minutes_played;rh=(rh*k+90*evidence.xg.home)/(k+t);ra=(ra*k+90*evidence.xg.away)/(k+t)}
+ if(evidence?.split){rh*=Math.exp(evidence.split);ra*=Math.exp(-evidence.split)}
+ rh=Math.min(6,rh);ra=Math.min(6,ra);
+ const mh=rh*remaining/90,ma=ra*remaining/90;
  const pmf=x=>{const a=[Math.exp(-x)];for(let i=1;i<=18;i++)a.push(a[i-1]*x/i);return a};
  const H=pmf(mh),A=pmf(ma);let total=0,one=0,draw=0,two=0,over=0,btts=0,best={p:-1,h:0,a:0};
  for(let i=0;i<H.length;i++)for(let j=0;j<A.length;j++){
@@ -129,19 +153,21 @@ export function faLivePredictor(game,model,fitted=null){
  return {source:'football_api_conditional_poisson',experimental:true,validated:false,prior_basis:basis,
   fixture_id:game.id,minute:game.minute,calculation_minute:minute,phase:game.status,observed_score:[game.home_score,game.away_score],
   time_basis:game.status==='HT'?'halftime_45':minute>=duration?'one_minute_remaining_assumption':'reported_match_minute',
-  remaining_standard_minutes:remaining,live_stats_applied:false,
+  remaining_standard_minutes:remaining,live_stats_applied:!!evidence,live_evidence:evidence,
+  scoring_rates:{historical:base,used:{home:rh,away:ra}},
   p1:pct(one),px:pct(draw),p2:pct(two),over25:pct(over),under25:pct(total-over),btts:pct(btts),
   remaining_expected_goals:{home:mh,away:ma},next_goal:{home:any*mh/(mh+ma)*100,away:any*ma/(mh+ma)*100,none:(1-any)*100},
   most_likely_final:{score:best.h+'-'+best.a,probability:pct(best.p)},
-  warning:'Experimental conditional Poisson. Average-rate priors are not team-strength forecasts. HT uses 45 minutes; late play assumes at least one remaining minute. No live statistics or penalty-shootout forecast.'};
+  warning:'Experimental conditional Poisson. Average-rate priors are not team-strength forecasts. HT uses 45 minutes; late play assumes at least one remaining minute. '+
+   (evidence?'Live statistics adjust the historical scoring rates; the blend weights are not yet validated.':'No live statistics were available.')+' No penalty-shootout forecast.'};
 }
-function faPrimaryForecast(game,model,badges){
+function faPrimaryForecast(game,model,badges,stats=null){
  game={...game,logos:faTeamLogos(game,model,badges,fhName),league_logo:faLeagueLogo(game,faBadgeCache.leagues)};
  const legacy=faForecastIdentity(game,model,fhName,faBadgeCache.identities);
  const review=forecastIntegrity(legacy,model,fhTeamKey);
  const fitted=fhEstimate(legacy,model,{allowHistoricalPriors:true});
  if(!fitted)return {...game,p1:null,px:null,p2:null,model:null,coverage:'stored_model_unavailable',forecast_review:review,live_outlook:null};
- const live=faPrimaryLiveStatus.has(game.status),outlook=live?faLivePredictor(game,model,fitted):null;
+ const live=faPrimaryLiveStatus.has(game.status),outlook=live?faLivePredictor(game,model,fitted,stats):null;
  const p={...fitted,prediction_tier:fitted.tier,most_likely_score:fhLikelyScore(fitted.mu_home,fitted.mu_away),
   experimental:true,validated:false,limited_evidence:fitted.tier!=='team'};
  const display=live&&outlook?outlook:p;
@@ -151,15 +177,33 @@ function faPrimaryForecast(game,model,badges){
   forecast_review:review,historical_sample:fitted.team_samples,model_coverage:fitted.team_samples,
   coverage:fitted.tier==='team'?'verified_historical_inputs':'limited_historical_inputs',forecast_source:'published_trained_model',forecast_calculated_at:model.trained_at,
   historical_identity:{home:legacy.home_id?'sportmonks:'+legacy.home_id:null,away:legacy.away_id?'sportmonks:'+legacy.away_id:null,method:'verified_id_map_or_unique_archived_alias'},
-  analysis_provenance:'historical_score_minute_no_live_statistics',live_stats:[],statistics:[]};
+  analysis_provenance:outlook?.live_stats_applied?'historical_score_minute_live_statistics':'historical_score_minute_no_live_statistics',live_stats:[],statistics:[]};
 }
 async function faPrimarySnapshot(req,env){
  const r=await faTrialRoute(new Request(new URL('/api/football-trial/live',req.url)),env);const data=await r.json();
  return {...data,matches:(data.matches||[]).map(faPrimaryGame).filter(Boolean)};
 }
-export async function faPrimaryLive(req,env){
+/* Live statistics for the live predictor. Read from the shared provider cache (match pages refresh it every two
+   minutes); a live match nobody has open is refreshed in the background every five minutes, so every live
+   forecast can use its statistics for about 25 provider requests per match. */
+const FA_LIVE_STATS_TTL=300000,FA_LIVE_STATS_MAX_AGE=480000;
+export async function faCachedLiveStats(env,games,now=Date.now()){
+ const ids=games.filter(g=>faPrimaryLiveStatus.has(g.status)&&Number.isSafeInteger(g.match_id)).slice(0,90).map(g=>'statistics-'+g.match_id);
+ if(!ids.length||!env?.FOOTBALL_TRIAL_DB)return new Map();
+ const rows=(await env.FOOTBALL_TRIAL_DB.prepare('SELECT cache_key,payload_json,fetched_at FROM football_trial_cache WHERE cache_key IN ('+ids.map((_,i)=>'?'+(i+1)).join(',')+')')
+  .bind(...ids).all().catch(()=>({results:[]}))).results||[];
+ return new Map(rows.filter(r=>r.payload_json&&now-r.fetched_at<=FA_LIVE_STATS_MAX_AGE).map(r=>[Number(r.cache_key.slice(11)),{stats:JSON.parse(r.payload_json),fetched_at:r.fetched_at}]));
+}
+export function faRefreshLiveStats(env,games,cached,now=Date.now(),fetcher=fetch){
+ const due=games.filter(g=>faPrimaryLiveStatus.has(g.status)&&g.status!=='PEN_LIVE'&&Number.isSafeInteger(g.match_id)&&!(now-(cached.get(g.match_id)?.fetched_at||0)<FA_LIVE_STATS_TTL)).slice(0,8);
+ return Promise.allSettled(due.map(g=>faTrialCached(env,'statistics-'+g.match_id,'/statistics/matches.json',{match_id:g.match_id},FA_LIVE_STATS_TTL,faTrialStatistics,fetcher,now)));
+}
+export async function faPrimaryLive(req,env,ctx){
  try{const [snapshot,model,badges]=await Promise.all([faPrimarySnapshot(req,env),tdPublishedModel(env),faBadgeIds(env)]);
-  const matches=snapshot.matches.filter(g=>faPrimaryLiveStatus.has(g.status)&&!g.source_stale&&Number.isInteger(g.home_score)&&Number.isInteger(g.away_score)&&(Number.isInteger(g.minute)||g.status==='HT')).map(g=>faPrimaryForecast(g,model,badges));
+  const playing=snapshot.matches.filter(g=>faPrimaryLiveStatus.has(g.status)&&!g.source_stale&&Number.isInteger(g.home_score)&&Number.isInteger(g.away_score)&&(Number.isInteger(g.minute)||g.status==='HT'));
+  const cached=await faCachedLiveStats(env,playing);
+  if(ctx?.waitUntil)ctx.waitUntil(faRefreshLiveStats(env,playing,cached));
+  const matches=playing.map(g=>faPrimaryForecast(g,model,badges,cached.get(g.match_id)?.stats||null));
   return smResponse({...snapshot,mode:'primary',source:'football-api.com',processing:'football_api_score_minute_historical_model',matches,model_unavailable:!model,pending:!snapshot.updated_at,refreshing:false,match_statistics_available:false},snapshot.updated_at?200:503,15);
  }catch{return smResponse({source:'football-api.com',error:'football_api_live_unavailable',matches:[],stale:true,pending:true},503)}
 }
@@ -179,7 +223,8 @@ export async function faPrimaryFocus(req,env,ctx){
  try{const [schedule,snapshot,model,badges]=await Promise.all([faPrimaryScheduled(env),faPrimarySnapshot(req,env),tdPublishedModel(env),faBadgeIds(env)]);
   const map=new Map(schedule.games.map(g=>[g.id,g]));
   for(const game of snapshot.matches)map.set(game.id,game);
-  const matches=[...map.values()].filter(g=>g.status==='NS'?Date.parse(g.date)>Date.now()-60000:faPrimaryLiveStatus.has(g.status)&&!g.source_stale).map(g=>faPrimaryForecast(g,model,badges)).sort((a,b)=>a.date.localeCompare(b.date));
+  const shown=[...map.values()].filter(g=>g.status==='NS'?Date.parse(g.date)>Date.now()-60000:faPrimaryLiveStatus.has(g.status)&&!g.source_stale),cached=await faCachedLiveStats(env,shown);
+  const matches=shown.map(g=>faPrimaryForecast(g,model,badges,cached.get(g.match_id)?.stats||null)).sort((a,b)=>a.date.localeCompare(b.date));
   const future=matches.filter(g=>g.status==='NS'),featured=future.find(g=>g.model)||future[0]||matches[0]||null;
   const available=matches.filter(g=>g.model).length;
   const logs=faForecastLogWrites(env,matches,model);
