@@ -269,9 +269,11 @@ export async function faPrimaryDetail(req,env,publicId){
   const lineupStatus=announcedAny?'unconfirmed':projected?'historical_projection':'unavailable';
   const formations={home:lineups.home.source==='recent_historical_projection'?evidence.home?.formation||null:null,
    away:lineups.away.source==='recent_historical_projection'?evidence.away?.formation||null:null};
+  // Most repeated formation in the same recent archived games; shown as an estimate even beside announced players.
+  const historicalFormations={home:evidence.home?.formation||null,away:evidence.away?.formation||null};
   return smResponse({source:'football-api.com',fixture_id:game.match_id||game.fixture_id,public_id:game.id,verified:true,
    lineup_status:lineupStatus,confirmed_lineup:null,lineups,lineup_sources:{home:lineups.home.source,away:lineups.away.source},
-   formations,statistics:faDetailStatistics(data?.statistics),match_statistics_available:!!data?.match_statistics_available,statistics_updated_at:data?.statistics_updated_at||null,xg:{home:null,away:null,available:false},player_xg:[],venue:game.venue||null,
+   formations,historical_formations:historicalFormations,statistics:faDetailStatistics(data?.statistics),match_statistics_available:!!data?.match_statistics_available,statistics_updated_at:data?.statistics_updated_at||null,xg:{home:null,away:null,available:false},player_xg:[],venue:game.venue||null,
    events:(data?.events||[]).map(e=>({...e,type:e.type,team_id:e.side==='home'?game.home_id:e.side==='away'?game.away_id:null})),
    history:await faPrimaryHistory(env,legacy,game,found),current_season_form:found?faSeasonForm(found,legacy):null,
    updated_at:new Date().toISOString(),news:[],disclosures:{lineups:'Η τρέχουσα ενδεκάδα προέρχεται από Football-API όταν είναι διαθέσιμη. Οι θέσεις και οι πιθανές ενδεκάδες βασίζονται αποκλειστικά σε πρόσφατους προηγούμενους αγώνες και δεν αποτελούν επίσημη επιβεβαίωση.',xg:'Ο πάροχος δεν παρέχει xG.'}},200,30);

@@ -550,6 +550,7 @@ function lineupPitch(m,team,side,formation){
   const list=ps=>ps?.length?ps.map(p=>'<div class="tdm-player"><span class="tdm-shirt">'+E(p.number??'·')+'</span><b>'+E(p.name)+'</b>'+(p.position?'<small>'+E(p.position)+' · ιστορική θέση</small>':'<small>Θέση μη διαθέσιμη</small>')+'</div>').join(''):'<p>Δεν υπάρχουν διαθέσιμοι παίκτες.</p>';
   return '<section class="tdm-panel"><h3>'+E(m[side])+'</h3>'+
    '<p class="tdm-note">'+(predicted?'Πιθανή ενδεκάδα Tiki-Data από τις προηγούμενες αγωνιστικές. Δεν είναι επιβεβαιωμένη.':'Παίκτες όπως ανακοινώθηκαν στον πάροχο. Οι θέσεις όπου εμφανίζονται προκύπτουν από πρόσφατες παλαιότερες συμμετοχές, όχι από επίσημη σημερινή διάταξη.')+'</p>'+
+   (formation?'<p class="tdm-note">Συνήθης σχηματισμός στους πρόσφατους αγώνες: <b>'+E(formation)+'</b> · εκτίμηση, όχι επίσημος.</p>':'')+
    '<h4>'+(predicted?'Πιθανή αρχική ενδεκάδα':'Διαθέσιμη αρχική ενδεκάδα')+'</h4>'+list(team?.starters)+
    (team?.bench?.length?'<h4>Πάγκος</h4>'+list(team.bench):'')+'</section>';
  }
@@ -625,7 +626,7 @@ function matchCenterLineups(m,d){
  const confirmed=hasPlayers&&d.lineup_status==='confirmed',predicted=hasPlayers&&['predicted_by_provider','historical_projection'].includes(d.lineup_status);
  const label=confirmed?'Επιβεβαιωμένες ενδεκάδες':predicted?'Πιθανή ενδεκάδα βάσει προηγούμενων αγώνων · όχι επιβεβαιωμένη':hasPlayers?'Διαθέσιμες ενδεκάδες · μη επιβεβαιωμένες':'Οι ενδεκάδες δεν έχουν δημοσιευθεί';
  return '<section class="tdm-tactical-section"><div class="tdm-tactical-heading"><div><h2>Ενδεκάδες & διάταξη ομάδων</h2><p>'+E(label)+'</p></div><span class="tdm-tactical-tag '+(confirmed?'confirmed':'')+'">'+(faMatch(m)?'Ιστορικές θέσεις':hasPlayers?'2D · Σχηματισμός':'Πριν από τη σέντρα')+'</span></div>'+
- (d&&!d.error?'<div class="tdm-pitch-grid">'+lineupPitch(m,d.lineups?.home,'home',d.formations?.home)+lineupPitch(m,d.lineups?.away,'away',d.formations?.away)+'</div>':deepNote(d))+
+ (d&&!d.error?'<div class="tdm-pitch-grid">'+lineupPitch(m,d.lineups?.home,'home',d.historical_formations?.home??d.formations?.home)+lineupPitch(m,d.lineups?.away,'away',d.historical_formations?.away??d.formations?.away)+'</div>':deepNote(d))+
  '<p class="tdm-note">'+(faMatch(m)?'Οι ιστορικές θέσεις αποτελούν εκτίμηση, όχι επαλήθευση του σημερινού σχηματισμού.':'Διάταξη βάσει του δημοσιευμένου σχηματισμού. Δεν διατίθενται δεδομένα παρακολούθησης θέσεων ή heatmap.')+'</p></section>';
 }
 function matchCenterHero(m,d,p,is){
@@ -656,7 +657,7 @@ function details(){
  '<p class="tdm-note">Το xG αφορά ποιότητα ευκαιριών, όχι πρόβλεψη τελικών γκολ. Διαθεσιμότητα ανά διοργάνωση και πακέτο.</p></section>';
  if(state.tab==='lineups')content=deepNote(d)+(valid?'<div class="tdm-confirmation '+(d.lineup_status==='confirmed'?'confirmed':'')+'">'+
  (d.lineup_status==='confirmed'?'✓ Επίσημες ενδεκάδες – επιβεβαιωμένες':d.lineup_status==='predicted_by_provider'?'◇ Πιθανές ενδεκάδες – όχι επιβεβαιωμένες':d.lineup_status==='historical_projection'?'Πιθανή ενδεκάδα από προηγούμενα παιχνίδια – όχι επιβεβαιωμένη':d.lineup_status==='unconfirmed'?'Η επιβεβαίωση της ενδεκάδας δεν είναι διαθέσιμη':'Δεν έχουν δημοσιευτεί ενδεκάδες')+'</div>'+
- '<div class="tdm-pitch-grid">'+lineupPitch(m,d.lineups?.home,'home',d.formations?.home)+lineupPitch(m,d.lineups?.away,'away',d.formations?.away)+'</div>':'')+
+ '<div class="tdm-pitch-grid">'+lineupPitch(m,d.lineups?.home,'home',d.historical_formations?.home??d.formations?.home)+lineupPitch(m,d.lineups?.away,'away',d.historical_formations?.away??d.formations?.away)+'</div>':'')+
  '<p class="tdm-note">Η ένδειξη επιβεβαίωσης προέρχεται αποκλειστικά από το metadata του παρόχου. Προβλεπόμενες ενδεκάδες ενδέχεται να αλλάξουν.</p>';
  if(state.tab==='history')content=deepNote(d)+(valid?gameHistory('Πρόσφατοι αγώνες · '+m.home,d.history?.home)+gameHistory('Πρόσφατοι αγώνες · '+m.away,d.history?.away)+gameHistory('Μεταξύ τους αναμετρήσεις',d.history?.head_to_head):'')+
  '<p class="tdm-note">Αποτελέσματα προηγούμενων αγώνων από το ιστορικό Tiki-Data Lab· τα φιλτράρουμε ώστε να προηγούνται χρονικά από τον αγώνα.</p>';
