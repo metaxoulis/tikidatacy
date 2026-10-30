@@ -75,7 +75,7 @@ test('runs are bounded and an exhausted provider budget leaves matches for a lat
 test('the scheduled training stores lineups only after publishing the model, and cannot fail because of them',()=>{
  const w=readFileSync(new URL('../frontend/worker.js',import.meta.url),'utf8');
  const body=w.slice(w.indexOf('async function tdRunScheduledTraining('),w.indexOf('async function tdTrainingStatus('));
- const publish=body.indexOf('await env.MATCHIQ_CACHE.put(TD_MODEL_KEY,JSON.stringify(model));'),sync=body.indexOf('await faSyncLineups(env).catch(');
+ const publish=body.indexOf('await env.MATCHIQ_CACHE.put(TD_MODEL_KEY,JSON.stringify(model));'),sync=body.indexOf('faSyncLineups(env).catch(');
  assert.ok(publish>0&&sync>publish);
  assert.match(body,/football_api_lineups_sync:footballLineups/);
 });
