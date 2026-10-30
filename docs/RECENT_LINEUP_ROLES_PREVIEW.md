@@ -21,4 +21,4 @@ python scripts/sync-worker-assets.py
 node --test tests/recent-lineup-evidence.test.mjs tests/football-primary.test.mjs tests/worker-bundle-parity.test.mjs
 ```
 
-The generated Worker is not yet rebuilt in this branch, so it is **not** a runnable deployed preview. The source modules and regression tests are prepared for the review/build step.
+The generated Worker **has been rebuilt and committed in this draft branch**, and the GitHub regression checks pass. The changes are **not deployed** to a live Cloudflare preview yet. A read-only preview D1 binding for `SPORTMONKS_ARCHIVE_DB` must be reviewed before the projected historical data can appear in that preview.
