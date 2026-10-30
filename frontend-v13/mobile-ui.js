@@ -545,7 +545,14 @@ function playerList(team,side,label){const people=team||{starters:[],bench:[]};r
 
 const shortSurname=n=>String(n||'').trim().split(/\s+/).filter(Boolean).slice(-1)[0]||'—';
 function lineupPitch(m,team,side,formation){
- if(faMatch(m)){const list=ps=>ps?.length?ps.map(p=>'<p>'+E(p.number??'—')+' · '+E(p.name)+'</p>').join(''):'<p>Δεν έχουν δοθεί παίκτες.</p>';return '<section class="tdm-panel"><h3>'+E(m[side])+'</h3><p class="tdm-note">Παίκτες από Football-API. Δεν παρέχονται θέσεις ή σχηματισμός.</p><h4>Αρχική ενδεκάδα</h4>'+list(team?.starters)+'<h4>Πάγκος</h4>'+list(team?.bench)+'</section>';}
+ if(faMatch(m)){
+  const predicted=team?.source==='recent_historical_projection';
+  const list=ps=>ps?.length?ps.map(p=>'<div class="tdm-player"><span class="tdm-shirt">'+E(p.number??'·')+'</span><b>'+E(p.name)+'</b>'+(p.position?'<small>'+E(p.position)+' · ιστορική θέση</small>':'<small>Θέση μη διαθέσιμη</small>')+'</div>').join(''):'<p>Δεν υπάρχουν διαθέσιμοι παίκτες.</p>';
+  return '<section class="tdm-panel"><h3>'+E(m[side])+'</h3>'+
+   '<p class="tdm-note">'+(predicted?'Πιθανή ενδεκάδα Tiki-Data από τις προηγούμενες αγωνιστικές. Δεν είναι επιβεβαιωμένη.':'Παίκτες όπως ανακοινώθηκαν στον πάροχο. Οι θέσεις όπου εμφανίζονται προκύπτουν από πρόσφατες παλαιότερες συμμετοχές, όχι από επίσημη σημερινή διάταξη.')+'</p>'+
+   '<h4>'+(predicted?'Πιθανή αρχική ενδεκάδα':'Διαθέσιμη αρχική ενδεκάδα')+'</h4>'+list(team?.starters)+
+   (team?.bench?.length?'<h4>Πάγκος</h4>'+list(team.bench):'')+'</section>';
+ }
  const people=team||{starters:[],bench:[]},players=Array.isArray(people.starters)?people.starters:[],bench=Array.isArray(people.bench)?people.bench:[];
  const lines=String(formation||'').split('-').map(Number);
  const validFormation=lines.length>=2&&lines.length<=5&&lines.every(n=>Number.isInteger(n)&&n>0&&n<=5)&&lines.reduce((a,b)=>a+b,0)===10;
@@ -615,11 +622,11 @@ function matchCenterForm(m,d,side){
 }
 function matchCenterLineups(m,d){
  const hasPlayers=['home','away'].some(side=>d?.lineups?.[side]?.starters?.length);
- const confirmed=hasPlayers&&d.lineup_status==='confirmed',predicted=hasPlayers&&d.lineup_status==='predicted_by_provider';
- const label=confirmed?'Επιβεβαιωμένες ενδεκάδες':predicted?'Πιθανές ενδεκάδες · όχι επιβεβαιωμένες':hasPlayers?'Διαθέσιμες ενδεκάδες · μη επιβεβαιωμένες':'Οι ενδεκάδες δεν έχουν δημοσιευθεί';
- return '<section class="tdm-tactical-section"><div class="tdm-tactical-heading"><div><h2>Ενδεκάδες & διάταξη ομάδων</h2><p>'+E(label)+'</p></div><span class="tdm-tactical-tag '+(confirmed?'confirmed':'')+'">'+(hasPlayers?'2D · Σχηματισμός':'Πριν από τη σέντρα')+'</span></div>'+
+ const confirmed=hasPlayers&&d.lineup_status==='confirmed',predicted=hasPlayers&&['predicted_by_provider','historical_projection'].includes(d.lineup_status);
+ const label=confirmed?'Επιβεβαιωμένες ενδεκάδες':predicted?'Πιθανή ενδεκάδα βάσει προηγούμενων αγώνων · όχι επιβεβαιωμένη':hasPlayers?'Διαθέσιμες ενδεκάδες · μη επιβεβαιωμένες':'Οι ενδεκάδες δεν έχουν δημοσιευθεί';
+ return '<section class="tdm-tactical-section"><div class="tdm-tactical-heading"><div><h2>Ενδεκάδες & διάταξη ομάδων</h2><p>'+E(label)+'</p></div><span class="tdm-tactical-tag '+(confirmed?'confirmed':'')+'">'+(faMatch(m)?'Ιστορικές θέσεις':hasPlayers?'2D · Σχηματισμός':'Πριν από τη σέντρα')+'</span></div>'+
  (d&&!d.error?'<div class="tdm-pitch-grid">'+lineupPitch(m,d.lineups?.home,'home',d.formations?.home)+lineupPitch(m,d.lineups?.away,'away',d.formations?.away)+'</div>':deepNote(d))+
- '<p class="tdm-note">Διάταξη βάσει του δημοσιευμένου σχηματισμού. Δεν διατίθενται δεδομένα παρακολούθησης θέσεων ή heatmap.</p></section>';
+ '<p class="tdm-note">'+(faMatch(m)?'Οι ιστορικές θέσεις αποτελούν εκτίμηση, όχι επαλήθευση του σημερινού σχηματισμού.':'Διάταξη βάσει του δημοσιευμένου σχηματισμού. Δεν διατίθενται δεδομένα παρακολούθησης θέσεων ή heatmap.')+'</p></section>';
 }
 function matchCenterHero(m,d,p,is){
  const final=['FT','FULL_TIME','FINISHED','AET','FT_PEN','PEN'].includes(String(m.status||'').toUpperCase());
@@ -648,7 +655,7 @@ function details(){
  (valid&&d.xg?.available?'<div class="tdm-xg"><div><small>'+E(m.home)+'</small><b>'+E(d.xg.home===null?'—':d.xg.home.toFixed(2))+'</b></div><span>xG</span><div><small>'+E(m.away)+'</small><b>'+E(d.xg.away===null?'—':d.xg.away.toFixed(2))+'</b></div></div>':deepNote(d)||'<p class="tdm-lead">Δεν υπάρχουν xG για τον αγώνα ή δεν περιλαμβάνονται στη συνδρομή.</p>')+
  '<p class="tdm-note">Το xG αφορά ποιότητα ευκαιριών, όχι πρόβλεψη τελικών γκολ. Διαθεσιμότητα ανά διοργάνωση και πακέτο.</p></section>';
  if(state.tab==='lineups')content=deepNote(d)+(valid?'<div class="tdm-confirmation '+(d.lineup_status==='confirmed'?'confirmed':'')+'">'+
- (d.lineup_status==='confirmed'?'✓ Επίσημες ενδεκάδες – επιβεβαιωμένες':d.lineup_status==='predicted_by_provider'?'◇ Πιθανές ενδεκάδες – όχι επιβεβαιωμένες':d.lineup_status==='unconfirmed'?'Η επιβεβαίωση της ενδεκάδας δεν είναι διαθέσιμη':'Δεν έχουν δημοσιευτεί ενδεκάδες')+'</div>'+
+ (d.lineup_status==='confirmed'?'✓ Επίσημες ενδεκάδες – επιβεβαιωμένες':d.lineup_status==='predicted_by_provider'?'◇ Πιθανές ενδεκάδες – όχι επιβεβαιωμένες':d.lineup_status==='historical_projection'?'Πιθανή ενδεκάδα από προηγούμενα παιχνίδια – όχι επιβεβαιωμένη':d.lineup_status==='unconfirmed'?'Η επιβεβαίωση της ενδεκάδας δεν είναι διαθέσιμη':'Δεν έχουν δημοσιευτεί ενδεκάδες')+'</div>'+
  '<div class="tdm-pitch-grid">'+lineupPitch(m,d.lineups?.home,'home',d.formations?.home)+lineupPitch(m,d.lineups?.away,'away',d.formations?.away)+'</div>':'')+
  '<p class="tdm-note">Η ένδειξη επιβεβαίωσης προέρχεται αποκλειστικά από το metadata του παρόχου. Προβλεπόμενες ενδεκάδες ενδέχεται να αλλάξουν.</p>';
  if(state.tab==='history')content=deepNote(d)+(valid?gameHistory('Πρόσφατοι αγώνες · '+m.home,d.history?.home)+gameHistory('Πρόσφατοι αγώνες · '+m.away,d.history?.away)+gameHistory('Μεταξύ τους αναμετρήσεις',d.history?.head_to_head):'')+
