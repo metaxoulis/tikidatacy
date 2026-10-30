@@ -18,6 +18,19 @@ from pathlib import Path
 FINAL_STATES = ("FT", "AET", "FTP")
 EMBARGO_DAYS = 3
 WINDOW = 8
+HALF_LIFE_DAYS = 60
+PREVIOUS_SEASON_WEIGHT = 0.55
+
+
+def _season_start(kickoff):
+    """For any fixture, use its own season and immediately previous season."""
+    season_year = kickoff.year if kickoff.month >= 7 else kickoff.year - 1
+    return datetime(season_year - 1, 7, 1)
+
+
+def _current_season_start(kickoff):
+    season_year = kickoff.year if kickoff.month >= 7 else kickoff.year - 1
+    return datetime(season_year, 7, 1)
 
 
 def _date(value):
@@ -57,13 +70,23 @@ def archived_game_stats(connection, fixture_id, home_id, away_id):
     return result
 
 
-def _averages(past, fields, side):
-    """History is only released after the three-day embargo."""
-    recent = list(past)[-WINDOW:]
+def _recent_history(past, kickoff):
+    """Exclude anything older than the immediately preceding football season."""
+    return [(day, stats) for day, stats in past if _season_start(kickoff) <= day < kickoff][-WINDOW:]
+
+
+def _averages(past, fields, kickoff):
+    """Time-weight only completed previous matches, never current-match statistics."""
+    recent = _recent_history(past, kickoff)
+    season_boundary = _current_season_start(kickoff)
+    weighted = [(row, math.exp(-math.log(2) * max(0, (kickoff - day).total_seconds() / 86400) / HALF_LIFE_DAYS)
+                 * (PREVIOUS_SEASON_WEIGHT if day < season_boundary else 1.0))
+                for day, row in recent]
     out = []
     for field in ("goals_for", "goals_against", *fields):
-        valid = [row[field] for row in recent if field in row]
-        out.append(sum(valid) / len(valid) if valid else math.nan)
+        valid = [(row[field], weight) for row, weight in weighted if field in row]
+        out.append(sum(v * w for v, w in valid) / sum(w for _, w in valid)
+                   if valid else math.nan)
         if field not in ("goals_for", "goals_against"):
             out.append(len(valid) / WINDOW)
     return out
@@ -82,7 +105,7 @@ def build_features(connection, asof, min_observed=3):
     for stat in fields:
         names.extend((stat + ":avg", stat + ":coverage"))
     columns = ["home:" + name for name in names] + ["away:" + name for name in names]
-    histories = defaultdict(lambda: deque(maxlen=WINDOW))
+    histories = defaultdict(lambda: deque(maxlen=64))
     pending = deque()
     rows, exclusions = [], defaultdict(int)
     sql = """SELECT id,league_id,starting_at,home_id,away_id,home_score,away_score
@@ -105,18 +128,19 @@ def build_features(connection, asof, min_observed=3):
             continue
         maturity = kickoff - timedelta(days=EMBARGO_DAYS)
         while pending and pending[0][0] <= maturity:
-            _, h, a, hstats, astats = pending.popleft()
-            histories[h].append(hstats)
-            histories[a].append(astats)
+            kickoff_previous, h, a, hstats, astats = pending.popleft()
+            histories[h].append((kickoff_previous, hstats))
+            histories[a].append((kickoff_previous, astats))
         hhistory, ahistory = histories[home], histories[away]
         # A record with a final score but no statistics can still support
         # goal-form features, not statistical coverage.
         sufficient = all(
-            sum(any(k.startswith(("stat:", "xg:")) for k in row) for row in history) >= min_observed
+            sum(any(k.startswith(("stat:", "xg:")) for k in stats)
+                for _, stats in _recent_history(history, kickoff)) >= min_observed
             for history in (hhistory, ahistory)
         )
         if sufficient:
-            vector = _averages(hhistory, fields, "home") + _averages(ahistory, fields, "away")
+            vector = _averages(hhistory, fields, kickoff) + _averages(ahistory, fields, kickoff)
             rows.append({"fixture_id": fixture, "league_id": league, "date": kickoff.isoformat(),
                          "x": vector, "home_goals": int(hg), "away_goals": int(ag),
                          "outcome": 0 if hg > ag else 1 if hg == ag else 2})
