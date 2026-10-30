@@ -245,7 +245,12 @@ export function faDetailStatistics(rows){
  return (Array.isArray(rows)?rows:[]).filter(x=>Object.hasOwn(FA_STAT_LABELS,x?.type)&&!(FA_STAT_OPTIONAL.has(x.type)&&!x.home&&!x.away))
   .sort((a,b)=>FA_STAT_ORDER.indexOf(a.type)-FA_STAT_ORDER.indexOf(b.type)).flatMap(x=>{
    const label=FA_STAT_LABELS[x.type],fmt=v=>v===null?null:x.type==='possesion'?v+'%':v;
-   return [{type:label,side:'home',value:fmt(x.home)},{type:label,side:'away',value:fmt(x.away)}]});
+   return [{type:label,code:x.type,side:'home',value:fmt(x.home)},{type:label,code:x.type,side:'away',value:fmt(x.away)}]});
+}
+/* The provider's own xG for the match (larger competitions only), shown to three decimals on the match page. */
+export function faDetailXg(rows){
+ const x=(Array.isArray(rows)?rows:[]).find(r=>r?.type==='expected_goals');
+ return x&&[x.home,x.away].every(v=>Number.isFinite(v)&&v>=0&&v<=15)?{home:x.home,away:x.away,available:true,source:'football-api.com'}:{home:null,away:null,available:false};
 }
 export async function faPrimaryDetail(req,env,publicId){
  if(req.method!=='GET')return smResponse({error:'method_not_allowed'},405);
@@ -276,7 +281,7 @@ export async function faPrimaryDetail(req,env,publicId){
   const historicalFormations={home:evidence.home?.formation||null,away:evidence.away?.formation||null};
   return smResponse({source:'football-api.com',fixture_id:game.match_id||game.fixture_id,public_id:game.id,verified:true,
    lineup_status:lineupStatus,confirmed_lineup:null,lineups,lineup_sources:{home:lineups.home.source,away:lineups.away.source},
-   formations,historical_formations:historicalFormations,statistics:faDetailStatistics(data?.statistics),match_statistics_available:!!data?.match_statistics_available,statistics_updated_at:data?.statistics_updated_at||null,xg:{home:null,away:null,available:false},player_xg:[],venue:game.venue||null,
+   formations,historical_formations:historicalFormations,statistics:faDetailStatistics(data?.statistics),match_statistics_available:!!data?.match_statistics_available,statistics_updated_at:data?.statistics_updated_at||null,xg:faDetailXg(data?.statistics),player_xg:[],venue:game.venue||null,
    events:(data?.events||[]).map(e=>({...e,type:e.type,team_id:e.side==='home'?game.home_id:e.side==='away'?game.away_id:null})),
    history:await faPrimaryHistory(env,legacy,game,found),current_season_form:found?faSeasonForm(found,legacy):null,
    updated_at:new Date().toISOString(),news:[],disclosures:{lineups:'Η τρέχουσα ενδεκάδα προέρχεται από Football-API όταν είναι διαθέσιμη. Οι θέσεις και οι πιθανές ενδεκάδες βασίζονται αποκλειστικά σε πρόσφατους προηγούμενους αγώνες και δεν αποτελούν επίσημη επιβεβαίωση.',xg:'Ο πάροχος δεν παρέχει xG.'}},200,30);
@@ -381,7 +386,7 @@ async function faSyncFinished(env,now,fetcher,limit,clock,o){
  }
  return report;
 }
-export async function faSyncLineups(env,now=Date.now(),fetcher=fetch,limit=16,clock=Date.now){
+export async function faSyncLineups(env,now=Date.now(),fetcher=fetch,limit=40,clock=Date.now){
  const lineup='INSERT INTO football_lineups(fa_match_id,fa_team_id,match_date,league_key,starters_json,bench_json,observed_at) VALUES(?1,?2,?3,?4,?5,?6,?7) ON CONFLICT(fa_match_id,fa_team_id) DO UPDATE SET match_date=excluded.match_date,league_key=excluded.league_key,starters_json=excluded.starters_json,bench_json=excluded.bench_json,observed_at=excluded.observed_at';
  return faSyncFinished(env,now,fetcher,limit,clock,{fetches:'football_lineup_fetches',count:'players',cache:'lineups-',path:'/matches/lineups.json',normalize:faTrialLineups,
   store(m,data,observed){
@@ -398,7 +403,7 @@ export async function faSyncLineups(env,now=Date.now(),fetcher=fetch,limit=16,cl
   }});
 }
 /* Shots, corners, cards, possession and, where the provider has it, xG of finished matches, so team form keeps
-   updating after the Sportmonks archive. Statistics arrive with the result, so a run takes more matches than lineups. */
+   updating after the Sportmonks archive. Training runs twice a day, so each run takes up to 40 matches. */
 export async function faSyncStatistics(env,now=Date.now(),fetcher=fetch,limit=40,clock=Date.now){
  const row='INSERT INTO football_match_statistics(fa_match_id,match_date,league_key,fa_home_id,fa_away_id,home_xg,away_xg,stats_json,observed_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9) ON CONFLICT(fa_match_id) DO UPDATE SET match_date=excluded.match_date,league_key=excluded.league_key,fa_home_id=excluded.fa_home_id,fa_away_id=excluded.fa_away_id,home_xg=excluded.home_xg,away_xg=excluded.away_xg,stats_json=excluded.stats_json,observed_at=excluded.observed_at';
  return faSyncFinished(env,now,fetcher,limit,clock,{fetches:'football_statistics_fetches',count:'metrics',cache:'statistics-',path:'/statistics/matches.json',normalize:faTrialStatistics,

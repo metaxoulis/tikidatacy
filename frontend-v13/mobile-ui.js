@@ -578,7 +578,23 @@ function pitchField(name,shape,rows,keeper,token){
 // players run from the team's left flank to its right.
 const PITCH_LINES=['Αμυντικός','Αμυντικός μέσος','Μέσος','Μεσοεπιθετικός','Επιθετικός'];
 const positionName=v=>window.__tdLocale==='en'?({'Τερματοφύλακας':'Goalkeeper','Αμυντικός':'Defender','Αμυντικός μέσος':'Defensive midfielder','Μέσος':'Midfielder','Μεσοεπιθετικός':'Attacking midfielder','Επιθετικός':'Forward'})[v]||v:v;
+// One starter without a recorded position (a debut, a name spelt differently) is placed by elimination: in goal when
+// nobody else is the keeper, otherwise in the only line the usual formation is one player short of.
+function faFillOnePosition(starters,formation){
+ const known=p=>p.position==='Τερματοφύλακας'||PITCH_LINES.includes(p.position),unknown=(starters||[]).filter(p=>!known(p));
+ if(starters?.length!==11||unknown.length!==1)return starters;
+ const others=starters.filter(known),keepers=others.filter(p=>p.position==='Τερματοφύλακας').length;
+ const lines=/^([1-5]-){1,4}[1-5]$/.test(formation||'')?formation.split('-').map(Number):null;
+ let position=keepers?null:'Τερματοφύλακας';
+ if(keepers===1&&lines&&lines.reduce((a,b)=>a+b,0)===10){
+  const line=p=>p.position==='Αμυντικός'?'D':p.position==='Επιθετικός'?'F':'M',count=k=>others.filter(p=>p.position!=='Τερματοφύλακας'&&line(p)===k).length;
+  const short=[['D',lines[0],'Αμυντικός'],['M',lines.slice(1,-1).reduce((a,b)=>a+b,0),'Μέσος'],['F',lines.at(-1),'Επιθετικός']].filter(([k,n])=>count(k)<n);
+  if(short.length===1)position=short[0][2];
+ }
+ return position?starters.map(p=>p===unknown[0]?{...p,position,position_source:'inferred_by_elimination'}:p):starters;
+}
 function faPitchLayout(starters,formation){
+ starters=faFillOnePosition(starters,formation);
  const keepers=(starters||[]).filter(p=>p.position==='Τερματοφύλακας');
  if(starters?.length!==11||keepers.length!==1)return null;
  const outfield=starters.filter(p=>p!==keepers[0]);
@@ -590,21 +606,21 @@ function faPitchLayout(starters,formation){
  if(usual&&usual.reduce((a,b)=>a+b,0)===10&&count('D')===usual[0]&&count('F')===usual.at(-1)){let at=0;rows=usual.map(n=>outfield.slice(at,at+=n))}
  else{rows=PITCH_LINES.map(r=>outfield.filter(p=>p.position===r)).filter(r=>r.length);if(rows.length<2||rows.length>5||rows.some(r=>r.length>5))return null}
  const flank=p=>typeof p.lateral==='number'?p.lateral:.5;
- return {shape:rows.map(r=>r.length).join('-'),keeper:keepers[0],rows:rows.map(r=>[...r].sort((a,b)=>flank(a)-flank(b)))};
+ return {shape:rows.map(r=>r.length).join('-'),keeper:keepers[0],starters,rows:rows.map(r=>[...r].sort((a,b)=>flank(a)-flank(b)))};
 }
 function lineupPitch(m,team,side,formation){
  const name=side==='home'?m.home:m.away,kit=teamKit(team?.kit),kitId='tdk-'+side;
  if(faMatch(m)){
   const predicted=team?.source==='recent_historical_projection',announced=!!team?.starters?.length&&!predicted;
   // Same card as Sportmonks lineups; positions are labelled historical in the note, tag and footer.
-  const rows=ps=>ps.map(p=>'<div class="tdm-player"><span class="tdm-shirt">'+E(p.number??'·')+'</span><b>'+E(p.name)+'</b><small>'+E(positionName(p.position)||L('Θέση μη διαθέσιμη','Position unknown'))+'</small></div>').join('');
+  const rows=ps=>ps.map(p=>'<div class="tdm-player"><span class="tdm-shirt">'+E(p.number??'·')+'</span><b>'+E(p.name)+'</b><small>'+E(positionName(p.position)||L('Θέση μη διαθέσιμη','Position unknown'))+(p.position_source==='inferred_by_elimination'?' · '+L('κατ’ αποκλεισμό','by elimination'):'')+'</small></div>').join('');
   const note=predicted?L('Πιθανή ενδεκάδα Tiki-Data από τις προηγούμενες αγωνιστικές. Δεν είναι επιβεβαιωμένη.','Probable Tiki-Data lineup from recent matches. Not confirmed.'):announced?L('Παίκτες όπως τους ανακοίνωσε ο πάροχος. Οι θέσεις προκύπτουν από προηγούμενους αγώνες, όχι από επίσημη σημερινή διάταξη.','Players as announced by the provider. Positions come from previous matches, not an official line-up for today.'):L('Η ενδεκάδα δεν έχει ανακοινωθεί και δεν υπάρχουν αρκετοί πρόσφατοι αγώνες για αξιόπιστη εκτίμηση.','The lineup has not been announced and there are not enough recent matches for a reliable estimate.');
   const layout=faPitchLayout(team?.starters,formation),shape=layout?.shape||formation;
   const kitNote=kit?L('Χρώματα συλλόγου','Club colours')+(team.kit.source==='club_colours_alternate'?L(', στο δεύτερο χρώμα για να ξεχωρίζουν οι ομάδες',', in the second colour so the teams stand apart'):'')+' — '+L('όχι απαραίτητα η φανέλα του αγώνα.','not necessarily the match kit.'):L('Ουδέτερη εμφάνιση — δεν υπάρχουν χρώματα για αυτόν τον σύλλογο.','Neutral shirts — no colours on file for this club.');
   return '<section class="tdm-panel tdm-pitch-card"><div class="tdm-pitch-title">'+badge(name,side==='home'?logoH(m):logoA(m))+'<div><h3>'+E(name)+'</h3>'+(shape?'<span class="tdm-formation-chip">'+E(shape)+' · '+L('εκτίμηση','estimate')+'</span>':'')+'</div></div>'+
    '<p class="tdm-note">'+note+'</p>'+
    (layout?(kit?kitDefs(kit,kitId):'')+pitchField(name,layout.shape,layout.rows,layout.keeper,pitchToken(kit,kitId,'#365a6b',plateNames(team.starters)))+'<p class="tdm-kit-note">'+kitNote+'</p>'+
-    '<details class="tdm-bench"><summary>'+(predicted?L('Πιθανή ενδεκάδα με θέσεις','Probable lineup with positions'):L('Ενδεκάδα με θέσεις','Lineup with positions'))+'</summary>'+rows(team.starters)+'</details>'
+    '<details class="tdm-bench"><summary>'+(predicted?L('Πιθανή ενδεκάδα με θέσεις','Probable lineup with positions'):L('Ενδεκάδα με θέσεις','Lineup with positions'))+'</summary>'+rows(layout.starters)+'</details>'
    :team?.starters?.length?'<h4>'+(predicted?L('Πιθανή αρχική ενδεκάδα','Probable starting XI'):L('Ανακοινωμένη αρχική ενδεκάδα','Announced starting XI'))+'</h4>'+rows(team.starters):'')+
    (team?.bench?.length?'<details class="tdm-bench"><summary>'+L('Αναπληρωματικοί','Substitutes')+' ('+team.bench.length+')</summary>'+rows(team.bench)+'</details>':'')+'</section>';
  }
@@ -765,6 +781,21 @@ function xgPanel(m,d,is){
   (players.length?'<h4>'+L('xG παικτών','Player xG')+'</h4>'+players.map(x=>row(x.player_name||L('Παίκτης','Player')+' #'+(x.player_id||'—'),xg3(x.xg))).join(''):'')+
   (!match&&!has(mu)&&!has(past)?'<p class="tdm-lead">'+L('Δεν υπάρχουν αναμενόμενα γκολ για αυτόν τον αγώνα.','No expected goals are available for this match.')+'</p>':'')+'</section>';
 }
+const statHead=m=>'<div class="tdm-stat-grid-row tdm-stat-grid-head"><strong>'+L('Στατιστικό','Statistic')+'</strong><div>'+badge(m.home,logoH(m))+'<small>'+E(m.home)+'</small></div><div>'+badge(m.away,logoA(m))+'<small>'+E(m.away)+'</small></div></div>';
+// The overview repeats the counts that sum up a Football-API match, refreshed every two minutes while it is live;
+// the full table stays on the statistics tab.
+function faKeyStats(m,d){
+ if(!faMatch(m)||!(live(m)||isFinal(m))||!d||d.error)return '';
+ const rows=Array.isArray(d.statistics)?d.statistics:[],value=(code,side)=>rows.find(x=>x.code===code&&x.side===side)?.value??null;
+ const items=[['possesion',L('Κατοχή','Possession')],['attempts_on_goal',L('Σουτ','Shots')],['shots_on_target',L('Σουτ στην εστία','Shots on target')],
+  ['corners',L('Κόρνερ','Corners')],['yellow_cards',L('Κίτρινες κάρτες','Yellow cards')],['red_cards',L('Κόκκινες κάρτες','Red cards')]]
+  .map(([code,name])=>[name,value(code,'home'),value(code,'away')]).filter(([,h,a])=>h!==null||a!==null);
+ if(d.xg?.available)items.unshift(['xG',xg3(d.xg.home),xg3(d.xg.away)]);
+ if(!items.length)return '';
+ return '<section class="tdm-panel"><h3>'+(live(m)?L('Live στατιστικά','Live statistics'):L('Στατιστικά αγώνα','Match statistics'))+'</h3><div class="tdm-stat-grid">'+statHead(m)+
+  items.map(([name,h,a])=>'<div class="tdm-stat-grid-row"><strong>'+E(name)+'</strong><b>'+E(h??'—')+'</b><b>'+E(a??'—')+'</b></div>').join('')+
+  '</div><button type="button" class="tdm-more" data-tab="stats">'+L('Όλα τα στατιστικά','All statistics')+'</button></section>';
+}
 function newsPanel(d){
  const news=d&&!d.error&&Array.isArray(d.news)?d.news:[];if(!news.length)return '';
  return '<section class="tdm-panel"><h3>'+L('Νέα ομάδων','Team news')+'</h3>'+news.map(n=>'<article class="tdm-news-item"><h4>'+E(n.title)+'</h4><p>'+E(n.preview||'')+'</p>'+(n.important?'<small class="tdm-news-alert">'+L('Πιθανή σημασία για τον αγώνα · προς επιβεβαίωση','May matter for the match · unconfirmed')+'</small>':'')+'</article>').join('')+
@@ -778,7 +809,7 @@ function details(){
  const tabs=[['summary',L('Επισκόπηση','Overview')],...(faMatch(m)&&(is||isFinal(m))?[['events',L('Γεγονότα','Events')]]:[]),['lineups',L('Ενδεκάδες','Lineups')],['stats',L('Στατιστικά','Statistics')],['history',L('Φόρμα & H2H','Form & H2H')]];
  if(!tabs.some(([k])=>k===state.tab))state.tab='summary';
  let content='';
- if(state.tab==='summary')content=liveStatsBlock(m)+liveMethodNote(m)+prematchReferenceBlock(m)+forecastPanel(m,p,g,is)+deepNote(d)+(valid?formPanel(m,d)+meetingsPanel(d,3):'')+factsPanel(m,d)+newsPanel(d);
+ if(state.tab==='summary')content=liveStatsBlock(m)+faKeyStats(m,d)+liveMethodNote(m)+prematchReferenceBlock(m)+forecastPanel(m,p,g,is)+deepNote(d)+(valid?formPanel(m,d)+meetingsPanel(d,3):'')+factsPanel(m,d)+newsPanel(d);
  if(state.tab==='lineups')content=matchCenterLineups(m,d);
  if(state.tab==='history')content=deepNote(d)+currentSeasonFormBlock(m,d)+(valid?gameHistory(L('Πρόσφατοι αγώνες · ','Recent matches · ')+m.home,d.history?.home)+gameHistory(L('Πρόσφατοι αγώνες · ','Recent matches · ')+m.away,d.history?.away)+meetingsPanel(d,5):'')+uefaFormBlock(m)+recentFormBlock(m);
  if(state.tab==='stats'){
@@ -790,7 +821,7 @@ function details(){
    if(!types.has(name))types.set(name,{home:null,away:null});
    types.get(name)[x.side]=x.value;
   }
-  const heading='<div class="tdm-stat-grid-row tdm-stat-grid-head"><strong>'+L('Στατιστικό','Statistic')+'</strong><div>'+badge(m.home,logoH(m))+'<small>'+E(m.home)+'</small></div><div>'+badge(m.away,logoA(m))+'<small>'+E(m.away)+'</small></div></div>';
+  const heading=statHead(m);
   const table='<section class="tdm-panel"><h3>'+L('Στατιστικά αγώνα','Match statistics')+'</h3>'+
    (types.size?'<div class="tdm-stat-grid">'+heading+[...types].slice(0,42).map(([name,x])=>'<div class="tdm-stat-grid-row"><strong>'+E(name)+'</strong><b>'+E(x.home??'—')+'</b><b>'+E(x.away??'—')+'</b></div>').join('')+'</div>':
    '<p class="tdm-lead">'+(is||isFinal(m)?L('Ο πάροχος δεν έχει δώσει στατιστικά για αυτόν τον αγώνα.','The provider has not published statistics for this match.'):L('Τα στατιστικά του αγώνα εμφανίζονται όταν αρχίσει.','Match statistics appear once it kicks off.'))+'</p>')+'</section>';
