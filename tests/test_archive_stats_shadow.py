@@ -3,7 +3,7 @@ import sqlite3
 import unittest
 from datetime import datetime, timedelta
 
-from research.archive_stats_shadow import build_features, date_folds
+from research.archive_stats_shadow import build_features, date_folds, _recent_history, _averages
 
 
 def synthetic_archive():
@@ -68,6 +68,27 @@ class ArchiveStatsShadowTests(unittest.TestCase):
         first = next(r for r in archive["rows"] if r["fixture_id"] == 99)
         second = next(r for r in archive["rows"] if r["fixture_id"] == 100)
         self.assertEqual(first["x"], second["x"])
+
+    def test_two_season_limit_and_recency_weighting(self):
+        kickoff = datetime(2026, 10, 20)
+        history = [
+            (datetime(2024, 10, 1), {"goals_for": 2, "goals_against": 2, "stat:shots-total": 999}),
+            (datetime(2025, 8, 1), {"goals_for": 1, "goals_against": 2, "stat:shots-total": 3}),
+            (datetime(2026, 10, 1), {"goals_for": 2, "goals_against": 0, "stat:shots-total": 15}),
+        ]
+        recent = _recent_history(history, kickoff)
+        self.assertEqual(len(recent), 2)
+        self.assertEqual(recent[0][0].year, 2025)
+        vector = _averages(history, ["stat:shots-total"], kickoff)
+        self.assertGreater(vector[2], 10)  # Current season outweighs prior-season stats.
+        self.assertLess(vector[2], 15)
+        self.assertEqual(vector[3], 2 / 8)
+
+    def test_previous_season_only_never_uses_two_years_back(self):
+        kickoff = datetime(2026, 10, 20)
+        stale = [(datetime(2024, 5, 1), {"stat:shots-total": 1000})]
+        self.assertEqual(_recent_history(stale, kickoff), [])
+        self.assertTrue(__import__("math").isnan(_averages(stale, ["stat:shots-total"], kickoff)[2]))
 
     def test_train_validation_test_dates_do_not_overlap(self):
         rows = [{"date": (datetime(2026,1,1)+timedelta(days=i)).isoformat()}
