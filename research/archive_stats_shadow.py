@@ -100,6 +100,8 @@ def build_features(connection, asof, min_observed=3):
     Same-day matches cannot enter each other's features.
     """
     cutoff = _date(asof) - timedelta(days=EMBARGO_DAYS)
+    # Neither training labels nor historical inputs may predate the prior season.
+    dataset_start = _season_start(_date(asof))
     fields = archive_fields(connection)
     names = ["goals_for", "goals_against"]
     for stat in fields:
@@ -125,6 +127,9 @@ def build_features(connection, asof, min_observed=3):
             continue
         if kickoff > cutoff:
             exclusions["cutoff"] += 1
+            continue
+        if kickoff < dataset_start:
+            exclusions["older_than_previous_season"] += 1
             continue
         maturity = kickoff - timedelta(days=EMBARGO_DAYS)
         while pending and pending[0][0] <= maturity:
