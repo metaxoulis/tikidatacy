@@ -292,6 +292,12 @@ function auditOutcome(m){
  return {pick:pick<0?'—':['1','Χ','2'][pick],confidence:top===null?null:top*100,status:valid&&final&&p.filter(x=>x===top).length===1?(pick===actual?'hit':'miss'):'pending'};
 }
 const auditLeagueBadge=k=>{const url=auditArchive.matches.find(m=>m.league_key===k)?.league_logo;return url?'<img class="tdm-audit-league-logo" src="'+E(url)+'" loading="lazy" alt="">':''};
+function auditStatisticsPilot(){
+ const t=(el,en)=>window.__tdLocale==='el'?el:en;
+ return '<section class="tdm-panel" aria-labelledby="pilot-stats-title"><span class="tdm-audit-date">'+t('Δοκιμαστική προβολή · 3 αγώνες','Pilot · 3 matches')+'</span><h2 id="pilot-stats-title">'+t('Στατιστικά μετά τον αγώνα','Post-match statistics')+'</h2><p>'+t('Δες τα διαθέσιμα στατιστικά σε νέα καρτέλα.','View available statistics in a new tab.')+'</p><div class="tdm-audit-grid">'+[
+ [743353,'Everton','Newcastle United','EFL Cup'],[743354,'Fiorentina','Atalanta','Serie A'],[743356,'AE Prat','Athletic Bilbao','Copa del Rey']
+ ].map(([id,home,away,league])=>'<article class="tdm-audit-card"><small>'+E(league)+' · 29/10/2026</small><h3>'+E(home)+' – '+E(away)+'</h3><a class="tdm-link" href="/transparency/statistics/'+id+'" target="_blank" rel="noopener noreferrer">'+t('Στατιστικά αγώνα ↗','Match statistics ↗')+'<span class="sr-only"> '+t('(νέα καρτέλα)','(new tab)')+'</span></a></article>').join('')+'</div></section>';
+}
 function transparency(){
  const all=auditArchive.matches.filter(m=>m.final===true&&Number.isInteger(m.home_score)&&Number.isInteger(m.away_score));
  const hits=all.filter(m=>auditOutcome(m).status==='hit').length,misses=all.filter(m=>auditOutcome(m).status==='miss').length;
@@ -300,6 +306,7 @@ function transparency(){
  const local=x=>new Date(x).toLocaleString(window.__tdLocale==='el'?'el-GR':'en-GB',{timeZone:'Asia/Nicosia',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
  return lead('Διαφάνεια','Οι προβλέψεις μας, δίπλα στα πραγματικά αποτελέσματα.')+
  '<section class="tdm-audit-intro"><span class="tdm-audit-date">Έλεγχος αγώνων · από 18 Οκτωβρίου 2026</span><h2>Κάθε αποτέλεσμα μετράει.</h2><p>Οι ολοκληρωμένοι αγώνες από 18/10/2026, με τις καταγεγραμμένες προβλέψεις και τα τελικά τους αποτελέσματα.</p><div class="tdm-audit-actions"><a href="/api/transparency" class="tdm-link">Δεδομένα ελέγχου ↗</a></div></section>'+
+ auditStatisticsPilot()+
  '<div class="tdm-audit-kpis"><div><b>'+(auditLoading?'—':all.length)+'</b><span>Ολοκληρωμένοι αγώνες</span></div><div><b class="tdm-audit-green">'+(auditLoading?'—':hits)+'</b><span>Επιβεβαιώσεις</span></div><div><b class="tdm-audit-red">'+(auditLoading?'—':misses)+'</b><span>Απορρίψεις</span></div><div><b>'+(auditLoading?'—':pct(hits/(hits+misses)*100))+'</b><span>Γενικό ποσοστό επιτυχίας 1Χ2</span></div></div>'+
  '<details class="tdm-panel tdm-audit-method"><summary>Πώς γίνεται ο έλεγχος</summary><p>Τελευταία αποθηκευμένη πρόβλεψη αυστηρά πριν από τη σέντρα. Η επιτυχία αφορά μόνο μοναδική επιλογή 1Χ2 με τελικό σκορ κανονικής διάρκειας. Το γενικό ποσοστό περιλαμβάνει όλους τους αξιολογήσιμους αγώνες από 18/10 και δεν αλλάζει με τα φίλτρα ημέρας ή διοργάνωσης. Οι αγώνες χωρίς καταγραφή δεν προσμετρώνται. Το αρχείο περιλαμβάνει και παλιότερες εκδόσεις με μικτή προέλευση πιθανοτήτων. Δεν υπολογίζουμε αναδρομικές προβλέψεις. Ώρες Κύπρου.</p></details>'+
  '<div class="tdm-date-control tdm-audit-calendar"><button class="tdm-chip" data-audit-shift="-1" aria-label="Προηγούμενη ημέρα" '+(auditDay==='2026-10-18'?'disabled':'')+'>‹</button><label>Ημερομηνία <input type="date" data-audit-day min="2026-10-18" max="'+today+'" value="'+(auditDay==='all'?'':auditDay)+'" aria-label="Ημερομηνία αγώνων διαφάνειας"></label><button class="tdm-chip" data-audit-shift="1" aria-label="Επόμενη ημέρα" '+(auditDay===today?'disabled':'')+'>›</button><button class="tdm-chip" data-audit-all-days>Όλες οι ημέρες</button></div>'+
