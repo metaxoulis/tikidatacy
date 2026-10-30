@@ -65,9 +65,11 @@ export async function faRecentLineupEvidence(db,teamId,kickoff,fa=null){
  // Stored Football-API rows carry the archived team ID when the club is mapped, so both sources describe one team.
  const team=archived?teamId:'football-api:'+fa.teamId;
  try{
+  // Either source failing (e.g. a missing table) leaves the other one in use.
+  const none={fixtures:[],players:[]};
   const [sm,fl]=await Promise.all([
-   archived?faLineupCached('sm/'+teamId+'/'+day,21600,()=>faArchivedLineupRows(db,teamId,cutoff,from)):{fixtures:[],players:[]},
-   stored?faLineupCached('fa/'+fa.teamId+'/'+day,10800,()=>faStoredLineupRows(fa.db,fa.teamId,cutoff.slice(0,10),from.slice(0,10))):{fixtures:[],players:[]}]);
+   archived?faLineupCached('sm/'+teamId+'/'+day,21600,()=>faArchivedLineupRows(db,teamId,cutoff,from)).catch(()=>none):none,
+   stored?faLineupCached('fa/'+fa.teamId+'/'+day,10800,()=>faStoredLineupRows(fa.db,fa.teamId,cutoff.slice(0,10),from.slice(0,10))).catch(()=>none):none]);
   const fixtures=[...sm.fixtures,...fl.fixtures.map(f=>({...f,home_id:team,away_id:null,home_formation:null}))];
   const players=[...sm.players,...fl.players.map(p=>({...p,team_id:team}))];
   return fixtures.length?faAnalyzeLineupEvidence(fixtures,players,team,kickoff):null;

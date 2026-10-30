@@ -154,3 +154,9 @@ test('archive lookups use the team-date indexes instead of scanning every fixtur
  assert.doesNotMatch(plan(),/SCAN sm_fixtures/);
  assert.match(plan(),/sm_fixtures_home_date/);assert.match(plan(),/sm_fixtures_away_date/);
 });
+
+test('before the lineup table exists, match pages still use the archive alone',async()=>{
+ const {sm}=club(),bare=new DatabaseSync(':memory:');
+ const ev=await faRecentLineupEvidence(d1(sm),13258,'2026-11-01T15:00:00Z',{db:d1(bare),teamId:7008});
+ assert.equal(ev.matches_observed,4);assert.equal(ev.football_api_matches,0);assert.equal(ev.formation,'4-3-3');
+});
