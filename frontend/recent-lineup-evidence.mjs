@@ -2,11 +2,10 @@
  * Football-API player IDs are never compared to Sportmonks player IDs.
  * Never present a historical position as an official current-game position.
  */
-const HALF_YEAR_MS=185*86400000;
-const MAX_LOOKBACK_MS=450*86400000;
-const MAX_GAMES=8;
-const OFFICIAL_FINAL=new Set(['FT','AET','FTP']);
-const dayMs=v=>{const n=Date.parse(v);return Number.isFinite(n)?n:null};
+const FA_LU_HALF_YEAR_MS=185*86400000;
+const FA_LU_MAX_LOOKBACK_MS=450*86400000;
+const FA_LU_MAX_GAMES=8;
+const faLineupDayMs=v=>{const n=Date.parse(v);return Number.isFinite(n)?n:null};
 export function faLineupName(v){
  return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
 }
@@ -20,17 +19,17 @@ export function faHistorySeasonStart(kickoff){
  const y=d.getUTCFullYear()-(d.getUTCMonth()<6?1:0);
  return Date.UTC(y-1,6,1);
 }
-const validFormation=v=>typeof v==='string'&&/^([1-5]-){1,4}[1-5]$/.test(v)&&v.split('-').map(Number).reduce((a,b)=>a+b,0)===10;
+const faLineupValidFormation=v=>typeof v==='string'&&/^([1-5]-){1,4}[1-5]$/.test(v)&&v.split('-').map(Number).reduce((a,b)=>a+b,0)===10;
 export async function faRecentLineupEvidence(db,teamId,kickoff){
- const at=dayMs(kickoff),season=faHistorySeasonStart(kickoff);
+ const at=faLineupDayMs(kickoff),season=faHistorySeasonStart(kickoff);
  if(!db||!Number.isSafeInteger(teamId)||teamId<1||at===null||season===null)return null;
  // The last two seasons, up to eight complete matches, and strictly pre-match.
- const lower=Math.max(season,at-MAX_LOOKBACK_MS);
+ const lower=Math.max(season,at-FA_LU_MAX_LOOKBACK_MS);
  const cutoff=new Date(at-3*86400000).toISOString().slice(0,19).replace('T',' ');
  const from=new Date(lower).toISOString().slice(0,19).replace('T',' ');
  try{
   const raw=await db.prepare("SELECT id,starting_at,home_id,away_id,home_formation,away_formation FROM sm_fixtures WHERE state IN ('FT','AET','FTP') AND starting_at < ?1 AND starting_at >= ?2 AND (home_id=?3 OR away_id=?3) ORDER BY starting_at DESC,id DESC LIMIT 8").bind(cutoff,from,teamId).all();
-  const fixtures=(raw.results||[]).filter(f=>OFFICIAL_FINAL.has('FT')&&f&&Number.isSafeInteger(f.id)&&dayMs(f.starting_at.replace(' ','T')+'Z')<at-3*86400000).slice(0,MAX_GAMES);
+  const fixtures=(raw.results||[]).filter(f=>f&&Number.isSafeInteger(f.id)&&faLineupDayMs(f.starting_at.replace(' ','T')+'Z')<at-3*86400000).slice(0,FA_LU_MAX_GAMES);
   if(!fixtures.length)return null;
   const ids=fixtures.map(f=>f.id);
   const placeholders=ids.map((_,i)=>'?'+(i+2)).join(',');
@@ -39,10 +38,10 @@ export async function faRecentLineupEvidence(db,teamId,kickoff){
  }catch{return null}
 }
 export function faAnalyzeLineupEvidence(fixtures,players,teamId,kickoff){
- const at=dayMs(kickoff);if(at===null)return null;
+ const at=faLineupDayMs(kickoff);if(at===null)return null;
  const byMatch=new Map(),games=(fixtures||[]).filter(f=>Number.isSafeInteger(f?.id)&&f.home_id===teamId||Number.isSafeInteger(f?.id)&&f.away_id===teamId)
-  .sort((a,b)=>String(b.starting_at).localeCompare(String(a.starting_at))).slice(0,MAX_GAMES);
- const validGames=games.filter(f=>{const time=dayMs(String(f.starting_at).replace(' ','T')+'Z');return time!==null&&time<at-3*86400000&&time>=Math.max(faHistorySeasonStart(kickoff),at-MAX_LOOKBACK_MS)});
+  .sort((a,b)=>String(b.starting_at).localeCompare(String(a.starting_at))).slice(0,FA_LU_MAX_GAMES);
+ const validGames=games.filter(f=>{const time=faLineupDayMs(String(f.starting_at).replace(' ','T')+'Z');return time!==null&&time<at-3*86400000&&time>=Math.max(faHistorySeasonStart(kickoff),at-FA_LU_MAX_LOOKBACK_MS)});
  for(const f of validGames)byMatch.set(f.id,[]);
  for(const p of players||[])if(byMatch.has(p.fixture_id)&&p.team_id===teamId&&p.role==='lineup'&&typeof p.player_name==='string'&&faLineupName(p.player_name)){
   const rows=byMatch.get(p.fixture_id);
@@ -54,7 +53,7 @@ export function faAnalyzeLineupEvidence(fixtures,players,teamId,kickoff){
  const forms=new Map();
  complete.forEach((f,index)=>{
   const formation=f.home_id===teamId?f.home_formation:f.away_formation;
-  if(validFormation(formation))forms.set(formation,(forms.get(formation)||0)+1);
+  if(faLineupValidFormation(formation))forms.set(formation,(forms.get(formation)||0)+1);
   const seen=new Set(),weight=Math.pow(.78,index);
   for(const p of byMatch.get(f.id)){
    const key=faLineupName(p.player_name);
@@ -75,8 +74,8 @@ export function faAnalyzeLineupEvidence(fixtures,players,teamId,kickoff){
    starts:complete.filter(f=>byMatch.get(f.id).some(v=>faLineupName(v.player_name)===key)).length,
    historical_player_id:p.player_id||null, last_date:complete.find(f=>byMatch.get(f.id).includes(p))?.starting_at||null};
  }).sort((a,b)=>b.score-a.score||b.starts-a.starts||a.name.localeCompare(b.name));
- const recentDate=dayMs(String(complete[0].starting_at).replace(' ','T')+'Z');
- const projectionReady=complete.length>=3&&people.length>=11&&recentDate!==null&&(at-recentDate)<HALF_YEAR_MS;
+ const recentDate=faLineupDayMs(String(complete[0].starting_at).replace(' ','T')+'Z');
+ const projectionReady=complete.length>=3&&people.length>=11&&recentDate!==null&&(at-recentDate)<FA_LU_HALF_YEAR_MS;
  let projected=null;
  if(projectionReady){
   const keeper=people.find(p=>p.is_goalkeeper);
