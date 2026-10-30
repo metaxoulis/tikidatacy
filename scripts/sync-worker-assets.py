@@ -43,6 +43,11 @@ module = (ROOT / 'frontend/sportmonks-assets.mjs').read_text().replace('export '
 text, count = re.subn(r'/\* sportmonks-assets:start \*/.*?/\* sportmonks-assets:end \*/', lambda _: '/* sportmonks-assets:start */\n' + module + '\n/* sportmonks-assets:end */', text, flags=re.S)
 if count != 1:
     raise RuntimeError('Missing sportmonks-assets markers')
+module = (ROOT / 'frontend/postmatch-statistics.mjs').read_text()
+module = re.sub(r'^import .*?;\n', '', module, flags=re.M).replace('export ', '')
+text, count = re.subn(r'/\* postmatch-statistics:start \*/.*?/\* postmatch-statistics:end \*/', lambda _: '/* postmatch-statistics:start */\n' + module + '\n/* postmatch-statistics:end */', text, flags=re.S)
+if count != 1:
+    raise RuntimeError('Missing postmatch-statistics markers')
 # Keep the Worker's existing line endings so diffs stay focused on the changes.
 text = text.replace('\r\n', '\n')
 if crlf:
