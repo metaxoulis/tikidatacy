@@ -141,3 +141,19 @@ test('Flanks: Sportmonks counts home columns from the right touchline and away c
  assert.deepEqual([2,3,4,5].map(n=>e.positionFor('Player '+n).lateral),[0,.33,.67,1]);
  assert.equal(e.projected.find(p=>p.name==='Player 1').lateral,null,'the keeper has no flank');
 });
+
+test('Another transliteration matches only through the same shirt number and a near-identical surname',()=>{
+ // Nice and Rennes on 2026-10-30: Football-API against the archived Sportmonks spellings.
+ const people=['Mousa Tamari','Mohamed Abdelmonem','Mohamed Amoura','Elye Wahi','Nicolas Lemaître','Mahamadou Nagida'].map((name,i)=>{
+  const norm=faLineupName(name);return {norm,tokens:norm.split(' '),name,number:[11,5,9,11,16,18][i]};
+ });
+ assert.equal(faLineupNameMatch('Moussa Al-Taamari',11,people)?.name,'Mousa Tamari');
+ assert.equal(faLineupNameMatch('Moussa Al-Taamari',null,people),null,'never without the shirt number');
+ assert.equal(faLineupNameMatch('Moussa Al-Taamari',7,people),null);
+ assert.equal(faLineupNameMatch('Kevin Tamaro',4,people),null,'a near surname with another number is someone else');
+ assert.equal(faLineupNameMatch('Mohamed Abdel Monem',5,people)?.name,'Mohamed Abdelmonem');
+ assert.equal(faLineupNameMatch('Mohamed El Amine Amoura',9,people)?.name,'Mohamed Amoura');
+ assert.equal(faLineupNameMatch('Sepe Elye Wahi',11,people)?.name,'Elye Wahi');
+ assert.equal(faLineupNameMatch('Nicolas Lemaitre',16,people)?.name,'Nicolas Lemaître');
+ assert.equal(faLineupNameMatch('Mahamadou Aboubakar Nagida',18,people)?.name,'Mahamadou Nagida');
+});

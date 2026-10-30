@@ -21,7 +21,7 @@ test('statistics keep whitelisted fields, plain counts and rows with at least on
 test('match page statistics: reading order, possession as %, untracked zero counters hidden, real 0s kept',()=>{
  const d=faDetailStatistics(faTrialStatistics(stats));
  assert.deepEqual([...new Set(d.map(x=>x.type))],['Κατοχή','Σουτ','Σουτ στην εστία','Αποκρούσεις','Κόκκινες κάρτες']);
- assert.deepEqual(d.slice(0,2),[{type:'Κατοχή',side:'home',value:'69%'},{type:'Κατοχή',side:'away',value:'31%'}]);
+ assert.deepEqual(d.slice(0,2),[{type:'Κατοχή',code:'possesion',side:'home',value:'69%'},{type:'Κατοχή',code:'possesion',side:'away',value:'31%'}]);
  assert.deepEqual(d.filter(x=>x.type==='Κόκκινες κάρτες').map(x=>x.value),[0,2]);
  assert.deepEqual(faDetailStatistics([{type:'mystery_metric',home:1,away:2}]),[],'unknown types are dropped');
  assert.deepEqual(faDetailStatistics(undefined),[]);

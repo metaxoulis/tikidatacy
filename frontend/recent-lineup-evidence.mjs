@@ -41,7 +41,8 @@ export function faHistorySeasonStart(kickoff){
 }
 /* Football-API abbreviates first names ("M. Sannadi") while Sportmonks keeps them ("Maroan Sannadi").
    A provider name matches one recent player of the same team by full name, or by surname plus initial;
-   the shirt number only breaks ties. Anything still ambiguous stays unmatched. */
+   the shirt number breaks ties, and alone with a near-identical surname covers other transliterations.
+   Anything still ambiguous stays unmatched. */
 export function faLineupNameMatch(currentName,number,people){
  const k=faLineupName(currentName);if(!k)return null;
  const exact=people.filter(p=>p.norm===k);if(exact.length)return exact.length===1?exact[0]:null;
@@ -52,7 +53,21 @@ export function faLineupNameMatch(currentName,number,people){
  const sameInitial=initial?shared.filter(p=>p.tokens[0]?.[0]===initial):shared;
  if(sameInitial.length===1)return sameInitial[0];
  const byNumber=(sameInitial.length?sameInitial:shared).filter(p=>Number.isInteger(number)&&p.number===number);
- return byNumber.length===1?byNumber[0]:null;
+ if(byNumber.length===1)return byNumber[0];
+ if(shared.length||!Number.isInteger(number))return null;
+ // Transliterations differ between providers ("Moussa Al-Taamari" / "Mousa Tamari"): with no shared name token, the
+ // same shirt number plus a surname one letter apart (two for long names) still identifies one squad player.
+ const near=people.filter(p=>p.number===number&&surname.some(t=>t.length>=4&&p.tokens.some(u=>u.length>=4&&faLineupEditDistance(t,u)<=(Math.min(t.length,u.length)>=7?2:1))));
+ return near.length===1?near[0]:null;
+}
+function faLineupEditDistance(a,b){
+ let prev=Array.from({length:b.length+1},(_,i)=>i);
+ for(let i=1;i<=a.length;i++){
+  const row=[i];
+  for(let j=1;j<=b.length;j++)row[j]=Math.min(prev[j]+1,row[j-1]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1));
+  prev=row;
+ }
+ return prev[b.length];
 }
 export async function faRecentLineupEvidence(db,teamId,kickoff,fa=null){
  const at=faLineupDayMs(kickoff),season=faHistorySeasonStart(kickoff);
