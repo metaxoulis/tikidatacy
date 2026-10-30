@@ -51,12 +51,14 @@ Kept (complete, records as counted by the exporter):
 | fixtures-extra | 47,920 | pages 1-241: xGFixture, pressure, comments, trends, timeline, ballCoordinates, sidelined, expectedLineups, predictions, news. From page 242 only `predictions;expectedLineups` (the full set exceeded the 12 MiB page limit) |
 | fixtures-sidelined | 47,920 | `sidelined.sideline`: injured and suspended players per fixture |
 | fixtures-odds | 47,920 | `odds` filtered to market 1 (Fulltime Result), every bookmaker |
-| fixtures-odds-goals (+ `-1b`, `-2`, `-2b`) | see below | `odds` filtered to markets 80 (Goals Over/Under) and 14 (Both Teams To Score), bookmakers 20 Pinnacle, 2 bet365, 9 Betfair, 23 Unibet, 29 WilliamHill, 28 bwin, 35 1xbet, 16 Marathonbet |
+| fixtures-odds-goals (+ `-1b`, `-2`, `-2b`) | 47,920 (pages 1-1917) | `odds` filtered to markets 80 (Goals Over/Under) and 14 (Both Teams To Score), bookmakers 20 Pinnacle, 2 bet365, 9 Betfair, 23 Unibet, 29 WilliamHill, 28 bwin, 35 1xbet, 16 Marathonbet |
 | odds-markets, odds-bookmakers | 202, 123 | id → name lists needed to read the odds |
 | xg-teams | 247,610 | team xG per fixture |
 | xg-players (+ `-below-1400m`, `-below-1300m`) | 571,800 + 55,800 + 92,340 | player xG (`/expected/lineups`) |
-| standings-season-* | one task per season | official tables including deductions |
+| standings-season-* | 233 seasons, 4,423 rows | official tables including deductions |
 | players, teams, coaches, referees, venues, transfers, rivals, news, standings, types, leagues, seasons, stages, rounds and the other reference lists | see `archive_tasks` | as fetched on 2026-10-29 |
+
+The export reached its terminal state at about 17:15 UTC on 2026-10-30: every task is `complete` or `blocked`. Stores 0 and 1 hold about 420 MB and 404 MB; store 2 is empty.
 
 Skipped: predictions/value-bets/live-predictions endpoints (per-fixture predictions are in fixtures-extra), commentaries, in-play, premium and history odds, the unfiltered pre-match odds feed, premium markets/bookmakers, match-facts, team-rankings, cities (venues carry city names), and the per-season schedules and topscorers (derivable from fixtures and events).
 
