@@ -1,0 +1,30 @@
+name: Recent lineup evidence tests
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/recent-lineup-evidence.mjs'
+      - 'frontend/football-primary.mjs'
+      - 'frontend-v13/mobile-ui.js'
+      - 'tests/recent-lineup-evidence.test.mjs'
+      - 'frontend/worker.js'
+      - '.github/workflows/recent-lineup-evidence.yml'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check affected modules
+        run: |
+          node --check frontend/recent-lineup-evidence.mjs
+          node --check frontend/football-primary.mjs
+          node --check frontend-v13/mobile-ui.js
+      - name: Run lineup and provider regression
+        run: node --test tests/recent-lineup-evidence.test.mjs tests/football-primary.test.mjs tests/worker-bundle-parity.test.mjs

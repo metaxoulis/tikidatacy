@@ -1,4 +1,5 @@
 import {faTrialMatch,faTrialCached,faTrialRoute} from './football-trial.mjs';
+import {faRecentLineupEvidence,faEnrichProviderLineups} from './recent-lineup-evidence.mjs';
 /* Main provider adapter. Football-API and legacy Sportmonks IDs never share a namespace. */
 /* Covered: top-5 leagues, Greek and Cypriot top flights, UEFA, and the domestic cups of those seven countries.
    Cups with a known Football-API ID also have their schedule fetched; other cups are accepted by exact name
@@ -255,13 +256,27 @@ export async function faPrimaryDetail(req,env,publicId){
   let data=null;if(game.match_id){const r=await faTrialRoute(new Request(new URL('/api/football-trial/match/'+game.match_id,req.url)),env);if(r.ok)data=await r.json()}
   const players=side=>(data?.lineups?.[side]?.players||[]).map(p=>({id:p.id,name:p.name,number:Number(p.number)||null,position:null,role:null,is_goalkeeper:false,order:null,substitute:p.substitute}));
   const side=key=>{const p=players(key);return {starters:p.filter(p=>!p.substitute),bench:p.filter(p=>p.substitute)}};
-  const lineups={home:side('home'),away:side('away')};
+  const announced={home:side('home'),away:side('away')};
+  // D1-only, read-only evidence: uses previously completed Sportmonks lineups.
+  // Numeric player identities never cross providers. This archive binding may be
+  // absent in preview; then the provider lineups continue working normally.
+  const archived=env.SPORTMONKS_ARCHIVE_DB&&legacy?await Promise.all(['home','away'].map(key=>
+   faRecentLineupEvidence(env.SPORTMONKS_ARCHIVE_DB,legacy[key+'_id'],game.date).catch(()=>null))):[null,null];
+  const evidence={home:archived[0],away:archived[1]};
+  const lineups=faEnrichProviderLineups(announced,evidence);
+  const projected=['home','away'].some(key=>lineups[key].source==='recent_historical_projection');
+  const announcedAny=['home','away'].some(key=>lineups[key].source==='football_api_announced_unverified');
+  const lineupStatus=announcedAny?'unconfirmed':projected?'historical_projection':'unavailable';
+  const formations={home:lineups.home.source==='recent_historical_projection'?evidence.home?.formation||null:null,
+   away:lineups.away.source==='recent_historical_projection'?evidence.away?.formation||null:null};
+  // Most repeated formation in the same recent archived games; shown as an estimate even beside announced players.
+  const historicalFormations={home:evidence.home?.formation||null,away:evidence.away?.formation||null};
   return smResponse({source:'football-api.com',fixture_id:game.match_id||game.fixture_id,public_id:game.id,verified:true,
-   lineup_status:lineups.home.starters.length&&lineups.away.starters.length?'unconfirmed':'unavailable',confirmed_lineup:null,lineups,lineup_sources:{home:lineups.home.starters.length?'official':'unavailable',away:lineups.away.starters.length?'official':'unavailable'},
-   formations:{home:null,away:null},statistics:faDetailStatistics(data?.statistics),match_statistics_available:!!data?.match_statistics_available,statistics_updated_at:data?.statistics_updated_at||null,xg:{home:null,away:null,available:false},player_xg:[],venue:game.venue||null,
+   lineup_status:lineupStatus,confirmed_lineup:null,lineups,lineup_sources:{home:lineups.home.source,away:lineups.away.source},
+   formations,historical_formations:historicalFormations,statistics:faDetailStatistics(data?.statistics),match_statistics_available:!!data?.match_statistics_available,statistics_updated_at:data?.statistics_updated_at||null,xg:{home:null,away:null,available:false},player_xg:[],venue:game.venue||null,
    events:(data?.events||[]).map(e=>({...e,type:e.type,team_id:e.side==='home'?game.home_id:e.side==='away'?game.away_id:null})),
    history:await faPrimaryHistory(env,legacy,game,found),current_season_form:found?faSeasonForm(found,legacy):null,
-   updated_at:new Date().toISOString(),news:[],disclosures:{lineups:'Παίκτες από Football-API. Δεν παρέχονται επιβεβαιωμένες θέσεις ή σχηματισμός.',xg:'Ο πάροχος δεν παρέχει xG.'}},200,30);
+   updated_at:new Date().toISOString(),news:[],disclosures:{lineups:'Η τρέχουσα ενδεκάδα προέρχεται από Football-API όταν είναι διαθέσιμη. Οι θέσεις και οι πιθανές ενδεκάδες βασίζονται αποκλειστικά σε πρόσφατους προηγούμενους αγώνες και δεν αποτελούν επίσημη επιβεβαίωση.',xg:'Ο πάροχος δεν παρέχει xG.'}},200,30);
  }catch{return smResponse({error:'football_api_details_unavailable'},503)}
 }
 /* Finished results for model training (/matches/history.json, 90-minute ft_score). Football-API team IDs are
