@@ -546,13 +546,14 @@ function playerList(team,side,label){const people=team||{starters:[],bench:[]};r
 const shortSurname=n=>String(n||'').trim().split(/\s+/).filter(Boolean).slice(-1)[0]||'—';
 function lineupPitch(m,team,side,formation){
  if(faMatch(m)){
-  const predicted=team?.source==='recent_historical_projection';
-  const list=ps=>ps?.length?ps.map(p=>'<div class="tdm-player"><span class="tdm-shirt">'+E(p.number??'·')+'</span><b>'+E(p.name)+'</b>'+(p.position?'<small>'+E(p.position)+' · ιστορική θέση</small>':'<small>Θέση μη διαθέσιμη</small>')+'</div>').join(''):'<p>Δεν υπάρχουν διαθέσιμοι παίκτες.</p>';
-  return '<section class="tdm-panel"><h3>'+E(m[side])+'</h3>'+
-   '<p class="tdm-note">'+(predicted?'Πιθανή ενδεκάδα Tiki-Data από τις προηγούμενες αγωνιστικές. Δεν είναι επιβεβαιωμένη.':'Παίκτες όπως ανακοινώθηκαν στον πάροχο. Οι θέσεις όπου εμφανίζονται προκύπτουν από πρόσφατες παλαιότερες συμμετοχές, όχι από επίσημη σημερινή διάταξη.')+'</p>'+
-   (formation?'<p class="tdm-note">Συνήθης σχηματισμός στους πρόσφατους αγώνες: <b>'+E(formation)+'</b> · εκτίμηση, όχι επίσημος.</p>':'')+
-   '<h4>'+(predicted?'Πιθανή αρχική ενδεκάδα':'Διαθέσιμη αρχική ενδεκάδα')+'</h4>'+list(team?.starters)+
-   (team?.bench?.length?'<h4>Πάγκος</h4>'+list(team.bench):'')+'</section>';
+  const predicted=team?.source==='recent_historical_projection',announced=!!team?.starters?.length&&!predicted,name=side==='home'?m.home:m.away;
+  // Same card as Sportmonks lineups; positions are labelled historical in the note, tag and footer.
+  const rows=ps=>ps.map(p=>'<div class="tdm-player"><span class="tdm-shirt">'+E(p.number??'·')+'</span><b>'+E(p.name)+'</b><small>'+E(p.position||'Θέση μη διαθέσιμη')+'</small></div>').join('');
+  const note=predicted?'Πιθανή ενδεκάδα Tiki-Data από τις προηγούμενες αγωνιστικές. Δεν είναι επιβεβαιωμένη.':announced?'Παίκτες όπως ανακοινώθηκαν στον πάροχο. Οι θέσεις προκύπτουν από πρόσφατες παλαιότερες συμμετοχές, όχι από επίσημη σημερινή διάταξη.':'Η ενδεκάδα δεν έχει ανακοινωθεί και δεν υπάρχουν αρκετοί πρόσφατοι αγώνες για αξιόπιστη εκτίμηση.';
+  return '<section class="tdm-panel tdm-pitch-card"><div class="tdm-pitch-title">'+badge(name,side==='home'?logoH(m):logoA(m))+'<div><h3>'+E(name)+'</h3>'+(formation?'<span class="tdm-formation-chip">'+E(formation)+' · εκτίμηση</span>':'')+'</div></div>'+
+   '<p class="tdm-note">'+note+'</p>'+
+   (team?.starters?.length?'<h4>'+(predicted?'Πιθανή αρχική ενδεκάδα':'Διαθέσιμη αρχική ενδεκάδα')+'</h4>'+rows(team.starters):'')+
+   (team?.bench?.length?'<details class="tdm-bench"><summary>Αναπληρωματικοί ('+team.bench.length+')</summary>'+rows(team.bench)+'</details>':'')+'</section>';
  }
  const people=team||{starters:[],bench:[]},players=Array.isArray(people.starters)?people.starters:[],bench=Array.isArray(people.bench)?people.bench:[];
  const lines=String(formation||'').split('-').map(Number);
