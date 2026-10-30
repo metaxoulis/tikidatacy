@@ -14,6 +14,11 @@ This draft adds read-only player-role inference and a possible starting XI to th
 - If identities, history or starter samples are insufficient, the UI leaves information unavailable instead of guessing.
 - Lineups and guessed positions are for display only. They do not modify 1X2, over/under or BTTS probabilities.
 
+## Pitch and club colours
+When all eleven starters have a historical position and exactly one is a keeper, the lineup is drawn on the half-pitch: in the usual formation when the players' defence and attack counts fit it, otherwise in the shape their positions make. Within a line players run from the team's left flank to its right, taken from the archived `formation_field` column (Sportmonks counts home columns from the right touchline and away columns from the left). Otherwise the list stays.
+
+Tokens are SVG shirts in the club's traditional colours from `frontend/team-kits.mjs` (plain, stripes, hoops, halves or centre band), keyed by Football-API team ID and listed only for clubs whose colours are well known; others keep the neutral token. When both clubs' main colours are close, the away club is shown in its second colour. The page says these are club colours, not necessarily the kit worn in the match.
+
 ## Stored Football-API lineups
 `faSyncLineups` runs inside the 4-hourly scheduled training, after the new model is published, and never fails that run. It asks Football-API for the lineups of matches already stored in `football_training_results`, newest first, at most 16 per run in about 20 seconds (roughly 100 requests a day of the shared 8,500 budget). A lineup cached by a match-page visit on match day is reused. Empty answers are retried up to three times, 12 hours apart. Rows go to `football_lineups` (starters and bench as `{id,name,number}`), attempts to `football_lineup_fetches`.
 

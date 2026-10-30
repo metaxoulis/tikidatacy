@@ -1,5 +1,6 @@
 import {faTrialMatch,faTrialCached,faTrialRoute,faTrialLineups} from './football-trial.mjs';
 import {faRecentLineupEvidence,faEnrichProviderLineups} from './recent-lineup-evidence.mjs';
+import {faMatchKits} from './team-kits.mjs';
 /* Main provider adapter. Football-API and legacy Sportmonks IDs never share a namespace. */
 /* Covered: top-5 leagues, Greek and Cypriot top flights, UEFA, and the domestic cups of those seven countries.
    Cups with a known Football-API ID also have their schedule fetched; other cups are accepted by exact name
@@ -264,6 +265,8 @@ export async function faPrimaryDetail(req,env,publicId){
    {db:env.TIKI_DB,teamId:game[key+'_id']}).catch(()=>null)));
   const evidence={home:archived[0],away:archived[1]};
   const lineups=faEnrichProviderLineups(announced,evidence);
+  // Traditional club colours for the pitch tokens; the page labels them as such, not as today's kit.
+  const kits=faMatchKits(game.home_id,game.away_id);for(const key of ['home','away'])if(kits[key])lineups[key].kit=kits[key];
   const projected=['home','away'].some(key=>lineups[key].source==='recent_historical_projection');
   const announcedAny=['home','away'].some(key=>lineups[key].source==='football_api_announced_unverified');
   const lineupStatus=announcedAny?'unconfirmed':projected?'historical_projection':'unavailable';

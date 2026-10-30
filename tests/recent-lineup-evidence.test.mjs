@@ -129,3 +129,15 @@ test('Historical names and malformed formation positions cannot produce fabricat
  assert.equal(faHistoricalRole('1:1'),'Τερματοφύλακας');
  assert.equal(faLineupName('João Félix'),'joao felix');
 });
+
+test('Flanks: Sportmonks counts home columns from the right touchline and away columns from the left',()=>{
+ // Real Athletic Club rows: the home right-back is 2:1, the away left-back is 2:1.
+ const games=[mk('2026-10-20',700),{...mk('2026-10-12',701),home_id:60,away_id:50,away_formation:'4-4-2'},mk('2026-10-01',702)];
+ // Players 2-5 are left-back, left and right centre-back, right-back in every game.
+ const back=(home,i)=>'2:'+(home?5-i:i);
+ const rows=games.flatMap(f=>Array.from({length:11},(_,i)=>({fixture_id:f.id,team_id:50,player_id:100+i,player_name:'Player '+(i+1),
+  jersey_number:i+1,position_id:group(i),role:'lineup',formation_field:i>=1&&i<=4?back(f.home_id===50,i):field(i)})));
+ const e=faAnalyzeLineupEvidence(games,rows,50,'2026-10-30T19:00:00Z');
+ assert.deepEqual([2,3,4,5].map(n=>e.positionFor('Player '+n).lateral),[0,.33,.67,1]);
+ assert.equal(e.projected.find(p=>p.name==='Player 1').lateral,null,'the keeper has no flank');
+});
