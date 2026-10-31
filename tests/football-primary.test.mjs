@@ -45,3 +45,14 @@ test('UTC midnight rollover and half time are retained without inventing a live 
  const m=faTrialMatch({...raw,scheduled:'00:05',added:'2026-10-28 23:50:00'});assert.equal(m.date,'2026-10-29T00:05:00.000Z');
  const ht=faPrimaryGame(faTrialMatch({...raw,status:'HALF TIME BREAK',time:'HT'}));assert.equal(ht.status,'HT');assert.equal(ht.minute,null);
 });
+
+test('added time, extra time and shoot-outs stay live (Saturday 2026-10-31 provider statuses)',()=>{
+ const g=(status,time)=>faPrimaryGame(faTrialMatch({...raw,status,time}));
+ assert.deepEqual([g('ADDED TIME','90+').status,g('ADDED TIME','90+').minute],['2ND',90]);
+ assert.deepEqual([g('ADDED TIME','45+').status,g('ADDED TIME','45+').minute],['1ST',45]);
+ assert.deepEqual([g('IN PLAY','90+').status,g('IN PLAY','90+').minute],['2ND',90]);
+ assert.deepEqual([g('IN PLAY','45+2').status,g('IN PLAY','45+2').minute],['1ST',45]);
+ assert.deepEqual([g('IN PLAY','99').status,g('IN PLAY','110').status],['ET','ET']);
+ assert.deepEqual([g('IN PLAY','PS').status,g('IN PLAY','PS').minute],['PEN_LIVE',null]);
+ assert.deepEqual([g('IN PLAY','62').status,g('HALF TIME BREAK','HT').status,g('FINISHED','FT').status,g('NOT STARTED','16:30').status],['2ND','HT','FT','NS']);
+});

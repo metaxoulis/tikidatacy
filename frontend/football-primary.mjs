@@ -21,8 +21,12 @@ export function faPrimaryGame(row){
  if(!row?.date||!Number.isFinite(Date.parse(row.date)))return null;
  const key=faCoveredCompetition(row);
  if(!key)return null;
- const clock=String(row.minute||''),min=/^(\d{1,3})(?:\+\d{1,2})?$/.exec(clock);
- const status=row.status==='FINISHED'?'FT':row.status==='HALF TIME BREAK'?'HT':row.status==='IN PLAY'?(Number(min?.[1])<=45?'1ST':'2ND'):row.status==='EXTRA TIME'?'ET':row.status==='PENALTY SHOOTOUT'?'PEN_LIVE':'NS';
+ // The clock reads "64", "45+" or "90+" in added time, and "PS" during a penalty shoot-out. "ADDED TIME" is play too;
+ // a numeric minute past 90 under "IN PLAY" is extra time (regular added time shows as "90+").
+ const clock=String(row.minute||''),min=/^(\d{1,3})(?:\+\d{0,2})?$/.exec(clock),at=min?Number(min[1]):null;
+ const playing=row.status==='IN PLAY'||row.status==='ADDED TIME';
+ const status=row.status==='FINISHED'?'FT':row.status==='HALF TIME BREAK'?'HT':row.status==='EXTRA TIME'?'ET':
+  row.status==='PENALTY SHOOTOUT'||playing&&clock==='PS'?'PEN_LIVE':playing?(at!==null&&at<=45?'1ST':at!==null&&at>90?'ET':'2ND'):'NS';
  return {...row,id:row.fixture_id?'football-api-fixture-'+row.fixture_id:'football-api-'+row.match_id,
   league_key:key,league:['ucl','uel','uecl'].includes(key)?'UEFA '+row.league:row.country&&/^Cup$/i.test(row.league)?row.country+' Cup':row.league,
   status,minute:status==='NS'?null:min?Number(min[1]):null,logos:{home:null,away:null},events:[],lineups:[],statistics:[],live_stats:[],match_statistics_available:false};
@@ -200,7 +204,7 @@ export function faRefreshLiveStats(env,games,cached,now=Date.now(),fetcher=fetch
 }
 export async function faPrimaryLive(req,env,ctx){
  try{const [snapshot,model,badges]=await Promise.all([faPrimarySnapshot(req,env),tdPublishedModel(env),faBadgeIds(env)]);
-  const playing=snapshot.matches.filter(g=>faPrimaryLiveStatus.has(g.status)&&!g.source_stale&&Number.isInteger(g.home_score)&&Number.isInteger(g.away_score)&&(Number.isInteger(g.minute)||g.status==='HT'));
+  const playing=snapshot.matches.filter(g=>faPrimaryLiveStatus.has(g.status)&&!g.source_stale&&Number.isInteger(g.home_score)&&Number.isInteger(g.away_score)&&(Number.isInteger(g.minute)||['HT','PEN_LIVE'].includes(g.status)));
   const cached=await faCachedLiveStats(env,playing);
   if(ctx?.waitUntil)ctx.waitUntil(faRefreshLiveStats(env,playing,cached));
   const matches=playing.map(g=>faPrimaryForecast(g,model,badges,cached.get(g.match_id)?.stats||null));
