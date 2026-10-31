@@ -58,7 +58,7 @@ async function faTrialRead(response){
  const bytes=new Uint8Array(size);let at=0;for(const c of chunks){bytes.set(c,at);at+=c.length}
  return JSON.parse(new TextDecoder().decode(bytes));
 }
-export async function faTrialCached(env,key,path,params,ttl,normalize,fetcher=fetch,now=Date.now()){
+export async function faTrialCached(env,key,path,params,ttl,normalize,fetcher=fetch,now=Date.now(),{timeout=12000,retry=120000}={}){
  const db=env.FOOTBALL_TRIAL_DB;if(!db)throw Error('trial_storage_unavailable');
  if(!env.FOOTBALL_API_KEY||!env.FOOTBALL_API_KEY_SECRET)throw Error('trial_not_configured');
  const old=await db.prepare('SELECT * FROM football_trial_cache WHERE cache_key=?1').bind(key).first();
@@ -75,7 +75,7 @@ export async function faTrialCached(env,key,path,params,ttl,normalize,fetcher=fe
   const url=new URL('https://api.football-api.com'+path);
   url.searchParams.set('key',String(env.FOOTBALL_API_KEY).trim());url.searchParams.set('secret',String(env.FOOTBALL_API_KEY_SECRET).trim());
   for(const [k,v] of Object.entries(params))url.searchParams.set(k,String(v));
-  let response;const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
+  let response;const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeout);
   try{response=await fetcher(url.toString(),{redirect:'manual',signal:controller.signal})}
   catch(cause){const error=Error('provider_network_error');error.networkHint=String(cause?.message||cause?.name||'unknown').replaceAll(String(env.FOOTBALL_API_KEY).trim(),'REDACTED').replaceAll(String(env.FOOTBALL_API_KEY_SECRET).trim(),'REDACTED').replace(/https?:\/\/\S+/g,'[url]').slice(0,180);throw error}
   finally{clearTimeout(timer)}
@@ -90,7 +90,7 @@ export async function faTrialCached(env,key,path,params,ttl,normalize,fetcher=fe
  }catch(e){
   const safe=new Set(['trial_daily_limit_reached','provider_network_error','provider_access_denied','provider_http_error','provider_invalid_response','provider_request_rejected']);
   const error=safe.has(e.message)?e.message:'trial_storage_error';
-  await db.prepare('UPDATE football_trial_cache SET lease_until=0,retry_after=?1,last_error=?2 WHERE cache_key=?3').bind(now+120000,error+(e.networkHint?': '+e.networkHint:''),key).run();
+  await db.prepare('UPDATE football_trial_cache SET lease_until=0,retry_after=?1,last_error=?2 WHERE cache_key=?3').bind(now+retry,error+(e.networkHint?': '+e.networkHint:''),key).run();
   return {data:cached,fetched_at:old?.fetched_at||0,stale:true,error};
  }
 }
@@ -99,18 +99,28 @@ async function faTrialUsage(env){
  const r=await env.FOOTBALL_TRIAL_DB.prepare('SELECT used FROM football_trial_usage WHERE day_utc=?1').bind(day).first();
  return {day_utc:day,used:r?.used||0,trial_limit:FA_TRIAL_CAP,plan_limit:9000};
 }
+/* The live feed. The scheduler's heartbeat refreshes it twice a minute; a visitor's request asks the provider itself
+   only when the copy is over 90 seconds old, that is when the heartbeat has stopped. A match is frozen when the
+   provider had not changed it for five minutes at the time we fetched the feed, so a slow or failed provider call
+   keeps the last known matches visible; a copy over 15 minutes old hides them all. */
+export const FA_LIVE_VISITOR_TTL=90000;
+export async function faTrialLive(env,ttl=FA_LIVE_VISITOR_TTL,opts={},fetcher=fetch,now=Date.now()){
+ const r=await faTrialCached(env,'live-primary-v2','/matches/live.json',{},ttl,d=>{if(!Array.isArray(d?.match))throw Error('provider_invalid_response');return d.match.map(faTrialMatch).filter(Boolean)},fetcher,now,opts);
+ const at=r.fetched_at||0,old=!at||now-at>900000;
+ const matches=(r.data||[]).map(m=>({...m,source_stale:old||faTrialSourceStale(m,at)}));
+ if(r.refreshed&&matches.length){
+  const stmts=matches.map(m=>env.FOOTBALL_TRIAL_DB.prepare('INSERT INTO football_trial_matches(match_id,payload_json,observed_at,finished) VALUES(?1,?2,?3,?4) ON CONFLICT(match_id) DO UPDATE SET payload_json=excluded.payload_json,observed_at=excluded.observed_at,finished=excluded.finished WHERE football_trial_matches.finished=0 OR excluded.finished=1')
+   .bind(m.match_id,JSON.stringify(m),new Date(r.fetched_at).toISOString(),m.status==='FINISHED'?1:0));
+  for(let i=0;i<stmts.length;i+=50)await env.FOOTBALL_TRIAL_DB.batch(stmts.slice(i,i+50));
+ }
+ return {r,matches};
+}
 export async function faTrialRoute(req,env){
  if(req.method!=='GET')return faReply({error:'method_not_allowed'},405);
  const url=new URL(req.url),path=url.pathname;
  try{
   if(path==='/api/football-trial/live'){
-   const r=await faTrialCached(env,'live-primary-v2','/matches/live.json',{},30000,d=>{if(!Array.isArray(d?.match))throw Error('provider_invalid_response');return d.match.map(faTrialMatch).filter(Boolean)});
-   const matches=(r.data||[]).map(m=>({...m,source_stale:faTrialSourceStale(m)}));
-   if(r.refreshed&&matches.length){
-    const stmts=matches.map(m=>env.FOOTBALL_TRIAL_DB.prepare('INSERT INTO football_trial_matches(match_id,payload_json,observed_at,finished) VALUES(?1,?2,?3,?4) ON CONFLICT(match_id) DO UPDATE SET payload_json=excluded.payload_json,observed_at=excluded.observed_at,finished=excluded.finished WHERE football_trial_matches.finished=0 OR excluded.finished=1')
-     .bind(m.match_id,JSON.stringify(m),new Date(r.fetched_at).toISOString(),m.status==='FINISHED'?1:0));
-    for(let i=0;i<stmts.length;i+=50)await env.FOOTBALL_TRIAL_DB.batch(stmts.slice(i,i+50));
-   }
+   const {r,matches}=await faTrialLive(env);
    return faReply({source:'football-api.com',mode:'parallel_trial',updated_at:r.fetched_at?new Date(r.fetched_at).toISOString():null,stale:r.stale,error:r.error||null,
     match_statistics_available:false,probabilities_modified:false,usage:await faTrialUsage(env),matches},r.data?200:503);
   }

@@ -3723,7 +3723,7 @@ async function faTrialRead(response){
  const bytes=new Uint8Array(size);let at=0;for(const c of chunks){bytes.set(c,at);at+=c.length}
  return JSON.parse(new TextDecoder().decode(bytes));
 }
-async function faTrialCached(env,key,path,params,ttl,normalize,fetcher=fetch,now=Date.now()){
+async function faTrialCached(env,key,path,params,ttl,normalize,fetcher=fetch,now=Date.now(),{timeout=12000,retry=120000}={}){
  const db=env.FOOTBALL_TRIAL_DB;if(!db)throw Error('trial_storage_unavailable');
  if(!env.FOOTBALL_API_KEY||!env.FOOTBALL_API_KEY_SECRET)throw Error('trial_not_configured');
  const old=await db.prepare('SELECT * FROM football_trial_cache WHERE cache_key=?1').bind(key).first();
@@ -3740,7 +3740,7 @@ async function faTrialCached(env,key,path,params,ttl,normalize,fetcher=fetch,now
   const url=new URL('https://api.football-api.com'+path);
   url.searchParams.set('key',String(env.FOOTBALL_API_KEY).trim());url.searchParams.set('secret',String(env.FOOTBALL_API_KEY_SECRET).trim());
   for(const [k,v] of Object.entries(params))url.searchParams.set(k,String(v));
-  let response;const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
+  let response;const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeout);
   try{response=await fetcher(url.toString(),{redirect:'manual',signal:controller.signal})}
   catch(cause){const error=Error('provider_network_error');error.networkHint=String(cause?.message||cause?.name||'unknown').replaceAll(String(env.FOOTBALL_API_KEY).trim(),'REDACTED').replaceAll(String(env.FOOTBALL_API_KEY_SECRET).trim(),'REDACTED').replace(/https?:\/\/\S+/g,'[url]').slice(0,180);throw error}
   finally{clearTimeout(timer)}
@@ -3755,7 +3755,7 @@ async function faTrialCached(env,key,path,params,ttl,normalize,fetcher=fetch,now
  }catch(e){
   const safe=new Set(['trial_daily_limit_reached','provider_network_error','provider_access_denied','provider_http_error','provider_invalid_response','provider_request_rejected']);
   const error=safe.has(e.message)?e.message:'trial_storage_error';
-  await db.prepare('UPDATE football_trial_cache SET lease_until=0,retry_after=?1,last_error=?2 WHERE cache_key=?3').bind(now+120000,error+(e.networkHint?': '+e.networkHint:''),key).run();
+  await db.prepare('UPDATE football_trial_cache SET lease_until=0,retry_after=?1,last_error=?2 WHERE cache_key=?3').bind(now+retry,error+(e.networkHint?': '+e.networkHint:''),key).run();
   return {data:cached,fetched_at:old?.fetched_at||0,stale:true,error};
  }
 }
@@ -3764,18 +3764,28 @@ async function faTrialUsage(env){
  const r=await env.FOOTBALL_TRIAL_DB.prepare('SELECT used FROM football_trial_usage WHERE day_utc=?1').bind(day).first();
  return {day_utc:day,used:r?.used||0,trial_limit:FA_TRIAL_CAP,plan_limit:9000};
 }
+/* The live feed. The scheduler's heartbeat refreshes it twice a minute; a visitor's request asks the provider itself
+   only when the copy is over 90 seconds old, that is when the heartbeat has stopped. A match is frozen when the
+   provider had not changed it for five minutes at the time we fetched the feed, so a slow or failed provider call
+   keeps the last known matches visible; a copy over 15 minutes old hides them all. */
+const FA_LIVE_VISITOR_TTL=90000;
+async function faTrialLive(env,ttl=FA_LIVE_VISITOR_TTL,opts={},fetcher=fetch,now=Date.now()){
+ const r=await faTrialCached(env,'live-primary-v2','/matches/live.json',{},ttl,d=>{if(!Array.isArray(d?.match))throw Error('provider_invalid_response');return d.match.map(faTrialMatch).filter(Boolean)},fetcher,now,opts);
+ const at=r.fetched_at||0,old=!at||now-at>900000;
+ const matches=(r.data||[]).map(m=>({...m,source_stale:old||faTrialSourceStale(m,at)}));
+ if(r.refreshed&&matches.length){
+  const stmts=matches.map(m=>env.FOOTBALL_TRIAL_DB.prepare('INSERT INTO football_trial_matches(match_id,payload_json,observed_at,finished) VALUES(?1,?2,?3,?4) ON CONFLICT(match_id) DO UPDATE SET payload_json=excluded.payload_json,observed_at=excluded.observed_at,finished=excluded.finished WHERE football_trial_matches.finished=0 OR excluded.finished=1')
+   .bind(m.match_id,JSON.stringify(m),new Date(r.fetched_at).toISOString(),m.status==='FINISHED'?1:0));
+  for(let i=0;i<stmts.length;i+=50)await env.FOOTBALL_TRIAL_DB.batch(stmts.slice(i,i+50));
+ }
+ return {r,matches};
+}
 async function faTrialRoute(req,env){
  if(req.method!=='GET')return faReply({error:'method_not_allowed'},405);
  const url=new URL(req.url),path=url.pathname;
  try{
   if(path==='/api/football-trial/live'){
-   const r=await faTrialCached(env,'live-primary-v2','/matches/live.json',{},30000,d=>{if(!Array.isArray(d?.match))throw Error('provider_invalid_response');return d.match.map(faTrialMatch).filter(Boolean)});
-   const matches=(r.data||[]).map(m=>({...m,source_stale:faTrialSourceStale(m)}));
-   if(r.refreshed&&matches.length){
-    const stmts=matches.map(m=>env.FOOTBALL_TRIAL_DB.prepare('INSERT INTO football_trial_matches(match_id,payload_json,observed_at,finished) VALUES(?1,?2,?3,?4) ON CONFLICT(match_id) DO UPDATE SET payload_json=excluded.payload_json,observed_at=excluded.observed_at,finished=excluded.finished WHERE football_trial_matches.finished=0 OR excluded.finished=1')
-     .bind(m.match_id,JSON.stringify(m),new Date(r.fetched_at).toISOString(),m.status==='FINISHED'?1:0));
-    for(let i=0;i<stmts.length;i+=50)await env.FOOTBALL_TRIAL_DB.batch(stmts.slice(i,i+50));
-   }
+   const {r,matches}=await faTrialLive(env);
    return faReply({source:'football-api.com',mode:'parallel_trial',updated_at:r.fetched_at?new Date(r.fetched_at).toISOString():null,stale:r.stale,error:r.error||null,
     match_statistics_available:false,probabilities_modified:false,usage:await faTrialUsage(env),matches},r.data?200:503);
   }
@@ -4189,8 +4199,8 @@ async function faBadgeRoute(env,id){
    'ETag':'"'+row.image_sha256+'"','X-Content-Type-Options':'nosniff'}});
  }catch{return missing()}
 }
-async function faPrimaryScheduled(env){
- const start=new Date().toISOString().slice(0,10),end=smAddDay(start,6),games=[],failures=[];
+async function faPrimaryScheduled(env,fetcher=fetch,now=Date.now()){
+ const start=new Date(now).toISOString().slice(0,10),end=smAddDay(start,6),games=[],failures=[];
  const ids=Object.keys(FA_COMPETITIONS);let cursor=0;
  await Promise.all(Array.from({length:3},async()=>{while(cursor<ids.length){const competition=ids[cursor++];
   for(let page=1;page<=3;page++){
@@ -4198,7 +4208,7 @@ async function faPrimaryScheduled(env){
    const r=await faTrialCached(env,key,'/fixtures/list.json',{competition_id:competition,page},1800000,d=>{
     if(!Array.isArray(d?.fixtures))throw Error('provider_invalid_response');
     return {games:d.fixtures.map(faPrimaryFixture).filter(Boolean),next:!!d.next_page};
-   });
+   },fetcher,now);
    if(r.error||r.stale)failures.push(competition);
    if(!r.data)break;
    games.push(...r.data.games.filter(g=>g.date.slice(0,10)>=start&&g.date.slice(0,10)<=end));
@@ -4308,10 +4318,40 @@ async function faEdgeCached(key,ctx,fresh,build,now=Date.now){
  }
  return serve(await store(await build()));
 }
-/* Live statistics for the live predictor. Read from the shared provider cache (match pages refresh it every two
-   minutes); a live match nobody has open is refreshed in the background every five minutes, so every live
-   forecast can use its statistics for about 25 provider requests per match. */
-const FA_LIVE_STATS_TTL=300000,FA_LIVE_STATS_MAX_AGE=480000;
+/* Live statistics for the live predictor, read from the shared provider cache: the heartbeat refreshes them every
+   three minutes and open match pages every two. A visitor's request refreshes a live match itself only when its copy
+   is over six minutes old, that is when the heartbeat has stopped. */
+const FA_LIVE_STATS_TTL=360000,FA_LIVE_STATS_MAX_AGE=480000;
+/* The scheduler's heartbeat, once a minute: live data stays current whatever the traffic, and visitors only read it.
+   It keeps the 7-day schedule warm (30-minute copies), and while a covered match is on or kicks off within 15
+   minutes it refreshes the live feed at the start and half way through the minute, and the statistics of covered
+   live matches every three minutes. Provider calls get 25 seconds here, more than a visitor could wait. */
+async function faLiveHeartbeat(env,fetcher=fetch,clock=Date.now,sleep=ms=>new Promise(r=>setTimeout(r,ms))){
+ if(!env?.FOOTBALL_TRIAL_DB)return {status:'unavailable'};
+ const started=clock(),report={status:'idle',live_refreshes:0,live_matches:0,statistics_refreshed:0,errors:[]};
+ const schedule=await faPrimaryScheduled(env,fetcher,started).catch(()=>({games:[]}));
+ const covered=list=>list.map(faPrimaryGame).filter(g=>g&&faPrimaryLiveStatus.has(g.status)&&!g.source_stale);
+ const before=covered((await faTrialLive(env,Infinity,{},fetcher,started)).matches);
+ const soon=schedule.games.some(g=>{const t=Date.parse(g.date);return t<=started+900000&&t>=started-9000000});
+ if(!soon&&!before.length)return report;
+ report.status='ok';
+ let first=0;
+ for(const pass of [0,1]){
+  if(pass){if(clock()-started>45000)break;await sleep(Math.max(0,first+30000-clock()))}else first=clock();
+  const {r,matches}=await faTrialLive(env,20000,{timeout:25000,retry:15000},fetcher,clock());
+  if(r.refreshed)report.live_refreshes++;if(r.error)report.errors.push('live:'+r.error);
+  const playing=covered(matches).filter(g=>g.status!=='PEN_LIVE'&&Number.isSafeInteger(g.match_id));
+  report.live_matches=playing.length;
+  if(pass)break;
+  for(let i=0;i<playing.length&&clock()-first<25000;i+=6){
+   const done=await Promise.all(playing.slice(i,i+6).map(g=>faTrialCached(env,'statistics-'+g.match_id,'/statistics/matches.json',{match_id:g.match_id},180000,faTrialStatistics,fetcher,clock(),{timeout:20000,retry:60000})));
+   report.statistics_refreshed+=done.filter(x=>x.refreshed).length;
+   for(const x of done)if(x.error&&x.error!=='refresh_in_progress')report.errors.push('statistics:'+x.error);
+  }
+ }
+ report.errors=[...new Set(report.errors)];
+ return report;
+}
 async function faCachedLiveStats(env,games,now=Date.now()){
  const ids=games.filter(g=>faPrimaryLiveStatus.has(g.status)&&Number.isSafeInteger(g.match_id)).slice(0,90).map(g=>'statistics-'+g.match_id);
  if(!ids.length||!env?.FOOTBALL_TRIAL_DB)return new Map();
@@ -4591,7 +4631,7 @@ async function faSyncStatistics(env,now=Date.now(),fetcher=fetch,limit=40,clock=
 
 /* football-primary:end */
 
-export default {async fetch(req,env,ctx){if(new URL(req.url).pathname==='/api/internal/sportmonks-archive'){if(!await tdTrainingAuthorized(req,env))return new Response('Not Found',{status:404});try{return await sportmonksArchive(req,env)}catch(e){console.error('archive_step_failed',String(e.message).slice(0,160));return Response.json({error:'archive_step_failed',reason:String(e.message).slice(0,160)},{status:503});}}const u=new URL(req.url),path=u.pathname;if(path==='/provider-check'||path==='/provider-check/')return new Response(null,{status:302,headers:{Location:'/predictions?filter=live','Cache-Control':'no-store'}});if(path.startsWith('/api/football-trial/'))return smResponse({error:'trial_retired'},410);if(/^\/api\/match\/football-api(?:-fixture)?-[1-9]\d{0,13}$/.test(path))return faPrimaryDetail(req,env,path.split('/').at(-1),ctx);if(path==='/landing-football.webp')return new Response(Uint8Array.from(atob(TD_LANDING_ART),c=>c.charCodeAt(0)),{headers:{'Content-Type':'image/webp','Cache-Control':'public,max-age=86400'}});if(path==='/api/internal/train')return tdRunScheduledTraining(req,env);if(path==='/api/model/statistics-status')return smResponse(await tdStatisticsStatus(env),200,60);if(path==='/api/model/training-status')return tdTrainingStatus(env);if(path==='/transparency'||path==='/transparency/')return asset(await seoPage(tdHtmlWithAdsenseVerification(HTML_PREDICTIONS,env),req,env,ctx,'transparency'),'text/html; charset=utf-8');if(path==='/api/transparency')return tdTransparency(req,env,ctx);if(path==='/transparency.xlsx')return new Response(Uint8Array.from(atob(TD_AUDIT_EXCEL),c=>c.charCodeAt(0)),{headers:{'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':'attachment; filename="Tiki-Data_Verification_18-10-2026.xlsx"','Cache-Control':'public, max-age=300'}});if(path==='/3287221.txt')return new Response('3287221',{headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'public, max-age=300'}});if(path==='/api/auth/session')return tdAuthSession(req,env);if(path==='/auth/google/start')return tdAuthStart(req,env);if(path==='/auth/google/callback')return tdAuthCallback(req,env);if(path==='/api/auth/preferences')return tdAuthPreferences(req,env);if(path==='/api/auth/logout')return tdAuthLogout(req,env);if(path==='/api/auth/delete')return tdAuthDeleteAccount(req,env);if(!['GET','HEAD'].includes(req.method))return new Response('Method Not Allowed',{status:405});if(path==='/'||path==='/index.html')return asset(await seoPage(tdHtmlWithAdsenseVerification(HTML_HOME,env),req,env,ctx,'home'),'text/html; charset=utf-8');if(path==='/predictions'||path==='/predictions/')return asset(await seoPage(tdHtmlWithAdsenseVerification(HTML_PREDICTIONS,env),req,env,ctx,'predictions'),'text/html; charset=utf-8');if(path==='/about'||path==='/about/')return asset(tdHtmlWithAdsenseVerification(u.searchParams.get('lang')==='el'?LEGAL_ABOUT:tdLegalEnglish('about'),env),'text/html; charset=utf-8');if(path==='/privacy'||path==='/privacy/')return asset(tdHtmlWithAdsenseVerification(u.searchParams.get('lang')==='el'?LEGAL_PRIVACY:tdLegalEnglish('privacy'),env),'text/html; charset=utf-8');if(path==='/terms'||path==='/terms/')return asset(tdHtmlWithAdsenseVerification(u.searchParams.get('lang')==='el'?LEGAL_TERMS:tdLegalEnglish('terms'),env),'text/html; charset=utf-8');if(path==='/cookies'||path==='/cookies/')return asset(tdHtmlWithAdsenseVerification(u.searchParams.get('lang')==='el'?LEGAL_COOKIES:tdLegalEnglish('cookies'),env),'text/html; charset=utf-8');if(path==='/contact'||path==='/contact/')return asset(tdHtmlWithAdsenseVerification(u.searchParams.get('lang')==='el'?LEGAL_CONTACT:tdLegalEnglish('contact'),env),'text/html; charset=utf-8');if(path==='/legal.css')return asset(LEGAL_CSS,'text/css; charset=utf-8');if(path==='/legal-theme.js')return asset(LEGAL_THEME_JS,'application/javascript; charset=utf-8');if(path==='/ads.txt'){const publisher=tdAdsensePublisherId(env);return publisher?asset('google.com, '+publisher+', DIRECT, f08c47fec0942fa0\n','text/plain; charset=utf-8'):new Response('Not Found',{status:404,headers:{'Cache-Control':'no-store'}});}
+export default {async fetch(req,env,ctx){if(new URL(req.url).pathname==='/api/internal/live-refresh'){if(req.method!=='POST'||!await tdTrainingAuthorized(req,env))return new Response('Not Found',{status:404});return Response.json(await faLiveHeartbeat(env).catch(()=>({status:'failed'})))}if(new URL(req.url).pathname==='/api/internal/sportmonks-archive'){if(!await tdTrainingAuthorized(req,env))return new Response('Not Found',{status:404});/* The deployed scheduler still posts here every minute; with the export complete, that call is the live heartbeat. */await faLiveHeartbeat(env).catch(()=>null);try{return await sportmonksArchive(req,env)}catch(e){console.error('archive_step_failed',String(e.message).slice(0,160));return Response.json({error:'archive_step_failed',reason:String(e.message).slice(0,160)},{status:503});}}const u=new URL(req.url),path=u.pathname;if(path==='/provider-check'||path==='/provider-check/')return new Response(null,{status:302,headers:{Location:'/predictions?filter=live','Cache-Control':'no-store'}});if(path.startsWith('/api/football-trial/'))return smResponse({error:'trial_retired'},410);if(/^\/api\/match\/football-api(?:-fixture)?-[1-9]\d{0,13}$/.test(path))return faPrimaryDetail(req,env,path.split('/').at(-1),ctx);if(path==='/landing-football.webp')return new Response(Uint8Array.from(atob(TD_LANDING_ART),c=>c.charCodeAt(0)),{headers:{'Content-Type':'image/webp','Cache-Control':'public,max-age=86400'}});if(path==='/api/internal/train')return tdRunScheduledTraining(req,env);if(path==='/api/model/statistics-status')return smResponse(await tdStatisticsStatus(env),200,60);if(path==='/api/model/training-status')return tdTrainingStatus(env);if(path==='/transparency'||path==='/transparency/')return asset(await seoPage(tdHtmlWithAdsenseVerification(HTML_PREDICTIONS,env),req,env,ctx,'transparency'),'text/html; charset=utf-8');if(path==='/api/transparency')return tdTransparency(req,env,ctx);if(path==='/transparency.xlsx')return new Response(Uint8Array.from(atob(TD_AUDIT_EXCEL),c=>c.charCodeAt(0)),{headers:{'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':'attachment; filename="Tiki-Data_Verification_18-10-2026.xlsx"','Cache-Control':'public, max-age=300'}});if(path==='/3287221.txt')return new Response('3287221',{headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'public, max-age=300'}});if(path==='/api/auth/session')return tdAuthSession(req,env);if(path==='/auth/google/start')return tdAuthStart(req,env);if(path==='/auth/google/callback')return tdAuthCallback(req,env);if(path==='/api/auth/preferences')return tdAuthPreferences(req,env);if(path==='/api/auth/logout')return tdAuthLogout(req,env);if(path==='/api/auth/delete')return tdAuthDeleteAccount(req,env);if(!['GET','HEAD'].includes(req.method))return new Response('Method Not Allowed',{status:405});if(path==='/'||path==='/index.html')return asset(await seoPage(tdHtmlWithAdsenseVerification(HTML_HOME,env),req,env,ctx,'home'),'text/html; charset=utf-8');if(path==='/predictions'||path==='/predictions/')return asset(await seoPage(tdHtmlWithAdsenseVerification(HTML_PREDICTIONS,env),req,env,ctx,'predictions'),'text/html; charset=utf-8');if(path==='/about'||path==='/about/')return asset(tdHtmlWithAdsenseVerification(u.searchParams.get('lang')==='el'?LEGAL_ABOUT:tdLegalEnglish('about'),env),'text/html; charset=utf-8');if(path==='/privacy'||path==='/privacy/')return asset(tdHtmlWithAdsenseVerification(u.searchParams.get('lang')==='el'?LEGAL_PRIVACY:tdLegalEnglish('privacy'),env),'text/html; charset=utf-8');if(path==='/terms'||path==='/terms/')return asset(tdHtmlWithAdsenseVerification(u.searchParams.get('lang')==='el'?LEGAL_TERMS:tdLegalEnglish('terms'),env),'text/html; charset=utf-8');if(path==='/cookies'||path==='/cookies/')return asset(tdHtmlWithAdsenseVerification(u.searchParams.get('lang')==='el'?LEGAL_COOKIES:tdLegalEnglish('cookies'),env),'text/html; charset=utf-8');if(path==='/contact'||path==='/contact/')return asset(tdHtmlWithAdsenseVerification(u.searchParams.get('lang')==='el'?LEGAL_CONTACT:tdLegalEnglish('contact'),env),'text/html; charset=utf-8');if(path==='/legal.css')return asset(LEGAL_CSS,'text/css; charset=utf-8');if(path==='/legal-theme.js')return asset(LEGAL_THEME_JS,'application/javascript; charset=utf-8');if(path==='/ads.txt'){const publisher=tdAdsensePublisherId(env);return publisher?asset('google.com, '+publisher+', DIRECT, f08c47fec0942fa0\n','text/plain; charset=utf-8'):new Response('Not Found',{status:404,headers:{'Cache-Control':'no-store'}});}
 if(path.startsWith('/archived-badges/')&&path.endsWith('.png'))return localArchivedBadge(env,path.slice(17,-4));if(path.startsWith('/badges/')&&path.endsWith('.png'))return faBadgeRoute(env,path.slice(8,-4));if(path.startsWith('/league-logos/')&&path.endsWith('.png'))return faLeagueLogoRoute(env,path.slice(14,-4));if(path==='/robots.txt')return asset(ADSENSE_ROBOTS,'text/plain; charset=utf-8');if(path==='/google72d157a252fdd591.html')return new Response("google-site-verification: google72d157a252fdd591.html",{status:200,headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'public,max-age=3600','X-Content-Type-Options':'nosniff'}});if(path==='/sitemap.xml')return seoSitemap(req,env,ctx);if(path==='/og-image.jpg')return seoOgImage();if(path==='/data'||path==='/data/')return new Response(null,{status:302,headers:{Location:'/predictions','Cache-Control':'no-store'}});if(path==='/data.css')return asset(CSS_DATA,'text/css; charset=utf-8');if(path==='/data.js')return asset(JS_DATA,'application/javascript; charset=utf-8');if(path==='/home-v23.css')return asset(HOME_V23_CSS,'text/css; charset=utf-8');if(path==='/home-v23.js')return asset(HOME_V23_JS,'application/javascript; charset=utf-8');if(path==='/styles.css')return asset(CSS,'text/css; charset=utf-8');if(path==='/logos.js')return asset(LOGOS,'application/javascript; charset=utf-8');if(path==='/home.js')return asset(HOME,'application/javascript; charset=utf-8');if(path==='/app.js')return asset(JS,'application/javascript; charset=utf-8');if(path==='/mobile-ui.js'){const response=asset(MOBILE_UI_JS,'application/javascript; charset=utf-8');response.headers.set('Cache-Control','no-cache, must-revalidate');return response;}if(path==='/locale.js')return asset(LOCALE_JS,'application/javascript; charset=utf-8');if(path==='/mobile-ui.css')return asset(MOBILE_UI_CSS,'text/css; charset=utf-8');if(path==='/stadium.svg')return asset(STADIUM,'image/svg+xml');/* pwa-routes:start */if(path==='/manifest.webmanifest')return asset(PWA_MANIFEST,'application/manifest+json');if(path==='/sw.js')return pwaWorker();if(Object.prototype.hasOwnProperty.call(PWA_ICONS,path))return pwaIcon(path);/* pwa-routes:end */if(path==='/brand.svg')return asset(BRAND,'image/svg+xml');if(path==='/favicon.svg')return asset(FAVICON,'image/svg+xml');if(path.startsWith('/api/allsports/')||path.startsWith('/api/sport/')||path==='/api/home-v23'||path==='/api/fixtures'||path.startsWith('/api/logo/team/'))return new Response(JSON.stringify({error:'retired_api'}),{status:410,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});if(path.startsWith('/api/sportmonks/')||path==='/api/history/fixtures'||path==='/api/history/odds/summary')return smResponse({error:'provider_migrated',source:'football-api.com'},410);if(path==='/api/sportmonks/health')return smCheckAccess(req,env);if(path==='/api/sportmonks/stage')return smStage(req,env);if(path==='/api/home-focus')return tdProviderFocus(req,env,ctx);if(path==='/api/uefa/evidence-status')return tdUefaEvidenceStatus(env);if(path==='/api/uefa/stages')return smResponse({source:'football-api.com',leagues:[]},200,3600);if(path==='/api/live')return tdProviderLive(req,env,ctx);if(/^\/api\/match\/sportmonks-[1-9]\d{0,13}$/.test(path))return smResponse({error:'provider_migrated'},410);if(path==='/api/model/backtest')return tdBacktestResponse(req,env,ctx);if(path==='/api/model/sync-status')return tdSyncStatus(req,env);if(path==='/api/history/fixtures')return smHistoryFixturesRoute(req,env,ctx);if(path==='/api/history/odds/summary')return smHistoryOddsRoute(req,env,ctx);return new Response('Not Found',{status:404})}};
 
 /* sportmonks-archive:start */
