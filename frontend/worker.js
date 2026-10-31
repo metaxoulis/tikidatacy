@@ -3765,12 +3765,14 @@ async function faTrialUsage(env){
  return {day_utc:day,used:r?.used||0,trial_limit:FA_TRIAL_CAP,plan_limit:9000};
 }
 /* The live feed. The scheduler's heartbeat refreshes it twice a minute; a visitor's request asks the provider itself
-   only when the copy is over 90 seconds old, that is when the heartbeat has stopped. A match is frozen when the
+   only when the copy is over 90 seconds old, that is when the heartbeat has stopped, and in the background, so it
+   may take as long as the heartbeat. `params` narrows the request (the site asks only for its competitions: the
+   whole world, about 300 matches on a Saturday, took the provider over 25 seconds). A match is frozen when the
    provider had not changed it for five minutes at the time we fetched the feed, so a slow or failed provider call
    keeps the last known matches visible; a copy over 15 minutes old hides them all. */
 const FA_LIVE_VISITOR_TTL=90000;
-async function faTrialLive(env,ttl=FA_LIVE_VISITOR_TTL,opts={},fetcher=fetch,now=Date.now()){
- const r=await faTrialCached(env,'live-primary-v2','/matches/live.json',{},ttl,d=>{if(!Array.isArray(d?.match))throw Error('provider_invalid_response');return d.match.map(faTrialMatch).filter(Boolean)},fetcher,now,opts);
+async function faTrialLive(env,ttl=FA_LIVE_VISITOR_TTL,opts={},fetcher=fetch,now=Date.now(),params={}){
+ const r=await faTrialCached(env,'live-primary-v2','/matches/live.json',params,ttl,d=>{if(!Array.isArray(d?.match))throw Error('provider_invalid_response');return d.match.map(faTrialMatch).filter(Boolean)},fetcher,now,opts);
  const at=r.fetched_at||0,old=!at||now-at>900000;
  const matches=(r.data||[]).map(m=>({...m,source_stale:old||faTrialSourceStale(m,at)}));
  if(r.refreshed&&matches.length){
@@ -4113,7 +4115,10 @@ function faEnrichProviderLineups(data,evidence){
 /* Covered: top-5 leagues, Greek and Cypriot top flights, UEFA, and the domestic cups of those seven countries.
    Cups with a known Football-API ID also have their schedule fetched; other cups are accepted by exact name
    when they appear live, so lower divisions (National League, Coppa Italia Serie C...) stay out. */
-const FA_COMPETITIONS={1:'bundesliga',2:'epl',3:'laliga',4:'seriea',5:'ligue1',9:'greece',44:'cyprus',244:'ucl',245:'uel',446:'uecl',150:'fa150',167:'fa167',171:'fa171'};
+const FA_COMPETITIONS={1:'bundesliga',2:'epl',3:'laliga',4:'seriea',5:'ligue1',9:'greece',44:'cyprus',244:'ucl',245:'uel',446:'uecl',150:'fa150',167:'fa167',171:'fa171',334:'fa334'};
+// The live feed is requested for these competitions only; cups with an unknown ID still pass by name when a feed
+// without this filter is read.
+const FA_LIVE_PARAMS={competition_id:Object.keys(FA_COMPETITIONS).join(',')};
 const FA_CUPS={
  England:/^(?:FA Cup|EFL Cup|League Cup|Community Shield)$/i,
  Spain:/^(?:Copa del Rey|Super ?Cup|Supercopa(?: de Espa(?:n|ñ)a)?)$/i,
@@ -4292,8 +4297,9 @@ function faPrimaryForecast(game,model,badges,stats=null){
   analysis_provenance:outlook?.live_stats_applied?'historical_score_minute_live_statistics':'historical_score_minute_no_live_statistics',live_stats:[],statistics:[]};
 }
 async function faPrimarySnapshot(req,env){
- const r=await faTrialRoute(new Request(new URL('/api/football-trial/live',req.url)),env);const data=await r.json();
- return {...data,matches:(data.matches||[]).map(faPrimaryGame).filter(Boolean)};
+ const {r,matches}=await faTrialLive(env,FA_LIVE_VISITOR_TTL,{timeout:25000,retry:30000},fetch,Date.now(),FA_LIVE_PARAMS);
+ return {source:'football-api.com',updated_at:r.fetched_at?new Date(r.fetched_at).toISOString():null,stale:r.stale,error:r.error||null,
+  usage:await faTrialUsage(env).catch(()=>null),matches:matches.map(faPrimaryGame).filter(Boolean)};
 }
 /* Feed and match-page responses are served from the data centre's Cache API, stale-while-revalidate: a copy
    younger than `fresh` is returned as is; an older one (up to ten minutes) is returned at once while a rebuild runs in
@@ -4331,14 +4337,14 @@ async function faLiveHeartbeat(env,fetcher=fetch,clock=Date.now,sleep=ms=>new Pr
  const started=clock(),report={status:'idle',live_refreshes:0,live_matches:0,statistics_refreshed:0,errors:[]};
  const schedule=await faPrimaryScheduled(env,fetcher,started).catch(()=>({games:[]}));
  const covered=list=>list.map(faPrimaryGame).filter(g=>g&&faPrimaryLiveStatus.has(g.status)&&!g.source_stale);
- const before=covered((await faTrialLive(env,Infinity,{},fetcher,started)).matches);
+ const before=covered((await faTrialLive(env,Infinity,{},fetcher,started,FA_LIVE_PARAMS)).matches);
  const soon=schedule.games.some(g=>{const t=Date.parse(g.date);return t<=started+900000&&t>=started-9000000});
  if(!soon&&!before.length)return report;
  report.status='ok';
  let first=0;
  for(const pass of [0,1]){
   if(pass){if(clock()-started>45000)break;await sleep(Math.max(0,first+30000-clock()))}else first=clock();
-  const {r,matches}=await faTrialLive(env,20000,{timeout:25000,retry:15000},fetcher,clock());
+  const {r,matches}=await faTrialLive(env,20000,{timeout:25000,retry:15000},fetcher,clock(),FA_LIVE_PARAMS);
   if(r.refreshed)report.live_refreshes++;if(r.error)report.errors.push('live:'+r.error);
   const playing=covered(matches).filter(g=>g.status!=='PEN_LIVE'&&Number.isSafeInteger(g.match_id));
   report.live_matches=playing.length;
