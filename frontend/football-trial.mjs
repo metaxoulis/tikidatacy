@@ -42,8 +42,10 @@ export function faTrialStatistics(d){
  return (Array.isArray(d)?d:[]).slice(0,40).map(x=>({type:String(x?.type||'').slice(0,40),home:n(x?.home),away:n(x?.away)}))
   .filter(x=>/^[a-z_]+$/.test(x.type)&&(x.home!==null||x.away!==null)&&!(x.type==='possesion'&&(x.home>100||x.away>100)));
 }
+/* A match in play whose provider record has not changed for five minutes is treated as frozen. On a busy Saturday
+   (close to 300 matches at once) the provider updates each record only every one to three minutes. */
 export function faTrialSourceStale(m,now=Date.now()){
- return m.status==='IN PLAY'&&(!m.provider_updated_at||now-Date.parse(m.provider_updated_at)>85000||Date.parse(m.provider_updated_at)>now+60000);
+ return ['IN PLAY','ADDED TIME'].includes(m.status)&&(!m.provider_updated_at||now-Date.parse(m.provider_updated_at)>300000||Date.parse(m.provider_updated_at)>now+60000);
 }
 const faReply=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{
  'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});

@@ -15,7 +15,9 @@ test('provider IDs and untrusted URLs cannot leak into normalized match identity
  const m=faTrialMatch(raw);assert.equal(m.id,'football-api-99');assert.equal(m.fixture_id,8);assert.equal(m.home_score,2);assert.equal(m.provider_updated_at,'2026-10-28T19:00:00Z');
  assert.ok(!JSON.stringify(m).includes('private'));assert.equal(faTrialMatch({...raw,away:{id:5,name:'Other'}}),null);
  assert.equal(faTrialMatch({...raw,scores:{score:''}}).home_score,null);
- assert.equal(faTrialSourceStale(m,Date.parse('2026-10-28T19:02:00Z')),true);
+ assert.equal(faTrialSourceStale(m,Date.parse('2026-10-28T19:02:00Z')),false,'a busy provider updates each record only every few minutes');
+ assert.equal(faTrialSourceStale(m,Date.parse('2026-10-28T19:06:00Z')),true,'five minutes without a change is frozen');
+ assert.equal(faTrialSourceStale({...m,status:'ADDED TIME'},Date.parse('2026-10-28T19:06:00Z')),true);
  assert.equal(faTrialSourceStale({...m,status:'FINISHED'},Date.parse('2026-10-29T19:02:00Z')),false);
 });
 test('events retain chronology and side, and lineup roles preserve unknown data',()=>{
