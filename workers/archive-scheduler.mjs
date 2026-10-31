@@ -15,3 +15,13 @@ export async function runArchiveBatch(env){
  }
  console.log(JSON.stringify(report));return report;
 }
+
+// The minute trigger now keeps live data current: the Sportmonks export it used to drive is complete. Until this
+// worker is redeployed, its archive call above reaches the same heartbeat on the Pages side.
+export async function runLiveHeartbeat(env){
+ const response=await fetch('https://tiki-data.pages.dev/api/internal/live-refresh',{method:'POST',
+  headers:{Authorization:'Bearer '+env.MODEL_TRAINING_TOKEN},signal:AbortSignal.timeout(90000)});
+ if(!response.ok)throw Error('Live heartbeat HTTP '+response.status);
+ const report={event:'live_heartbeat',...await response.json()};
+ console.log(JSON.stringify(report));return report;
+}

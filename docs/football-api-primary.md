@@ -14,6 +14,15 @@ Production verification on 2026-10-29 at 09:50 UTC: 12 Football-API results for 
 
 The provider sends no positions or formations. Announced lineups are drawn on the pitch with positions taken from the same players' recent matches (archived Sportmonks lineups, matched by name, or by shirt number with a near-identical surname); a single starter without a recorded position is placed by elimination, and with more than one missing the lineup is listed instead. Match pages show Football-API match statistics (possession, shots, corners, fouls, cards and similar counts) where the provider records them; smaller competitions may have none, and the Stats tab is then empty. The provider's match xG (`expected_goals`, larger competitions only) is shown to three decimals in the xG panel, and the overview repeats the key counts (xG, possession, shots, shots on target, corners, cards) while a match is live or finished; live match pages refresh them every two minutes. Statistics and lineups of finished matches are stored by the scheduled training (`football_match_statistics`, `football_lineups`). API credentials stay in Cloudflare secret bindings and only whitelisted provider fields are cached or exposed.
 
+Live data does not depend on visitors. Every minute the scheduler (`tiki-data-history-scheduler`, trigger `* * * * *`) runs a heartbeat. The Pages side reaches it through `/api/internal/live-refresh`, or through the archive call made by the scheduler that is currently deployed. Each heartbeat:
+- keeps the 7-day schedule warm (30-minute copies);
+- while a covered match is on, or kicks off within 15 minutes, refreshes the live feed twice a minute and the statistics of covered live matches every three minutes, with 25-second provider timeouts;
+- otherwise makes no live request.
+
+Visitors only read these copies. A visitor request asks the provider itself only when the live copy is over 90 seconds old, or a live match's statistics are over six minutes old, that is when the heartbeat has stopped. A match is judged frozen against the time the feed was fetched, so a slow or failed provider call keeps the last known matches visible; a copy over 15 minutes old hides them.
+
+On a 26-match Saturday this is roughly 1,200 live-feed and 1,000 statistics requests, well inside the 8,500 daily ceiling.
+
 `/api/home-focus`, `/api/live` and `/api/match/<id>` are served from the data centre's Cache API, stale-while-revalidate:
 - A copy younger than 20 s (10 s for live) is returned as is.
 - An older copy (up to ten minutes) is returned immediately while one rebuild per isolate runs in the background.
@@ -27,6 +36,6 @@ The live predictor mixes history with the match itself. It starts from each team
 - Without xG, shots on target, shots, corners and possession shift only the split between the teams, up to ±30% and ramped in over 30 minutes, as the earlier Sportmonks live model did.
 - A red-card difference shifts the split in both cases.
 
-The blend weights are not yet validated. `/api/live` reads these statistics from the shared provider cache and refreshes, in the background, those of live matches nobody has open every five minutes, at most eight per request. That costs about 25 provider requests per live match.
+The blend weights are not yet validated.
 
 Production check on 2026-10-29 at 21:13 UTC: three of four in-play matches (Everton–Newcastle, Fiorentina–Atalanta, AE Prat–Athletic Bilbao) returned 12 statistic types on `/api/match/<id>`; Gimnastica Torrelavega–UD Ourense returned none. `/api/live` reports `match_statistics_available: false` by design.

@@ -26,7 +26,7 @@ Apply `migrations/20261029_sportmonks_raw_archive.sql` to these stores only. Exi
 
 `POST /api/internal/sportmonks-archive` accepts `{"action":"init"}`, `{"action":"step","pages":6}`, or `{"action":"status"}`, with the existing MODEL_TRAINING_TOKEN as a Bearer header. Credentials never enter client code or versioned files.
 
-The history scheduler keeps its training trigger (`0 4,16 * * *`). A temporary `* * * * *` trigger drives up to 24 bounded export steps per invocation. It uses the existing server-side training credential. Remove the minute trigger after completion and keep the training trigger.
+The history scheduler keeps its training trigger (`0 4,16 * * *`). Its `* * * * *` trigger drove up to 24 bounded export steps per invocation, using the existing server-side training credential. Now that the export is complete, that minute call runs the Football-API live heartbeat (see `docs/football-api-primary.md`), so **keep the minute trigger**.
 
 The exporter reserves at most 15,000 pages per UTC day, independently of public traffic, to leave substantial D1 write headroom. This is a conservative archive-only ceiling, not a claim about remaining account-wide quota. It resumes on the next UTC day after a budget pause. Indexed queue selection avoids repeatedly scanning the job manifest. Per-request batches and concurrent decoding are bounded to avoid Worker resource limits. A full shard set pauses explicitly.
 
