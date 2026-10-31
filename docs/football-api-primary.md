@@ -19,7 +19,7 @@ Live data does not depend on visitors. Every minute the scheduler (`tiki-data-hi
 - while a covered match is on, or kicks off within 15 minutes, refreshes the live feed twice a minute and the statistics of covered live matches every three minutes, with 25-second provider timeouts;
 - otherwise makes no live request.
 
-Visitors only read these copies. A visitor request asks the provider itself only when the live copy is over 90 seconds old, or a live match's statistics are over six minutes old, that is when the heartbeat has stopped. A match is judged frozen against the time the feed was fetched, so a slow or failed provider call keeps the last known matches visible; a copy over 15 minutes old hides them.
+The live feed is requested only for the site's competitions, using `competition_id` with the covered league, UEFA and domestic-cup IDs (334 is the Copa del Rey). The whole world, about 300 matches on a Saturday, took the provider over 25 seconds and timed out from 16:31 UTC on 2026-10-31. Visitors only read these copies. A visitor request asks the provider itself only when the live copy is over 90 seconds old, or a live match's statistics are over six minutes old, that is when the heartbeat has stopped. A match is judged frozen against the time the feed was fetched, so a slow or failed provider call keeps the last known matches visible; a copy over 15 minutes old hides them.
 
 On a 26-match Saturday this is roughly 1,200 live-feed and 1,000 statistics requests, well inside the 8,500 daily ceiling.
 

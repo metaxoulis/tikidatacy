@@ -94,18 +94,20 @@ export async function faTrialCached(env,key,path,params,ttl,normalize,fetcher=fe
   return {data:cached,fetched_at:old?.fetched_at||0,stale:true,error};
  }
 }
-async function faTrialUsage(env){
+export async function faTrialUsage(env){
  const day=new Date().toISOString().slice(0,10);
  const r=await env.FOOTBALL_TRIAL_DB.prepare('SELECT used FROM football_trial_usage WHERE day_utc=?1').bind(day).first();
  return {day_utc:day,used:r?.used||0,trial_limit:FA_TRIAL_CAP,plan_limit:9000};
 }
 /* The live feed. The scheduler's heartbeat refreshes it twice a minute; a visitor's request asks the provider itself
-   only when the copy is over 90 seconds old, that is when the heartbeat has stopped. A match is frozen when the
+   only when the copy is over 90 seconds old, that is when the heartbeat has stopped, and in the background, so it
+   may take as long as the heartbeat. `params` narrows the request (the site asks only for its competitions: the
+   whole world, about 300 matches on a Saturday, took the provider over 25 seconds). A match is frozen when the
    provider had not changed it for five minutes at the time we fetched the feed, so a slow or failed provider call
    keeps the last known matches visible; a copy over 15 minutes old hides them all. */
 export const FA_LIVE_VISITOR_TTL=90000;
-export async function faTrialLive(env,ttl=FA_LIVE_VISITOR_TTL,opts={},fetcher=fetch,now=Date.now()){
- const r=await faTrialCached(env,'live-primary-v2','/matches/live.json',{},ttl,d=>{if(!Array.isArray(d?.match))throw Error('provider_invalid_response');return d.match.map(faTrialMatch).filter(Boolean)},fetcher,now,opts);
+export async function faTrialLive(env,ttl=FA_LIVE_VISITOR_TTL,opts={},fetcher=fetch,now=Date.now(),params={}){
+ const r=await faTrialCached(env,'live-primary-v2','/matches/live.json',params,ttl,d=>{if(!Array.isArray(d?.match))throw Error('provider_invalid_response');return d.match.map(faTrialMatch).filter(Boolean)},fetcher,now,opts);
  const at=r.fetched_at||0,old=!at||now-at>900000;
  const matches=(r.data||[]).map(m=>({...m,source_stale:old||faTrialSourceStale(m,at)}));
  if(r.refreshed&&matches.length){
