@@ -14,6 +14,12 @@ Production verification on 2026-10-29 at 09:50 UTC: 12 Football-API results for 
 
 The provider sends no positions or formations. Announced lineups are drawn on the pitch with positions taken from the same players' recent matches (archived Sportmonks lineups, matched by name, or by shirt number with a near-identical surname); a single starter without a recorded position is placed by elimination, and with more than one missing the lineup is listed instead. Match pages show Football-API match statistics (possession, shots, corners, fouls, cards and similar counts) where the provider records them; smaller competitions may have none, and the Stats tab is then empty. The provider's match xG (`expected_goals`, larger competitions only) is shown to three decimals in the xG panel, and the overview repeats the key counts (xG, possession, shots, shots on target, corners, cards) while a match is live or finished; live match pages refresh them every two minutes. Statistics and lineups of finished matches are stored by the scheduled training (`football_match_statistics`, `football_lineups`). API credentials stay in Cloudflare secret bindings and only whitelisted provider fields are cached or exposed.
 
+`/api/home-focus`, `/api/live` and `/api/match/<id>` are served from the data centre's Cache API, stale-while-revalidate:
+- A copy younger than 20 s (10 s for live) is returned as is.
+- An older copy (up to ten minutes) is returned immediately while one rebuild per isolate runs in the background.
+
+Visitors therefore never wait for the provider or for the model, which each isolate keeps in memory for a minute. A match page's events, lineups and statistics are requested in parallel.
+
 A match counts as live while the provider reports "IN PLAY" or "ADDED TIME". Its clock may read "45+" or "90+" in added time, which counts as minute 45 or 90, and "PS" during a penalty shoot-out. A numeric minute past 90 is extra time. A live match is hidden as frozen only when its provider record has not changed for five minutes; on a busy Saturday (about 300 matches at once) the provider updates each record only every one to three minutes. With nothing in play, the live page lists the next kick-offs.
 
 The live predictor mixes history with the match itself. It starts from each team's historical scoring rate, or the league or global average, and conditions on score and minute. When the match's provider statistics are at most eight minutes old it also uses them:

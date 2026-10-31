@@ -187,6 +187,29 @@ async function faPrimarySnapshot(req,env){
  const r=await faTrialRoute(new Request(new URL('/api/football-trial/live',req.url)),env);const data=await r.json();
  return {...data,matches:(data.matches||[]).map(faPrimaryGame).filter(Boolean)};
 }
+/* Feed and match-page responses are served from the data centre's Cache API, stale-while-revalidate: a copy
+   younger than `fresh` is returned as is; an older one (up to ten minutes) is returned at once while a rebuild runs in
+   the background, so a visitor never waits for the provider or the model. Only a cold cache builds in the request,
+   and an isolate rebuilds a key once at a time. */
+const faEdgeBuilding=new Set();
+export async function faEdgeCached(key,ctx,fresh,build,now=Date.now){
+ const cache=globalThis.caches?.default,id=new Request('https://tiki-cache.local/fa-edge-v1/'+key);
+ const serve=r=>{const h=new Headers(r.headers);h.set('Cache-Control','no-store');h.delete('X-Tiki-Built-At');return new Response(r.body,{status:r.status,headers:h})};
+ const store=async r=>{
+  if(!cache||r.status!==200)return r;
+  const h=new Headers(r.headers);h.set('Cache-Control','public, max-age=600');h.set('X-Tiki-Built-At',String(now()));
+  const body=await r.arrayBuffer();await cache.put(id,new Response(body,{status:200,headers:h})).catch(()=>{});
+  return new Response(body,{status:200,headers:r.headers});
+ };
+ const hit=cache?await cache.match(id).catch(()=>null):null;
+ const age=hit?now()-Number(hit.headers.get('X-Tiki-Built-At')||0):Infinity;
+ if(hit&&age<fresh)return serve(hit);
+ if(hit&&age<600000&&ctx?.waitUntil){
+  if(!faEdgeBuilding.has(key)){faEdgeBuilding.add(key);ctx.waitUntil(Promise.resolve().then(build).then(store).catch(()=>{}).finally(()=>faEdgeBuilding.delete(key)))}
+  return serve(hit);
+ }
+ return serve(await store(await build()));
+}
 /* Live statistics for the live predictor. Read from the shared provider cache (match pages refresh it every two
    minutes); a live match nobody has open is refreshed in the background every five minutes, so every live
    forecast can use its statistics for about 25 provider requests per match. */
@@ -202,7 +225,8 @@ export function faRefreshLiveStats(env,games,cached,now=Date.now(),fetcher=fetch
  const due=games.filter(g=>faPrimaryLiveStatus.has(g.status)&&g.status!=='PEN_LIVE'&&Number.isSafeInteger(g.match_id)&&!(now-(cached.get(g.match_id)?.fetched_at||0)<FA_LIVE_STATS_TTL)).slice(0,8);
  return Promise.allSettled(due.map(g=>faTrialCached(env,'statistics-'+g.match_id,'/statistics/matches.json',{match_id:g.match_id},FA_LIVE_STATS_TTL,faTrialStatistics,fetcher,now)));
 }
-export async function faPrimaryLive(req,env,ctx){
+export function faPrimaryLive(req,env,ctx){return faEdgeCached('live',ctx,10000,()=>faPrimaryLiveBuild(req,env,ctx))}
+async function faPrimaryLiveBuild(req,env,ctx){
  try{const [snapshot,model,badges]=await Promise.all([faPrimarySnapshot(req,env),tdPublishedModel(env),faBadgeIds(env)]);
   const playing=snapshot.matches.filter(g=>faPrimaryLiveStatus.has(g.status)&&!g.source_stale&&Number.isInteger(g.home_score)&&Number.isInteger(g.away_score)&&(Number.isInteger(g.minute)||['HT','PEN_LIVE'].includes(g.status)));
   const cached=await faCachedLiveStats(env,playing);
@@ -223,7 +247,8 @@ export function faForecastLogWrites(env,matches,model,now=Date.now()){
    return env.TIKI_DB.prepare("INSERT OR IGNORE INTO prospective_forecast_log (fixture_key,created_at,model_version,data_cutoff,source_sync_at,ph,pd,pa) VALUES (?1,datetime('now'),?2,?3,?4,?5,?6,?7)")
     .bind(g.id+':'+g.date,model.model_version,model.cutoff,stamp,g.p1/100,g.px/100,g.p2/100)});
 }
-export async function faPrimaryFocus(req,env,ctx){
+export function faPrimaryFocus(req,env,ctx){return faEdgeCached('focus',ctx,20000,()=>faPrimaryFocusBuild(req,env,ctx))}
+async function faPrimaryFocusBuild(req,env,ctx){
  try{const [schedule,snapshot,model,badges]=await Promise.all([faPrimaryScheduled(env),faPrimarySnapshot(req,env),tdPublishedModel(env),faBadgeIds(env)]);
   const map=new Map(schedule.games.map(g=>[g.id,g]));
   for(const game of snapshot.matches)map.set(game.id,game);
@@ -301,10 +326,13 @@ export function faDetailXg(rows){
  const x=(Array.isArray(rows)?rows:[]).find(r=>r?.type==='expected_goals');
  return x&&[x.home,x.away].every(v=>Number.isFinite(v)&&v>=0&&v<=15)?{home:x.home,away:x.away,available:true,source:'football-api.com'}:{home:null,away:null,available:false};
 }
-export async function faPrimaryDetail(req,env,publicId){
+export async function faPrimaryDetail(req,env,publicId,ctx){
  if(req.method!=='GET')return smResponse({error:'method_not_allowed'},405);
+ return faEdgeCached('match-'+publicId,ctx,20000,()=>faPrimaryDetailBuild(req,env,publicId,ctx));
+}
+async function faPrimaryDetailBuild(req,env,publicId,ctx){
  try{
-  const focus=await (await faPrimaryFocus(req,env)).json();const game=focus.matches?.find(m=>m.id===publicId);
+  const focus=await (await faPrimaryFocus(req,env,ctx)).json();const game=focus.matches?.find(m=>m.id===publicId);
   if(!game)return smResponse({error:'match_not_in_current_schedule'},404);
   const model=await tdPublishedModel(env),legacy=model?faHistoricalIdentity(game,model,fhName,faBadgeCache.identities):null;
   const found=legacy&&env.TIKI_DB?await faTeamResults(env.TIKI_DB,legacy.home_id,legacy.away_id,game.date.slice(0,10)).catch(()=>null):null;

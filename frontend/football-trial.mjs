@@ -120,9 +120,10 @@ export async function faTrialRoute(req,env){
    const known=await env.FOOTBALL_TRIAL_DB.prepare('SELECT payload_json FROM football_trial_matches WHERE match_id=?1').bind(id).first();
    if(!known)return faReply({error:'match_not_in_trial_feed'},404);
    const game=JSON.parse(known.payload_json),ended=game.status==='FINISHED',ttl=ended?86400000:120000;
-   const events=await faTrialCached(env,'events-'+id,'/matches/events.json',{match_id:id},ttl,faTrialEvents);
-   const lineups=await faTrialCached(env,'lineups-'+id,'/matches/lineups.json',{match_id:id},ended?86400000:1200000,faTrialLineups);
-   const statistics=await faTrialCached(env,'statistics-'+id,'/statistics/matches.json',{match_id:id},ttl,faTrialStatistics);
+   // Three independent provider requests, made together rather than one after another.
+   const [events,lineups,statistics]=await Promise.all([faTrialCached(env,'events-'+id,'/matches/events.json',{match_id:id},ttl,faTrialEvents),
+    faTrialCached(env,'lineups-'+id,'/matches/lineups.json',{match_id:id},ended?86400000:1200000,faTrialLineups),
+    faTrialCached(env,'statistics-'+id,'/statistics/matches.json',{match_id:id},ttl,faTrialStatistics)]);
    return faReply({source:'football-api.com',match:game,events:events.data||[],events_updated_at:events.fetched_at?new Date(events.fetched_at).toISOString():null,
     events_stale:events.stale,lineups:lineups.data||null,lineups_stale:lineups.stale,
     statistics:statistics.data||[],statistics_updated_at:statistics.fetched_at?new Date(statistics.fetched_at).toISOString():null,statistics_stale:statistics.stale,
