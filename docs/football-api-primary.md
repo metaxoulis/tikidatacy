@@ -2,7 +2,7 @@
 
 Schedule and live routes now use Football-API.com. `/provider-check` redirects to Live and public trial endpoints return 410. Archived Sportmonks results and the published Tiki model remain available; upstream Sportmonks ingestion is retired.
 
-Live scores share a global 30-second D1 cache. Ten selected competition schedules share a 30-minute cache, with at most three pages per competition over the next seven days. Events and match statistics refresh on demand after two minutes, lineups after twenty minutes; finished matches cache all three for a day. Statistics are requested only for a match page, never for match lists. A transactional daily reservation ceiling of 8,500 requests protects the 9,000-request plan; failed calls count. User visits reuse shared data. No commentary requests are made.
+Live scores share a global D1 copy kept fresh by the scheduler heartbeat described below. Fourteen competition schedules share a 30-minute cache, with at most three pages per competition over the next seven days. On an open match page, events and match statistics refresh after one minute and lineups after twenty; finished matches cache all three for a day. A transactional daily reservation ceiling of 38,000 requests protects the Legend plan (40,000 a day from 2026-11-01, then 0.0015 EUR per request); failed calls count. User visits reuse shared data. No commentary requests are made.
 
 Public match identifiers use Football-API fixture IDs, with a separate match namespace when the fixture ID is absent. Historical forecasts resolve both team names through unique archived aliases, reject ambiguous names, and only then use legacy team IDs inside the model. Football-API numeric team IDs never enter the Sportmonks identity namespace. Unmatched teams display facts without an invented forecast. UEFA forecasts retain the existing publication review and experimental preview distinction. Live forecasts use actual score/minute and archived fitted rates, without live-stat adjustment.
 
@@ -16,12 +16,12 @@ The provider sends no positions or formations. Announced lineups are drawn on th
 
 Live data does not depend on visitors. Every minute the scheduler (`tiki-data-history-scheduler`, trigger `* * * * *`) runs a heartbeat. The Pages side reaches it through `/api/internal/live-refresh`, or through the archive call made by the scheduler that is currently deployed. Each heartbeat:
 - keeps the 7-day schedule warm (30-minute copies);
-- while a covered match is on, or kicks off within 15 minutes, refreshes the live feed twice a minute and the statistics of covered live matches every three minutes, with 25-second provider timeouts;
+- while a covered match is on, or kicks off within 15 minutes, refreshes the live feed every 15 seconds and the statistics of covered live matches every two minutes, with 25-second provider timeouts;
 - otherwise makes no live request.
 
-The live feed is requested only for the site's competitions, using `competition_id` with the covered league, UEFA and domestic-cup IDs (334 is the Copa del Rey). The whole world, about 300 matches on a Saturday, took the provider over 25 seconds and timed out from 16:31 UTC on 2026-10-31. Visitors only read these copies. A visitor request asks the provider itself only when the live copy is over 90 seconds old, or a live match's statistics are over six minutes old, that is when the heartbeat has stopped. A match is judged frozen against the time the feed was fetched, so a slow or failed provider call keeps the last known matches visible; a copy over 15 minutes old hides them.
+The live feed is requested only for the site's competitions, using `competition_id` with the covered league, UEFA and domestic-cup IDs (334 is the Copa del Rey). The whole world, about 300 matches on a Saturday, took the provider over 25 seconds and timed out from 16:31 UTC on 2026-10-31. Visitors only read these copies. A visitor request asks the provider itself only when the live copy is over 90 seconds old, or a live match's statistics are over six minutes old, that is when the heartbeat has stopped. A match is judged frozen against the time the feed was fetched, so a slow or failed provider call keeps the last known matches visible; a copy over 15 minutes old hides them. The page applies the same 15-minute rule and shows 'waiting for newer data' meanwhile.
 
-On a 26-match Saturday this is roughly 1,200 live-feed and 1,000 statistics requests, well inside the 8,500 daily ceiling.
+On a 26-match Saturday this is roughly 2,400 live-feed and 1,500 statistics requests. Open live match pages refresh every minute.
 
 `/api/home-focus`, `/api/live` and `/api/match/<id>` are served from the data centre's Cache API, stale-while-revalidate:
 - A copy younger than 20 s (10 s for live) is returned as is.
