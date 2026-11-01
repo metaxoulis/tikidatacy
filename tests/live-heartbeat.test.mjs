@@ -32,20 +32,20 @@ function setup({live=[],fixtures=[]}={}){
  return {env,sqlite,calls,fetcher,clock,sleep,advance:ms=>{t+=ms}};
 }
 
-test('while covered matches are on, the heartbeat refreshes the feed twice a minute and their statistics once',async()=>{
+test('while covered matches are on, the heartbeat refreshes the feed every 15 seconds and their statistics once',async()=>{
  const live=[row(1,2,'IN PLAY','62',T0-60000),row(2,2,'ADDED TIME','90+',T0-120000),row(3,40,'IN PLAY','70',T0-30000),row(4,2,'IN PLAY','30',T0-600000)];
  const s=setup({live});
  s.sqlite.prepare('INSERT INTO football_trial_cache(cache_key,payload_json,fetched_at) VALUES(?,?,?)').run('live-primary-v2',JSON.stringify(live.map(faTrialMatch)),T0-60000);
  const r=await faLiveHeartbeat(s.env,s.fetcher,s.clock,s.sleep);
- assert.equal(r.status,'ok');assert.equal(r.live_refreshes,2);
- assert.equal(s.calls.filter(p=>p==='/matches/live.json').length,2,'at the start and half way through the minute');
+ assert.equal(r.status,'ok');assert.equal(r.live_refreshes,4);
+ assert.equal(s.calls.filter(p=>p==='/matches/live.json').length,4,'at 0, 15, 30 and 45 seconds');
  assert.deepEqual(s.calls.filter(p=>p==='/statistics/matches.json').length,2,'covered, not frozen: matches 1 and 2 only');
  assert.equal(r.live_matches,2);assert.equal(r.statistics_refreshed,2);assert.deepEqual(r.errors,[]);
  const again=setup({live:[row(1,2,'IN PLAY','62',T0-60000)]});
  again.sqlite.prepare('INSERT INTO football_trial_cache(cache_key,payload_json,fetched_at) VALUES(?,?,?)').run('live-primary-v2',JSON.stringify([row(1,2,'IN PLAY','62',T0-60000)].map(faTrialMatch)),T0-60000);
  again.sqlite.prepare('INSERT INTO football_trial_cache(cache_key,payload_json,fetched_at) VALUES(?,?,?)').run('statistics-1','[]',T0-60000);
  await faLiveHeartbeat(again.env,again.fetcher,again.clock,again.sleep);
- assert.equal(again.calls.filter(p=>p==='/statistics/matches.json').length,0,'statistics younger than three minutes are kept');
+ assert.equal(again.calls.filter(p=>p==='/statistics/matches.json').length,0,'statistics younger than two minutes are kept');
 });
 
 test('with nothing on and no kick-off within 15 minutes, the heartbeat makes no live request',async()=>{
@@ -80,6 +80,6 @@ test('the live feed is requested for the covered competitions only, never the wh
  const live=[row(1,2,'IN PLAY','62',T0-60000)],s=setup({live}),asked=[];
  s.sqlite.prepare('INSERT INTO football_trial_cache(cache_key,payload_json,fetched_at) VALUES(?,?,?)').run('live-primary-v2',JSON.stringify(live.map(faTrialMatch)),T0-60000);
  await faLiveHeartbeat(s.env,async u=>{const url=new URL(u);if(url.pathname==='/matches/live.json')asked.push(url.searchParams.get('competition_id'));return s.fetcher(u)},s.clock,s.sleep);
- assert.equal(asked.length,2);
+ assert.equal(asked.length,4);
  assert.deepEqual(asked[0].split(',').map(Number).sort((a,b)=>a-b),[1,2,3,4,5,9,44,150,167,171,244,245,334,446],'leagues, UEFA and the known domestic cups (334 is the Copa del Rey)');
 });

@@ -365,7 +365,9 @@ const olderEstimateTag=m=>{
 };
 const calendarBadge=k=>{const d=new Date(k+'T12:00:00'),month=d.toLocaleDateString(window.__tdLocale==='el'?'el-GR':'en-GB',{month:'short'}).replace('.','');return '<span class="tdm-calendar-badge" aria-hidden="true"><small>'+E(month)+'</small><b>'+d.getDate()+'</b></span>'};
 const leagueBadge=k=>{const url=state.matches.find(m=>m.league_key===k&&trusted(m.league_logo))?.league_logo||({ucl:'/league-logos/ucl.png',uel:'/league-logos/uel.png',uecl:'/league-logos/uecl.png'})[k];return trusted(url)?'<img class="tdm-tab-league-logo" src="'+E(url)+'" alt="" loading="lazy">':'<svg class="tdm-tab-league-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 3h8v5a4 4 0 0 1-8 0V3ZM8 5H4v2a4 4 0 0 0 4 4m8-6h4v2a4 4 0 0 1-4 4M12 12v7m-4 2h8"/></svg>'};
-const coveredLive=m=>live(m)&&Date.now()-Date.parse(state.liveUpdatedAt)<85000&&liveMatches.some(x=>String(x.id)===String(m.id)&&Number.isInteger(x.home_score)&&Number.isInteger(x.away_score)&&(Number.isInteger(x.minute)||x.status==='HT'));
+// Live while the last snapshot is under 15 minutes old, as the server judges it; an older-than-usual one shows the
+// 'waiting for newer data' label instead of emptying the page.
+const coveredLive=m=>live(m)&&Date.now()-Date.parse(state.liveUpdatedAt)<900000&&liveMatches.some(x=>String(x.id)===String(m.id)&&Number.isInteger(x.home_score)&&Number.isInteger(x.away_score)&&(Number.isInteger(x.minute)||x.status==='HT'));
 const matchesForFilters=()=>state.matches.filter(m=>(state.view==='live'?coveredLive(m):state.mode==='live'?coveredLive(m):state.mode==='favorites'?isFav(m.home)||isFav(m.away):true)&&(state.league==='all'||state.league===m.league_key)&&(!state.query||norm(m.home+' '+m.away+' '+m.league).includes(norm(state.query))));
 const availableDays=()=>[...new Set(matchesForFilters().map(m=>dayKey(m.date)))].filter(Boolean).sort();
 function ensureAvailableDay(){const days=availableDays();if(!days.length){state.day='all';return}if(state.day!=='all'&&days.includes(state.day))return;const today=dayKey(new Date());state.day=days.find(k=>k>=today)||days[days.length-1]}
@@ -1050,7 +1052,7 @@ async function loadAudit(){
  return auditPromise;
 }
 
-setInterval(()=>{if(document.hidden||state.view!=='detail')return;const m=state.matches.find(m=>m.id===state.id);if(faMatch(m)&&live(m)){deepCache.delete(state.id);void fetchDeep(state.id)}},120000);
+setInterval(()=>{if(document.hidden||state.view!=='detail')return;const m=state.matches.find(m=>m.id===state.id);if(faMatch(m)&&live(m)){deepCache.delete(state.id);void fetchDeep(state.id)}},60000);
 function init(){document.body.appendChild(root);document.documentElement.classList.add('td-mobile-ready');if(state.view==='transparency'){render();void loadAudit();return}restoreFixtures();baseMatches=state.matches.slice();render();void accountLoad();void refresh();void refreshLive();if(state.view==='detail'&&state.id)void fetchDeep(state.id);void loadUefaStages();setInterval(()=>{if(!document.hidden)void refresh()},300000);setInterval(()=>{if(!document.hidden)void refreshLive()},30000)}
 window.matchMedia('(min-width:781px)').addEventListener('change',()=>{if(root.isConnected)render()});
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();

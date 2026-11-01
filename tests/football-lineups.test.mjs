@@ -65,7 +65,7 @@ test('runs are bounded and an exhausted provider budget leaves matches for a lat
  const get=async u=>{asked.push(Number(new URL(u).searchParams.get('match_id')));return lineupReply(squad('H',1000),squad('A',2000))};
  const r=await faSyncLineups(e,NOW,get,2);
  assert.deepEqual(asked,[103,102]);assert.equal(r.pending,2);
- e.trial.exec("INSERT INTO football_trial_usage VALUES('2026-11-04',8500) ON CONFLICT(day_utc) DO UPDATE SET used=8500");
+ e.trial.exec("INSERT INTO football_trial_usage VALUES('2026-11-04',38000) ON CONFLICT(day_utc) DO UPDATE SET used=38000");
  const out=await faSyncLineups(e,NOW,get);
  assert.equal(out.status,'partial');assert.equal(asked.length,2);
  assert.equal(e.tiki.prepare('SELECT count(*) n FROM football_lineup_fetches WHERE fa_match_id=101').get().n,0);

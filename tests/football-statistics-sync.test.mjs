@@ -66,7 +66,7 @@ test('runs are bounded, an exhausted budget leaves matches for later, and missin
  const e=env(),asked=[];
  const r=await faSyncStatistics(e,NOW,async u=>{asked.push(id(u));return reply(full)},2);
  assert.deepEqual([asked.sort(),r.pending],[[102,103],2],'the newest matches go first');
- e.trial.exec("INSERT INTO football_trial_usage VALUES('2026-11-04',8500) ON CONFLICT(day_utc) DO UPDATE SET used=8500");
+ e.trial.exec("INSERT INTO football_trial_usage VALUES('2026-11-04',38000) ON CONFLICT(day_utc) DO UPDATE SET used=38000");
  assert.equal((await faSyncStatistics(e,NOW,async()=>reply(full))).status,'partial');
  assert.equal(e.tiki.prepare('SELECT count(*) n FROM football_statistics_fetches WHERE fa_match_id=101').get().n,0);
  assert.equal((await faSyncStatistics({},NOW)).status,'unavailable');

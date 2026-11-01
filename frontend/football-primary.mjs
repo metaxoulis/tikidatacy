@@ -215,13 +215,13 @@ export async function faEdgeCached(key,ctx,fresh,build,now=Date.now){
  return serve(await store(await build()));
 }
 /* Live statistics for the live predictor, read from the shared provider cache: the heartbeat refreshes them every
-   three minutes and open match pages every two. A visitor's request refreshes a live match itself only when its copy
+   two minutes and open match pages every minute. A visitor's request refreshes a live match itself only when its copy
    is over six minutes old, that is when the heartbeat has stopped. */
 const FA_LIVE_STATS_TTL=360000,FA_LIVE_STATS_MAX_AGE=480000;
 /* The scheduler's heartbeat, once a minute: live data stays current whatever the traffic, and visitors only read it.
    It keeps the 7-day schedule warm (30-minute copies), and while a covered match is on or kicks off within 15
-   minutes it refreshes the live feed at the start and half way through the minute, and the statistics of covered
-   live matches every three minutes. Provider calls get 25 seconds here, more than a visitor could wait. */
+   minutes it refreshes the live feed every 15 seconds and the statistics of covered live matches every two
+   minutes. Provider calls get 25 seconds here, more than a visitor could wait. */
 export async function faLiveHeartbeat(env,fetcher=fetch,clock=Date.now,sleep=ms=>new Promise(r=>setTimeout(r,ms))){
  if(!env?.FOOTBALL_TRIAL_DB)return {status:'unavailable'};
  const started=clock(),report={status:'idle',live_refreshes:0,live_matches:0,statistics_refreshed:0,errors:[]};
@@ -232,15 +232,15 @@ export async function faLiveHeartbeat(env,fetcher=fetch,clock=Date.now,sleep=ms=
  if(!soon&&!before.length)return report;
  report.status='ok';
  let first=0;
- for(const pass of [0,1]){
-  if(pass){if(clock()-started>45000)break;await sleep(Math.max(0,first+30000-clock()))}else first=clock();
-  const {r,matches}=await faTrialLive(env,20000,{timeout:25000,retry:15000},fetcher,clock(),FA_LIVE_PARAMS);
+ for(const pass of [0,1,2,3]){
+  if(pass){if(clock()-first>50000||clock()-started>75000)break;await sleep(Math.max(0,first+15000*pass-clock()))}else first=clock();
+  const {r,matches}=await faTrialLive(env,10000,{timeout:25000,retry:15000},fetcher,clock(),FA_LIVE_PARAMS);
   if(r.refreshed)report.live_refreshes++;if(r.error)report.errors.push('live:'+r.error);
   const playing=covered(matches).filter(g=>g.status!=='PEN_LIVE'&&Number.isSafeInteger(g.match_id));
   report.live_matches=playing.length;
-  if(pass)break;
+  if(pass)continue;
   for(let i=0;i<playing.length&&clock()-first<25000;i+=6){
-   const done=await Promise.all(playing.slice(i,i+6).map(g=>faTrialCached(env,'statistics-'+g.match_id,'/statistics/matches.json',{match_id:g.match_id},180000,faTrialStatistics,fetcher,clock(),{timeout:20000,retry:60000})));
+   const done=await Promise.all(playing.slice(i,i+6).map(g=>faTrialCached(env,'statistics-'+g.match_id,'/statistics/matches.json',{match_id:g.match_id},120000,faTrialStatistics,fetcher,clock(),{timeout:20000,retry:60000})));
    report.statistics_refreshed+=done.filter(x=>x.refreshed).length;
    for(const x of done)if(x.error&&x.error!=='refresh_in_progress')report.errors.push('statistics:'+x.error);
   }

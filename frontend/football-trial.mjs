@@ -2,7 +2,9 @@
  * All upstream requests reserve a centrally enforced daily budget before fetch.
  * Cache leases and usage counters use primary D1 writes, across visitors/regions.
  */
-export const FA_TRIAL_CAP=8500;
+// Legend plan (from 2026-11-01): 40,000 requests a day, then 0.0015 EUR each. The ceiling keeps 2,000 in reserve so the
+// site never runs into paid overage.
+export const FA_TRIAL_CAP=38000;
 const faText=v=>typeof v==='string'?v.slice(0,180):'';
 const faId=v=>/^\d{1,14}$/.test(String(v))&&Number(v)>0?Number(v):null;
 const faStamp=v=>{const s=String(v||'').replace(' ','T').replace(/Z?$/,'Z');return Number.isFinite(Date.parse(s))?s:null};
@@ -97,7 +99,7 @@ export async function faTrialCached(env,key,path,params,ttl,normalize,fetcher=fe
 export async function faTrialUsage(env){
  const day=new Date().toISOString().slice(0,10);
  const r=await env.FOOTBALL_TRIAL_DB.prepare('SELECT used FROM football_trial_usage WHERE day_utc=?1').bind(day).first();
- return {day_utc:day,used:r?.used||0,trial_limit:FA_TRIAL_CAP,plan_limit:9000};
+ return {day_utc:day,used:r?.used||0,trial_limit:FA_TRIAL_CAP,plan_limit:40000};
 }
 /* The live feed. The scheduler's heartbeat refreshes it twice a minute; a visitor's request asks the provider itself
    only when the copy is over 90 seconds old, that is when the heartbeat has stopped, and in the background, so it
@@ -131,7 +133,7 @@ export async function faTrialRoute(req,env){
    const id=Number(match[1]);
    const known=await env.FOOTBALL_TRIAL_DB.prepare('SELECT payload_json FROM football_trial_matches WHERE match_id=?1').bind(id).first();
    if(!known)return faReply({error:'match_not_in_trial_feed'},404);
-   const game=JSON.parse(known.payload_json),ended=game.status==='FINISHED',ttl=ended?86400000:120000;
+   const game=JSON.parse(known.payload_json),ended=game.status==='FINISHED',ttl=ended?86400000:60000;
    // Three independent provider requests, made together rather than one after another.
    const [events,lineups,statistics]=await Promise.all([faTrialCached(env,'events-'+id,'/matches/events.json',{match_id:id},ttl,faTrialEvents),
     faTrialCached(env,'lineups-'+id,'/matches/lineups.json',{match_id:id},ended?86400000:1200000,faTrialLineups),
