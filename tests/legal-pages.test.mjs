@@ -23,3 +23,26 @@ test('no page still claims AdSense is off, or that details will come later',()=>
  }
  assert.match(page('cookies'),/tiki\.mobile\.fixture\.snapshot\.football-api\.v1/,'the storage key the site really uses');
 });
+
+// Without ?lang=el the legal routes serve these English pages, and that is what reviewers read.
+const worker=readFileSync(new URL('../frontend/worker.js',import.meta.url),'utf8');
+const english=JSON.parse(worker.match(/^const LEGAL_ENGLISH=(.*);$/m)[1]);
+const text=n=>english[n].sections.map(([h,b])=>h+' '+b).join(' ');
+test('the English legal pages served by default say the same as the Greek ones',()=>{
+ for(const n of ['privacy','contact','about','terms']){assert.match(text(n),/Nicolaos Metaxa/,n);assert.match(text(n),/mailto:tikidatainfo@gmail\.com/,n)}
+ for(const n of ['privacy','cookies','terms','about'])assert.match(text(n),/Google AdSense/,n);
+ for(const n of Object.keys(english))
+  for(const stale of [/not yet been published/,/still being finalised/,/not enabled by default/,/have not yet activated/,/working on a private support contact/,/before advertising services/])
+   assert.doesNotMatch(text(n),stale,n+': '+stale);
+});
+
+test('emails are never hidden by Cloudflare, and the CSP lets Google\'s consent message load',()=>{
+ for(const n of ['privacy','cookies','contact','about','terms'])
+  for(const link of page(n).match(/<a [^>]*href="mailto:[^"]*"[^>]*>[^<]*<\/a>/g)||[])
+   assert.ok(page(n).includes('<!--email_off-->'+link+'<!--/email_off-->'),n);
+ assert.match(text('contact'),/<!--email_off--><a href="mailto:tikidatainfo@gmail\.com">/);
+ const ads=worker.match(/^const ADS_ORIGINS="([^"]*)";$/m)[1],csp=worker.match(/^const CSP="(.*)";$/m)[1];
+ assert.ok(ads.split(' ').includes('https://*.google.com'),'fundingchoicesmessages.google.com serves the consent message');
+ assert.match(csp,/script-src 'self' https:\/\/pagead2\.googlesyndication\.com "\+ADS_ORIGINS\+"/);
+ assert.match(csp,/style-src 'self' 'unsafe-inline'/,'the consent message injects its own styles');
+});
