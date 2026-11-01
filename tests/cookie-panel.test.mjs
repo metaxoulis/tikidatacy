@@ -11,4 +11,6 @@ test('the cookie panel is bundled, served, and loaded with Google consent messag
  assert.match(original,/fc\.callbackQueue\.push\(fc\.showRevocationMessage\)/);
  assert.doesNotMatch(original,/(?:document\.cookie|localStorage\.setItem)/);
  assert.match(original,/sessionStorage\.setItem\(KEY/);
+ assert.equal(JSON.parse(worker.match(/^const LEGAL_COOKIES=(.*);$/m)[1]),readFileSync(new URL('../frontend-v13/cookies.html',import.meta.url),'utf8'));
+ assert.equal(JSON.parse(worker.match(/^const LEGAL_PRIVACY=(.*);$/m)[1]),readFileSync(new URL('../frontend-v13/privacy.html',import.meta.url),'utf8'));
 });
