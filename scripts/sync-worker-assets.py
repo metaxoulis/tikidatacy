@@ -13,7 +13,7 @@ assets = {
     'JS_DATA': 'data.js', 'CSS_DATA': 'data.css', 'HTML_DATA': 'data.html',
     'MOBILE_UI_JS': 'mobile-ui.js', 'MOBILE_UI_CSS': 'mobile-ui.css',
     'BRAND': 'brand.svg', 'FAVICON': 'favicon-new.svg',
-    'LEGAL_CSS': 'legal.css', 'LEGAL_THEME_JS': 'legal-theme.js',
+    'LEGAL_CSS': 'legal.css', 'LEGAL_THEME_JS': 'legal-theme.js', 'FC_PRESENT_JS': 'fc-present.js',
     **{'LEGAL_' + page.upper(): page + '.html' for page in ['about', 'privacy', 'terms', 'cookies', 'contact']},
 }
 for key, filename in assets.items():

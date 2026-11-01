@@ -46,3 +46,17 @@ test('emails are never hidden by Cloudflare, and the CSP lets Google\'s consent 
  assert.match(csp,/script-src 'self' https:\/\/pagead2\.googlesyndication\.com "\+ADS_ORIGINS\+"/);
  assert.match(csp,/style-src 'self' 'unsafe-inline'/,'the consent message injects its own styles');
 });
+
+test('every page carries Google\'s Privacy & messaging tag, with its snippet served from our origin',()=>{
+ const fn=worker.slice(worker.indexOf('function tdAdsensePublisherId('),worker.indexOf('function tdHtmlWithAdsenseVerification('));
+ const inject=new Function(fn+worker.slice(worker.indexOf('function tdHtmlWithAdsenseVerification('),worker.indexOf('}',worker.indexOf('function tdHtmlWithAdsenseVerification('))+1)+';return tdHtmlWithAdsenseVerification')();
+ const html=inject('<html><head></head><body></body></html>',{});
+ assert.match(html,/<script async src="https:\/\/fundingchoicesmessages\.google\.com\/i\/pub-3859805035970267\?ers=1"><\/script><script src="\/fc-present\.js" defer><\/script>/);
+ assert.match(html,/adsbygoogle\.js\?client=ca-pub-3859805035970267/);
+ assert.match(worker,/if\(path==='\/fc-present\.js'\)return asset\(FC_PRESENT_JS,'application\/javascript; charset=utf-8'\)/);
+ const bundled=JSON.parse(worker.match(/^const FC_PRESENT_JS=(.*);$/m)[1]);
+ assert.equal(bundled,readFileSync(new URL('../frontend-v13/fc-present.js',import.meta.url),'utf8'));
+ assert.match(bundled,/googlefcPresent/);
+ for(const n of ['privacy','cookies'])assert.match(page(n),/Πριν προβληθούν διαφημίσεις/,n);
+ assert.match(text('privacy'),/Before ads are shown to visitors/);
+});
