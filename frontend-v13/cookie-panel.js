@@ -56,7 +56,10 @@
       'html[data-theme="light"] #td-cookie-control p{color:#415a70}' +
       'html[data-theme="light"] #td-cookie-control .tdc-close{color:#173049;border-color:#a6bbcb}' +
       'html[data-theme="light"] #td-cookie-control .tdc-status{color:#8e4d11}' +
-      '@media(max-width:420px){#td-cookie-control{bottom:12px;left:12px}#td-cookie-control .tdc-panel{width:calc(100vw - 24px)}}';
+      '@media(max-width:768px){#td-cookie-control{position:relative;bottom:auto;left:auto;width:auto;max-width:100%;display:flex;justify-content:flex-end;margin:12px 0 22px;padding:0 12px}' +
+      '#td-cookie-control .tdc-toggle{background:transparent;color:inherit;border:1px solid currentColor;box-shadow:none;border-radius:8px;padding:7px 10px;font-size:12px}' +
+      '#td-cookie-control .tdc-panel{position:fixed;top:calc((100dvh - 104px)/2);bottom:auto;left:50%;transform:translate(-50%,-50%);width:min(360px,calc(100vw - 24px));max-height:calc(100dvh - 128px - env(safe-area-inset-bottom,0px));overflow-y:auto;overscroll-behavior:contain;z-index:2147483000}' +
+      'html[data-theme="light"] #td-cookie-control .tdc-toggle{color:#21405a;border-color:#b2c3d2}}';
     document.head.appendChild(style);
     var root = create('div');
     root.id = 'td-cookie-control';
@@ -83,9 +86,20 @@
     var status = create('p','tdc-status');status.hidden=true;status.setAttribute('role','status');
     panel.appendChild(heading);panel.appendChild(info);panel.appendChild(links);
     panel.appendChild(actions);panel.appendChild(status);
-    root.appendChild(toggle);root.appendChild(panel);document.body.appendChild(root);
+    root.appendChild(toggle);root.appendChild(panel);
+    // Mobile: keep the cookie shortcut in the page footer, never over the bottom navigation.
+    var mobileQuery=window.matchMedia&&window.matchMedia('(max-width: 768px)');
+    function placeControl(){
+      var target=mobileQuery&&mobileQuery.matches?(document.querySelector('footer')||document.querySelector('main')||document.body):document.body;
+      if(root.parentNode!==target)target.appendChild(root);
+    }
+    placeControl();
+    if(mobileQuery){
+      if(typeof mobileQuery.addEventListener==='function')mobileQuery.addEventListener('change',placeControl);
+      else if(typeof mobileQuery.addListener==='function')mobileQuery.addListener(placeControl);
+    }
     function show() { panel.hidden=false;toggle.setAttribute('aria-expanded','true');status.hidden=true;manage.focus(); }
-    function hide() { panel.hidden=true;toggle.setAttribute('aria-expanded','false');markSeen();toggle.focus(); }
+    function hide() { panel.hidden=true;toggle.setAttribute('aria-expanded','false');markSeen();try{toggle.focus({preventScroll:true});}catch(_){toggle.focus();} }
     toggle.addEventListener('click',function(){ if(panel.hidden)show();else hide(); });
     close.addEventListener('click',hide);
     manage.addEventListener('click',function(){
