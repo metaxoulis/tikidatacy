@@ -8,7 +8,7 @@ test('the cookie panel is bundled, served, and loaded with Google consent messag
  assert.equal(bundled,original);
  assert.match(worker,/if\(path==='\/cookie-panel\.js'\)return asset\(COOKIE_PANEL_JS,'application\/javascript; charset=utf-8'\)/);
  assert.match(worker,/<script defer src="\/cookie-panel\.js"><\/script>/);
- assert.match(original,/googlefc\.callbackQueue\.push\(fc\.showRevocationMessage\)/);
+ assert.match(original,/fc\.callbackQueue\.push\(fc\.showRevocationMessage\)/);
  assert.doesNotMatch(original,/(?:document\.cookie|localStorage\.setItem)/);
  assert.match(original,/sessionStorage\.setItem\(KEY/);
 });
