@@ -68,3 +68,31 @@ test('nothing shifts while the page loads: optional fonts, no legacy layout, siz
  assert.match(ui,/loading="lazy" decoding="async" width="40" height="40" alt="'\+E\(name\)\+'"/);
  assert.match(JSON.stringify(worker.slice(worker.indexOf('function tdLegalEnglish('),worker.indexOf('function tdLegalEnglish(')+3000)),/display=optional/);
 });
+
+test('a new live snapshot repaints the page even when the match list itself is unchanged',()=>{
+ const src=readFileSync(new URL('../frontend-v13/mobile-ui.js',import.meta.url),'utf8');
+ assert.match(src,/wasLive=liveKey\(liveMatches\);\n  liveMatches=snapshot\.matches;/);
+ assert.match(src,/if\(\(wasPending!==state\.livePending\|\|wasLive!==liveKey\(liveMatches\)\)&&!matchesChanged&&canRenderDataView\(\)\)render\(\);/,
+  'the week list already carries live matches, so only the snapshot changes and the live page stayed at 0 live');
+});
+
+test('one h1 per page and no skipped heading levels',()=>{
+ const src=readFileSync(new URL('../frontend-v13/mobile-ui.js',import.meta.url),'utf8'),style=readFileSync(new URL('../frontend-v13/mobile-ui.css',import.meta.url),'utf8');
+ assert.match(src,/return '<h1 class="tdm-sr-only">'\+E\(m\.home\)\+' – '\+E\(m\.away\)\+'<\/h1><div class="tdm-match-breadcrumb">/,'the match page had two h1, one per team');
+ assert.match(src,/<div><h2>'\+E\(m\[side\]\)\+'<\/h2>'/);
+ assert.match(src,/var teams = r\.querySelectorAll\('\.tdm-match-team h2'\);/,'the tab title still reads the team names');
+ assert.match(src,/<div class="tdm-footer-col"><h2>'\+head\+'<\/h2>'/,'footer headings went from h2 straight to h4');
+ assert.doesNotMatch(style,/tdm-match-team h1|tdm-footer-col h4/);
+ assert.match(style,/\.tdm-sr-only\{position:absolute!important/);
+});
+
+test('transparency explains the rate: evaluated, excluded and per model version, in both languages',()=>{
+ const src=readFileSync(new URL('../frontend-v13/mobile-ui.js',import.meta.url),'utf8');
+ const view=src.slice(src.indexOf('function transparency(){'),src.indexOf('\n}\n',src.indexOf('function transparency(){')));
+ assert.match(view,/rated=hits\+misses,excluded=all\.length-rated/);
+ assert.match(view,/L\(' αξιολογημένοι',' evaluated'\)/);assert.match(view,/L\(' εκτός',' excluded'\)/);
+ assert.match(view,/L\('Ανά έκδοση μοντέλου','By model version'\)/);
+ assert.match(view,/pct\(hits\/rated\*100\)/);
+ assert.doesNotMatch(view,/Ώρες Κύπρου/);
+ assert.doesNotMatch(view,/'<span>Ολοκληρωμένοι αγώνες<\/span>'/,'labels go through L() for English mode');
+});

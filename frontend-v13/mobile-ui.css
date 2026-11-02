@@ -756,7 +756,7 @@ html.td-mobile-ready body{background:#f4f7fb!important;color-scheme:light!import
 #td-mobile-root .tdm-match-team{display:flex;align-items:center;gap:15px;min-width:0}
 #td-mobile-root .tdm-match-team>img,#td-mobile-root .tdm-match-team>.tdm-team-avatar{box-sizing:border-box;width:73px;height:73px;flex-shrink:0;object-fit:contain;padding:10px;border-radius:11px;background:#ffffff12}
 #td-mobile-root .tdm-match-team>div{min-width:0}
-#td-mobile-root .tdm-match-team h1{font-size:clamp(21px,2.2vw,33px);line-height:1.13;letter-spacing:-1px;margin:0;color:#f3f4ff;font-weight:800;overflow-wrap:anywhere}
+#td-mobile-root .tdm-match-team h2{font-size:clamp(21px,2.2vw,33px);line-height:1.13;letter-spacing:-1px;margin:0;color:#f3f4ff;font-weight:800;overflow-wrap:anywhere}
 #td-mobile-root .tdm-match-team.away{flex-direction:row-reverse;text-align:right}
 #td-mobile-root .tdm-match-form{display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-top:10px}
 #td-mobile-root .tdm-match-form small{font-size:9px;color:#bac3d5;margin-right:3px}
@@ -800,8 +800,8 @@ html.td-mobile-ready body{background:#f4f7fb!important;color-scheme:light!import
 #td-mobile-root .tdm-pitch-xg{display:inline-block;color:#fae080;font-size:9px;background:#092b23bf;margin-top:3px;padding:1px 4px;border-radius:3px}
 #td-mobile-root .tdm-tactical-section .tdm-pitch-pending{border-radius:11px;background:#f3f6fa;border:1px dashed #d2dce9;min-height:170px;display:grid;place-items:center;padding:24px;color:#6d7c93;text-align:center;font-size:12px;line-height:1.6}
 #td-mobile-root .tdm-match-page button:focus-visible{outline:3px solid #47a2ff;outline-offset:3px}
-@media(max-width:900px){#td-mobile-root .tdm-match-main{gap:14px;grid-template-columns:minmax(0,1fr) 190px minmax(0,1fr)}#td-mobile-root .tdm-match-team{flex-direction:column;text-align:center}#td-mobile-root .tdm-match-team.away{flex-direction:column;text-align:center}#td-mobile-root .tdm-match-team.away .tdm-match-form,#td-mobile-root .tdm-match-form{justify-content:center}#td-mobile-root .tdm-match-team h1{font-size:23px}}
-@media(max-width:620px){#td-mobile-root .tdm-match-hero{padding:16px 12px 10px}#td-mobile-root .tdm-match-main{grid-template-columns:minmax(0,1fr) 132px minmax(0,1fr);gap:7px;margin:23px 0 18px}#td-mobile-root .tdm-match-team>img,#td-mobile-root .tdm-match-team>.tdm-team-avatar{width:49px;height:49px;padding:6px}#td-mobile-root .tdm-match-team h1{font-size:16px;letter-spacing:-.4px}#td-mobile-root .tdm-match-team{gap:9px}#td-mobile-root .tdm-match-form small{display:none}#td-mobile-root .tdm-match-form{gap:3px;margin-top:7px}#td-mobile-root .tdm-form-token{width:13px;height:13px;font-size:8px}#td-mobile-root .tdm-match-center .tdm-versus{font-size:34px}#td-mobile-root .tdm-match-state{font-size:8px;letter-spacing:0;padding:4px 6px}#td-mobile-root .tdm-match-odds-labels{font-size:10px;gap:4px}#td-mobile-root .tdm-match-toolbar{justify-content:center;text-align:center;padding:9px 7px}#td-mobile-root .tdm-match-meta time{margin-left:0}#td-mobile-root .tdm-tactical-heading h2{font-size:18px}#td-mobile-root .tdm-tactical-section .tdm-pitch-grid{grid-template-columns:1fr}#td-mobile-root .tdm-tactical-section .tdm-pitch{min-height:420px}#td-mobile-root .tdm-tactical-section .tdm-pitch-player>strong{font-size:10px}#td-mobile-root .tdm-match-breadcrumb{font-size:10px;gap:6px}}
+@media(max-width:900px){#td-mobile-root .tdm-match-main{gap:14px;grid-template-columns:minmax(0,1fr) 190px minmax(0,1fr)}#td-mobile-root .tdm-match-team{flex-direction:column;text-align:center}#td-mobile-root .tdm-match-team.away{flex-direction:column;text-align:center}#td-mobile-root .tdm-match-team.away .tdm-match-form,#td-mobile-root .tdm-match-form{justify-content:center}#td-mobile-root .tdm-match-team h2{font-size:23px}}
+@media(max-width:620px){#td-mobile-root .tdm-match-hero{padding:16px 12px 10px}#td-mobile-root .tdm-match-main{grid-template-columns:minmax(0,1fr) 132px minmax(0,1fr);gap:7px;margin:23px 0 18px}#td-mobile-root .tdm-match-team>img,#td-mobile-root .tdm-match-team>.tdm-team-avatar{width:49px;height:49px;padding:6px}#td-mobile-root .tdm-match-team h2{font-size:16px;letter-spacing:-.4px}#td-mobile-root .tdm-match-team{gap:9px}#td-mobile-root .tdm-match-form small{display:none}#td-mobile-root .tdm-match-form{gap:3px;margin-top:7px}#td-mobile-root .tdm-form-token{width:13px;height:13px;font-size:8px}#td-mobile-root .tdm-match-center .tdm-versus{font-size:34px}#td-mobile-root .tdm-match-state{font-size:8px;letter-spacing:0;padding:4px 6px}#td-mobile-root .tdm-match-odds-labels{font-size:10px;gap:4px}#td-mobile-root .tdm-match-toolbar{justify-content:center;text-align:center;padding:9px 7px}#td-mobile-root .tdm-match-meta time{margin-left:0}#td-mobile-root .tdm-tactical-heading h2{font-size:18px}#td-mobile-root .tdm-tactical-section .tdm-pitch-grid{grid-template-columns:1fr}#td-mobile-root .tdm-tactical-section .tdm-pitch{min-height:420px}#td-mobile-root .tdm-tactical-section .tdm-pitch-player>strong{font-size:10px}#td-mobile-root .tdm-match-breadcrumb{font-size:10px;gap:6px}}
 
 #td-mobile-root .tdm-match-odds-labels>span{display:flex;flex-direction:column;align-items:center;gap:3px;white-space:nowrap} #td-mobile-root .tdm-match-odds-labels b{font-size:20px;font-weight:850;line-height:1.25;font-variant-numeric:tabular-nums} #td-mobile-root .tdm-match-odds-labels{margin-bottom:7px} @media(max-width:620px){#td-mobile-root .tdm-match-odds-labels b{font-size:16px}}
 
@@ -1169,7 +1169,7 @@ html #td-mobile-root :is(.tdm-match-hero,.tdm-scoreboard){
 }
 html #td-mobile-root .tdm-match-meta{font-family:var(--mx-cond)!important;letter-spacing:.1em!important;text-transform:uppercase}
 html #td-mobile-root .tdm-match-meta>span{border-radius:2px!important}
-html #td-mobile-root .tdm-match-team h1{font-family:var(--mx-display)!important;font-weight:900!important;text-transform:uppercase;font-size:clamp(26px,3.4vw,48px)!important;line-height:.95!important;letter-spacing:0!important}
+html #td-mobile-root .tdm-match-team h2{font-family:var(--mx-display)!important;font-weight:900!important;text-transform:uppercase;font-size:clamp(26px,3.4vw,48px)!important;line-height:.95!important;letter-spacing:0!important}
 html #td-mobile-root .tdm-match-center .tdm-versus{font-family:var(--mx-display)!important;font-weight:900!important;font-style:italic;color:var(--mx-hero-accent)!important;font-size:clamp(36px,4.4vw,60px)!important;letter-spacing:0!important}
 html #td-mobile-root .tdm-match-state{border-radius:2px!important;font-family:var(--mx-cond)!important;letter-spacing:.14em!important;color:var(--mx-hero-accent)!important;background:color-mix(in srgb,var(--mx-hero-accent) 10%,transparent)!important}
 html #td-mobile-root .tdm-detail-prob-cell{border-radius:2px!important;background:rgba(255,255,255,.04)!important;border-color:rgba(244,241,234,.14)!important}
@@ -1409,7 +1409,7 @@ html #td-mobile-root .tdm-match-team>img,html #td-mobile-root .tdm-match-team>.t
   width:clamp(64px,7vw,96px)!important;height:clamp(64px,7vw,96px)!important;padding:12px!important;border-radius:var(--mx-r)!important;
   background:rgba(244,241,234,.06)!important;border:1px solid rgba(244,241,234,.14);
 }
-html #td-mobile-root .tdm-match-team h1{font-size:clamp(24px,3vw,44px)!important;color:#f4f1ea!important}
+html #td-mobile-root .tdm-match-team h2{font-size:clamp(24px,3vw,44px)!important;color:#f4f1ea!important}
 html #td-mobile-root .tdm-match-form small{font-family:var(--mx-cond)!important;font-size:11px!important;letter-spacing:.14em;text-transform:uppercase;color:#959aa6!important}
 html #td-mobile-root .tdm-form-token{width:20px!important;height:20px!important;border-radius:2px!important;font-family:var(--mx-display)!important;font-size:12px!important;font-weight:800!important;background:#4b5160!important;color:#fff!important}
 html #td-mobile-root .tdm-form-token.W{background:#16a34a!important}
@@ -1556,7 +1556,7 @@ html #td-mobile-root .tdm-match-content .tdm-form-compact .tdm-team-form>small{m
   html #td-mobile-root .tdm-match-main>.tdm-match-team.home{grid-area:home}
   html #td-mobile-root .tdm-match-main>.tdm-match-team.away{grid-area:away}
   html #td-mobile-root .tdm-match-main>.tdm-match-center{grid-area:centre}
-  html #td-mobile-root .tdm-match-team h1{font-size:clamp(18px,5.6vw,24px)!important;line-height:1!important}
+  html #td-mobile-root .tdm-match-team h2{font-size:clamp(18px,5.6vw,24px)!important;line-height:1!important}
 }
 html #td-mobile-root .tdm-match-content .tdm-team-form>strong{display:block;font-family:var(--mx-display)!important;font-weight:800!important;font-size:22px!important;line-height:1.05;text-transform:uppercase;color:var(--mx-ink)!important}
 html #td-mobile-root .tdm-match-content .tdm-team-form>small{display:block;margin-top:var(--sp-1);font-family:var(--mx-cond)!important;font-size:12px!important;letter-spacing:.1em;text-transform:uppercase;color:var(--mx-muted)!important}
@@ -1645,7 +1645,7 @@ html[data-theme="light"] #td-mobile-root .tdm-footer-logo{background-image:var(-
 html #td-mobile-root .tdm-footer-brand p{margin:var(--sp-3) 0 0;max-width:34ch;line-height:1.6;font-size:14px;color:var(--mx-muted)!important}
 html #td-mobile-root .tdm-site-footer .tdm-footer-cols{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--sp-5)!important}
 html #td-mobile-root .tdm-footer-col{display:flex;flex-direction:column;gap:2px;min-width:0}
-html #td-mobile-root .tdm-footer-col h4{margin:0 0 var(--sp-2);font-family:var(--mx-cond);font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mx-ink)!important}
+html #td-mobile-root .tdm-footer-col h2{margin:0 0 var(--sp-2);font-family:var(--mx-cond);font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mx-ink)!important}
 html #td-mobile-root .tdm-site-footer .tdm-footer-col a{
   display:flex!important;align-items:center;min-height:32px!important;padding:0!important;
   font-family:var(--mx-body)!important;font-size:14px!important;font-weight:400!important;letter-spacing:normal!important;text-transform:none!important;color:var(--mx-ink-2)!important;
@@ -1793,7 +1793,7 @@ html.td-booted #td-mobile-root :is(.tdm-overview-header,.tdm-overview-hero,.tdm-
   html #td-mobile-root .tdm-search{position:sticky;top:var(--sp-2);z-index:30;box-shadow:0 10px 28px rgba(0,0,0,.35)!important}
   html #td-mobile-root .tdm-overview-disclosure{display:block!important;padding:var(--sp-5)!important}
   /* Team names: shrink to fit rather than breaking mid-word */
-  html #td-mobile-root .tdm-match-team h1{font-size:clamp(18px,5.4vw,26px)!important;overflow-wrap:normal!important;word-break:normal!important;hyphens:manual}
+  html #td-mobile-root .tdm-match-team h2{font-size:clamp(18px,5.4vw,26px)!important;overflow-wrap:normal!important;word-break:normal!important;hyphens:manual}
   /* Cards */
   html #td-mobile-root .tdm-card{padding:14px!important}
   html #td-mobile-root .tdm-card:hover{transform:none}
@@ -1821,3 +1821,6 @@ html.td-booted #td-mobile-root :is(.tdm-overview-header,.tdm-overview-hero,.tdm-
 body>.skip{position:absolute;left:-9999px;top:8px;z-index:2147483646;padding:10px 14px;background:#d8ff3d;color:#06080d;font-weight:700;text-decoration:none}
 body>.skip:focus{left:12px}
 #td-mobile-root:focus{outline:none}
+
+/* Visually hidden, still read by screen readers and crawlers (the match page's single h1). */
+#td-mobile-root .tdm-sr-only{position:absolute!important;width:1px!important;height:1px!important;overflow:hidden!important;clip:rect(0 0 0 0)!important;clip-path:inset(50%)!important;white-space:nowrap!important;margin:0!important;padding:0!important}
