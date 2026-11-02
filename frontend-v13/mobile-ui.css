@@ -1809,3 +1809,10 @@ html.td-booted #td-mobile-root :is(.tdm-overview-header,.tdm-overview-hero,.tdm-
 @media(prefers-reduced-motion:reduce){
   html #td-mobile-root *,html #td-mobile-root *::before,html #td-mobile-root *::after{animation:none!important;transition:none!important}
 }
+
+/* Match cards: a real link to the match page covers the card (crawlable, keyboard-focusable); the name is for
+   screen readers and search engines. */
+#td-mobile-root .tdm-card{position:relative}
+#td-mobile-root .tdm-card-link{position:absolute;inset:0;z-index:1;border-radius:inherit}
+#td-mobile-root .tdm-card-link span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
+#td-mobile-root .tdm-card-link:focus-visible{outline:2px solid currentColor;outline-offset:2px}
