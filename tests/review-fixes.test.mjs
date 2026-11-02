@@ -48,3 +48,51 @@ test('the CSP admits the Cloudflare Web Analytics beacon, which the privacy poli
  assert.match(readFileSync(new URL('../frontend-v13/privacy.html',import.meta.url),'utf8'),/Cloudflare Web Analytics/);
  assert.match(JSON.parse(worker.match(/^const LEGAL_ENGLISH=(.*);$/m)[1]).privacy.sections.map(x=>x[1]).join(' '),/Cloudflare Web Analytics/);
 });
+
+const html=n=>readFileSync(new URL('../frontend-v13/'+n+'.html',import.meta.url),'utf8');
+const css=readFileSync(new URL('../frontend-v13/mobile-ui.css',import.meta.url),'utf8');
+test('nothing shifts while the page loads: optional fonts, no legacy layout, sized badges',()=>{
+ for(const n of ['home-v23','predictions','about','contact','cookies','privacy','terms']){
+  assert.doesNotMatch(html(n),/display=swap/,n+': a late font swap reflowed the whole page (CLS 0.32)');
+  assert.match(html(n),/fonts\.googleapis\.com\/css2\?[^"]*display=optional/,n);
+ }
+ assert.doesNotMatch(html('home-v23'),/href="\/home-v23\.css"/,'legacy layout stylesheet blocked rendering');
+ assert.doesNotMatch(html('predictions'),/href="\/styles\.css"/,'89 KB legacy stylesheet plus an @import of another font family');
+ assert.match(css,/^body>\.app,body>\.shell,body>\.modal-mount\{display:none!important\}$/m,'the static layout is never painted before the app');
+ for(const n of ['home-v23','predictions']){
+  assert.match(html(n),/<noscript><style>body>\.app,body>\.shell\{display:block!important\}<\/style><\/noscript>/,n);
+  assert.match(html(n),/class="skip"[^>]*>Skip to content<\/a>|href="#td-mobile-root" class="skip">/,n);
+  assert.match(html(n),/href="#td-mobile-root"/,n);
+ }
+ assert.match(css,/body>\.skip\{position:absolute;left:-9999px/);
+ assert.match(ui,/loading="lazy" decoding="async" width="40" height="40" alt="'\+E\(name\)\+'"/);
+ assert.match(JSON.stringify(worker.slice(worker.indexOf('function tdLegalEnglish('),worker.indexOf('function tdLegalEnglish(')+3000)),/display=optional/);
+});
+
+test('a new live snapshot repaints the page even when the match list itself is unchanged',()=>{
+ const src=readFileSync(new URL('../frontend-v13/mobile-ui.js',import.meta.url),'utf8');
+ assert.match(src,/wasLive=liveKey\(liveMatches\);\n  liveMatches=snapshot\.matches;/);
+ assert.match(src,/if\(\(wasPending!==state\.livePending\|\|wasLive!==liveKey\(liveMatches\)\)&&!matchesChanged&&canRenderDataView\(\)\)render\(\);/,
+  'the week list already carries live matches, so only the snapshot changes and the live page stayed at 0 live');
+});
+
+test('one h1 per page and no skipped heading levels',()=>{
+ const src=readFileSync(new URL('../frontend-v13/mobile-ui.js',import.meta.url),'utf8'),style=readFileSync(new URL('../frontend-v13/mobile-ui.css',import.meta.url),'utf8');
+ assert.match(src,/return '<h1 class="tdm-sr-only">'\+E\(m\.home\)\+' – '\+E\(m\.away\)\+'<\/h1><div class="tdm-match-breadcrumb">/,'the match page had two h1, one per team');
+ assert.match(src,/<div><h2>'\+E\(m\[side\]\)\+'<\/h2>'/);
+ assert.match(src,/var teams = r\.querySelectorAll\('\.tdm-match-team h2'\);/,'the tab title still reads the team names');
+ assert.match(src,/<div class="tdm-footer-col"><h2>'\+head\+'<\/h2>'/,'footer headings went from h2 straight to h4');
+ assert.doesNotMatch(style,/tdm-match-team h1|tdm-footer-col h4/);
+ assert.match(style,/\.tdm-sr-only\{position:absolute!important/);
+});
+
+test('transparency explains the rate: evaluated, excluded and per model version, in both languages',()=>{
+ const src=readFileSync(new URL('../frontend-v13/mobile-ui.js',import.meta.url),'utf8');
+ const view=src.slice(src.indexOf('function transparency(){'),src.indexOf('\n}\n',src.indexOf('function transparency(){')));
+ assert.match(view,/rated=hits\+misses,excluded=all\.length-rated/);
+ assert.match(view,/L\(' αξιολογημένοι',' evaluated'\)/);assert.match(view,/L\(' εκτός',' excluded'\)/);
+ assert.match(view,/L\('Ανά έκδοση μοντέλου','By model version'\)/);
+ assert.match(view,/pct\(hits\/rated\*100\)/);
+ assert.doesNotMatch(view,/Ώρες Κύπρου/);
+ assert.doesNotMatch(view,/'<span>Ολοκληρωμένοι αγώνες<\/span>'/,'labels go through L() for English mode');
+});
