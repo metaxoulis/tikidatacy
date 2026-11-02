@@ -48,3 +48,23 @@ test('the CSP admits the Cloudflare Web Analytics beacon, which the privacy poli
  assert.match(readFileSync(new URL('../frontend-v13/privacy.html',import.meta.url),'utf8'),/Cloudflare Web Analytics/);
  assert.match(JSON.parse(worker.match(/^const LEGAL_ENGLISH=(.*);$/m)[1]).privacy.sections.map(x=>x[1]).join(' '),/Cloudflare Web Analytics/);
 });
+
+const html=n=>readFileSync(new URL('../frontend-v13/'+n+'.html',import.meta.url),'utf8');
+const css=readFileSync(new URL('../frontend-v13/mobile-ui.css',import.meta.url),'utf8');
+test('nothing shifts while the page loads: optional fonts, no legacy layout, sized badges',()=>{
+ for(const n of ['home-v23','predictions','about','contact','cookies','privacy','terms']){
+  assert.doesNotMatch(html(n),/display=swap/,n+': a late font swap reflowed the whole page (CLS 0.32)');
+  assert.match(html(n),/fonts\.googleapis\.com\/css2\?[^"]*display=optional/,n);
+ }
+ assert.doesNotMatch(html('home-v23'),/href="\/home-v23\.css"/,'legacy layout stylesheet blocked rendering');
+ assert.doesNotMatch(html('predictions'),/href="\/styles\.css"/,'89 KB legacy stylesheet plus an @import of another font family');
+ assert.match(css,/^body>\.app,body>\.shell,body>\.modal-mount\{display:none!important\}$/m,'the static layout is never painted before the app');
+ for(const n of ['home-v23','predictions']){
+  assert.match(html(n),/<noscript><style>body>\.app,body>\.shell\{display:block!important\}<\/style><\/noscript>/,n);
+  assert.match(html(n),/class="skip"[^>]*>Skip to content<\/a>|href="#td-mobile-root" class="skip">/,n);
+  assert.match(html(n),/href="#td-mobile-root"/,n);
+ }
+ assert.match(css,/body>\.skip\{position:absolute;left:-9999px/);
+ assert.match(ui,/loading="lazy" decoding="async" width="40" height="40" alt="'\+E\(name\)\+'"/);
+ assert.match(JSON.stringify(worker.slice(worker.indexOf('function tdLegalEnglish('),worker.indexOf('function tdLegalEnglish(')+3000)),/display=optional/);
+});

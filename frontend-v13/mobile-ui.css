@@ -2,7 +2,8 @@
 html.td-mobile-ready{color-scheme:light!important}
 html.td-mobile-ready,html.td-mobile-ready body{margin:0!important;background:#f6f8f9!important;overflow-x:hidden!important}
 #td-mobile-root{color-scheme:light}
-html.td-mobile-ready body>.app,html.td-mobile-ready body>.shell,html.td-mobile-ready body>.modal-mount{display:none!important}
+/* The legacy static layout is never painted: showing it and then swapping to the app shifted the whole page. */
+body>.app,body>.shell,body>.modal-mount{display:none!important}
 #td-mobile-root{display:block;min-height:100dvh;padding:0 0 calc(85px + env(safe-area-inset-bottom,0px));background:#f6f8f9;color:#182c35;font:14px/1.5 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 #td-mobile-root *{box-sizing:border-box}#td-mobile-root button,#td-mobile-root input{font:inherit}#td-mobile-root button{cursor:pointer}
 #td-mobile-root .tdm-wrap{max-width:550px;padding:0 18px;margin:auto}
@@ -1816,3 +1817,7 @@ html.td-booted #td-mobile-root :is(.tdm-overview-header,.tdm-overview-hero,.tdm-
 #td-mobile-root .tdm-card-link{position:absolute;inset:0;z-index:1;border-radius:inherit}
 #td-mobile-root .tdm-card-link span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
 #td-mobile-root .tdm-card-link:focus-visible{outline:2px solid currentColor;outline-offset:2px}
+/* Skip link: off screen until focused from the keyboard, then jumps to the app. */
+body>.skip{position:absolute;left:-9999px;top:8px;z-index:2147483646;padding:10px 14px;background:#d8ff3d;color:#06080d;font-weight:700;text-decoration:none}
+body>.skip:focus{left:12px}
+#td-mobile-root:focus{outline:none}
