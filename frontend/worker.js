@@ -792,6 +792,89 @@ function normalizedCachedHistory(rows,classify,now=Date.now()){
 
 /* forecast-integrity:end */
 const fhClamp=(x,a,b)=>Math.min(b,Math.max(a,x));
+/* european-strength:start */
+/*
+ * Tiki-Data cross-competition research feature.
+ *
+ * A chronological, opponent-relative EUROPEAN Elo anchor. This is NOT the
+ * official UEFA coefficient table or a claim of calibrated 1X2 skill.
+ * Only verified historical UEFA full-time scores with stable identities
+ * should be passed to this function. It uses no D1 reads and no network.
+ */
+const EUROPEAN_KEYS = new Set(['ucl', 'uel', 'uecl']);
+const DAY_MS = 86400000;
+const limited = (x, a, b) => Math.max(a, Math.min(b, x));
+
+function fitEuropeanStrength(rows, teamKey, identity, asOfDate = new Date()) {
+  if (typeof teamKey !== 'function') throw new TypeError('teamKey_required');
+  const now = new Date(asOfDate);
+  if (!Number.isFinite(now.getTime())) throw new TypeError('invalid_as_of_date');
+  const cutoff = Date.parse(now.toISOString().slice(0, 10) + 'T00:00:00Z') - 3 * DAY_MS;
+  const seen = new Set(), matches = [];
+
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const league = String(row?.dataset_slug || '').split('-').slice(0, -2).join('-');
+    if (!EUROPEAN_KEYS.has(league)) continue;
+    const day = Date.parse(String(row.match_date || '') + 'T00:00:00Z');
+    const homeGoals = row.home_score, awayGoals = row.away_score;
+    if (!Number.isFinite(day) || day >= cutoff ||
+        !Number.isInteger(homeGoals) || !Number.isInteger(awayGoals) ||
+        homeGoals < 0 || homeGoals > 15 || awayGoals < 0 || awayGoals > 15) continue;
+    const home = teamKey(row.home_team, row.home_team_id, identity);
+    const away = teamKey(row.away_team, row.away_team_id, identity);
+    if (!home || !away || home === away) continue;
+    const key = String(row.match_date) + '|' + home + '|' + away;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    matches.push({day, home, away, homeGoals, awayGoals});
+  }
+  matches.sort((a, b) => a.day - b.day || a.home.localeCompare(b.home) || a.away.localeCompare(b.away));
+
+  const clubs = Object.create(null);
+  const get = k => clubs[k] || (clubs[k] = {elo: 1500, matches: 0});
+  for (const m of matches) {
+    const h = get(m.home), a = get(m.away);
+    const expectation = 1 / (1 + Math.pow(10, (a.elo - h.elo - 55) / 400));
+    const observed = m.homeGoals > m.awayGoals ? 1 : m.homeGoals === m.awayGoals ? .5 : 0;
+    const margin = 1 + .12 * Math.min(3, Math.abs(m.homeGoals - m.awayGoals));
+    const change = 24 * margin * (observed - expectation);
+    h.elo = limited(h.elo + change, 1200, 1800);
+    a.elo = limited(a.elo - change, 1200, 1800);
+    h.matches++;
+    a.matches++;
+  }
+  return {method: 'historical_uefa_opponent_elo_v1', cutoff: new Date(cutoff).toISOString().slice(0, 10),
+    trained_matches: matches.length, clubs: Object.fromEntries(Object.entries(clubs).map(([k, v]) =>
+      [k, {elo: Number(v.elo.toFixed(4)), matches: v.matches}]))};
+}
+
+/*
+ * Research-only symmetric adjustment to goal intensities. If either club has
+ * insufficient UEFA history, apply NO adjustment. No forced favourite.
+ * Official coefficients may be added later only as dated, verified snapshots
+ * and must be evaluated independently of this historical-Elo feature.
+ */
+function europeanGoalShift(fixture, model, teamKey) {
+  const unused = {log_shift: 0, applied: false, reason: 'insufficient_verified_european_history'};
+  if (!EUROPEAN_KEYS.has(fixture?.league_key) ||
+      typeof teamKey !== 'function' ||
+      model?.european_strength?.method !== 'historical_uefa_opponent_elo_v1')
+    return {...unused, reason: 'not_applicable'};
+  const ratings = model.european_strength.clubs;
+  const homeKey = teamKey(fixture.home, fixture.home_id, model.team_identity);
+  const awayKey = teamKey(fixture.away, fixture.away_id, model.team_identity);
+  if (!homeKey || !awayKey || homeKey === awayKey) return {...unused, reason: 'invalid_team_identity'};
+  const h = ratings?.[homeKey], a = ratings?.[awayKey];
+  if (!h || !a || h.matches < 3 || a.matches < 3) return unused;
+  const support = Math.min(h.matches, a.matches);
+  const reliability = support / (support + 8);
+  const logShift = limited(.35 * ((h.elo - a.elo) / 400) * reliability, -.35, .35);
+  return {log_shift: logShift, applied: true, method: 'historical_uefa_opponent_elo_v1',
+    confidence: 'experimental_unvalidated', european_samples: {home: h.matches, away: a.matches},
+    home_elo: h.elo, away_elo: a.elo};
+}
+
+/* european-strength:end */
 function fhTrain(rows,asOfDate=new Date()){
  const cutoff=Date.parse(new Date(asOfDate).toISOString().slice(0,10)+'T00:00:00Z')-3*86400000;
  const eligibleRows=rows.filter(r=>Date.parse(String(r.match_date||'')+'T00:00:00Z')<cutoff);
@@ -882,7 +965,7 @@ function fhTrain(rows,asOfDate=new Date()){
    v.defence=.5*v.defence+.5*fhClamp((z.d+prior)/(z.mass+prior),.45,1.8);
   }
  }
- return {model_version:FH_TRAINING.version,trained_at:new Date(asOfDate).toISOString(),cutoff:new Date(cutoff).toISOString().slice(0,10),decay_days:FH_TRAINING.decay_days,venue_prior:FH_TRAINING.venue_prior,status:'experimental_unvalidated',cross_competition_validation:{accepted:false,status:'pending_independent_evaluation'},team_identity:identity,global,all_teams:allTeams,leagues:result};
+ return {model_version:FH_TRAINING.version,trained_at:new Date(asOfDate).toISOString(),cutoff:new Date(cutoff).toISOString().slice(0,10),decay_days:FH_TRAINING.decay_days,venue_prior:FH_TRAINING.venue_prior,status:'experimental_unvalidated',cross_competition_validation:{accepted:false,status:'pending_independent_evaluation'},european_strength:fitEuropeanStrength(rows,fhTeamKey,identity,asOfDate),team_identity:identity,global,all_teams:allTeams,leagues:result};
 }
 function fhLikelyScore(lh,la){let top={score:'—',prob:0};let mass=0;const poisson=(lambda,n)=>Math.exp(-lambda)*Math.pow(lambda,n)/[1,1,2,6,24,120,720,5040][n];for(let i=0;i<=7;i++)for(let j=0;j<=7;j++){const p=poisson(lh,i)*poisson(la,j);mass+=p;if(p>top.prob)top={score:i+'-'+j,prob:p};}return{score:top.score,probability:top.prob/mass*100};}
 function fhPoisson(h,a){
@@ -944,15 +1027,17 @@ function fhEstimate(fixture,model,options=null){
    fixture.home_id<=0||fixture.away_id<=0||fixture.home_id===fixture.away_id||
    hc<3||ac<3||!Number.isFinite(Date.parse(model.trained_at))||
    Date.now()-Date.parse(model.trained_at)>7*86400000))return null;
- const muHome=fhClamp(baseline.hmean*(hs?fhClamp(home.attack,.45,1.8):1)*(as?fhClamp(away.defence,.45,1.8):1),.35,3.6);
- const muAway=fhClamp(baseline.amean*(as?fhClamp(away.attack,.45,1.8):1)*(hs?fhClamp(home.defence,.45,1.8):1),.35,3.6);
+ const euroAdjustment=options?.europeanStrengthPreview?europeanGoalShift(fixture,model,fhTeamKey):null;
+ const muHome=fhClamp(baseline.hmean*(hs?fhClamp(home.attack,.45,1.8):1)*(as?fhClamp(away.defence,.45,1.8):1)*Math.exp((euroAdjustment?.log_shift||0)/2),.35,3.6);
+ const muAway=fhClamp(baseline.amean*(as?fhClamp(away.attack,.45,1.8):1)*(hs?fhClamp(home.defence,.45,1.8):1)*Math.exp(-(euroAdjustment?.log_shift||0)/2),.35,3.6);
  const tier=hs&&as?'team':hs||as?'partial_team':league?'league':'cross_league';
  const method=tier==='team'?'licensed_historical_venue_poisson':tier==='partial_team'?'partial_team_hierarchical_poisson':tier==='league'?'league_historical_prior_poisson':'cross_league_historical_prior_poisson';
  return {...fhPoisson(muHome,muAway),method,tier,confidence:tier==='team'?'experimental':tier==='partial_team'?'low':'very_low',validated:false,
   team_samples:{home:hc,away:ac},history_latest:model.cutoff,
   evidence_source:'all_available_competitions',history_competitions:{home:home?.competitions||{},away:away?.competitions||{}},
   strength:{method:'regularized_opponent_adjusted_attack_defence',iterations:8,
-   home:hs?{attack:home.attack,defence:home.defence}:null,away:as?{attack:away.attack,defence:away.defence}:null},
+   home:hs?{attack:home.attack,defence:home.defence}:null,away:as?{attack:away.attack,defence:away.defence}:null,
+   european_preview:euroAdjustment?.applied?euroAdjustment:null},
   model_note:tier==='team'?'Stable team identity; opponent-adjusted attack and defence across available competitions, venue and recency. Experimental; prospective accuracy not established.':tier==='partial_team'?'Limited evidence: one team has usable venue history; the other uses an empirical competition baseline.':'Insufficient team history: empirical competition or pooled baseline, not a team-specific strength forecast.'};
 }
 
