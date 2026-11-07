@@ -4,14 +4,14 @@
   var KEY = 'tiki.cookie.notice.seen.v1';
   var words = {
     el: {
-      toggle: 'Cookies', title: 'Cookies και απόρρητο',
+      toggle: 'Cookies', title: 'Οι επιλογές απορρήτου σας', essential: 'Λειτουργία ιστοτόπου', essentialDetail: 'Γλώσσα, εμφάνιση και σύνδεση.', ads: 'Διαφήμιση', adsDetail: 'Οι άδειες για τη Google και τους συνεργάτες της ρυθμίζονται στο μήνυμα συναίνεσης.',
       info: 'Το Tiki-Data χρησιμοποιεί απαραίτητη αποθήκευση για τη λειτουργία του. Στο μήνυμα της Google μπορείτε να αποδεχτείτε, να απορρίψετε ή να αλλάξετε τις επιλογές διαφήμισης. Το κλείσιμο αυτής της ενημέρωσης διατηρεί τις επιλογές σας.',
       manage: 'Ρυθμίσεις συναίνεσης', close: 'Κλείσιμο',
       unavailable: 'Οι ρυθμίσεις συναίνεσης της Google δεν είναι διαθέσιμες αυτή τη στιγμή. Μπορείτε να συνεχίσετε την περιήγηση. Οι διαφημίσεις παραμένουν ανενεργές μέχρι να υπάρχει έγκυρη επιλογή.',
       cookies: 'Πολιτική Cookies', privacy: 'Απόρρητο'
     },
     en: {
-      toggle: 'Cookies', title: 'Cookies and privacy',
+      toggle: 'Cookies', title: 'Your privacy choices', essential: 'Site preferences', essentialDetail: 'Language, appearance and sign-in.', ads: 'Advertising', adsDetail: 'Manage permissions for Google and its partners in the consent message.',
       info: 'Tiki-Data uses essential browser storage to operate. Use Google’s consent message to accept, refuse or change advertising choices. Closing this notice leaves your choices unchanged.',
       manage: 'Consent preferences', close: 'Close',
       unavailable: 'Google consent settings are currently unavailable. You can keep browsing. Advertising stays off until a valid choice is available.',
@@ -60,6 +60,10 @@
       '#td-cookie-control .tdc-toggle{background:transparent;color:inherit;border:1px solid currentColor;box-shadow:none;border-radius:8px;padding:7px 10px;font-size:12px}' +
       '#td-cookie-control .tdc-panel{position:fixed;top:calc((100dvh - 104px)/2);bottom:auto;left:50%;transform:translate(-50%,-50%);width:min(360px,calc(100vw - 24px));max-height:calc(100dvh - 128px - env(safe-area-inset-bottom,0px));overflow-y:auto;overscroll-behavior:contain;z-index:2147483000}' +
       'html[data-theme="light"] #td-cookie-control .tdc-toggle{color:#21405a;border-color:#b2c3d2}}';
+    style.textContent += 'html #td-cookie-control .tdc-panel{border-top:4px solid #356bff!important;max-height:min(78dvh,610px);overflow-y:auto}' +
+      '#td-cookie-control .tdc-purposes{margin:12px 0 16px;padding:0 0 0 12px;border-left:3px solid #5688ff;text-align:start}' +
+      '#td-cookie-control dt{font-weight:700;font-size:14px}#td-cookie-control dd{margin:1px 0 8px;font-size:13px}' +
+      'html #td-cookie-control button.tdc-toggle{background:#204dc5!important;color:white!important;border-color:#204dc5!important}';
     document.head.appendChild(style);
     var root = create('div');
     root.id = 'td-cookie-control';
@@ -75,6 +79,11 @@
     panel.setAttribute('aria-labelledby','td-cookie-title');
     var heading = create('h2','',tr.title); heading.id = 'td-cookie-title';
     var info = create('p','',tr.info);
+    var purposes = create('dl','tdc-purposes');
+    [[tr.essential,tr.essentialDetail],[tr.ads,tr.adsDetail]].forEach(function (pair) {
+      purposes.appendChild(create('dt','',pair[0]));
+      purposes.appendChild(create('dd','',pair[1]));
+    });
     var links = create('div','tdc-links');
     var cookieLink = create('a','',tr.cookies);cookieLink.href='/cookies';
     var privacyLink = create('a','',tr.privacy);privacyLink.href='/privacy';
@@ -84,7 +93,7 @@
     var close = create('button','tdc-close',tr.close);close.type='button';
     actions.appendChild(manage);actions.appendChild(close);
     var status = create('p','tdc-status');status.hidden=true;status.setAttribute('role','status');
-    panel.appendChild(heading);panel.appendChild(info);panel.appendChild(links);
+    panel.appendChild(heading);panel.appendChild(info);panel.appendChild(purposes);panel.appendChild(links);
     panel.appendChild(actions);panel.appendChild(status);
     root.appendChild(toggle);root.appendChild(panel);
     // Mobile: keep the cookie shortcut in the page footer, never over the bottom navigation.

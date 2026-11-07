@@ -1910,3 +1910,27 @@ html #td-mobile-root .tdm-match-page .tdm-match-tabs .tdm-tab.active {border-bot
   html #td-mobile-root .tdm-match-page .tdm-match-content:has(.tdm-forecast) > * {min-width: 0; margin-block: 0 !important}
   html #td-mobile-root .tdm-match-page .tdm-match-content > .tdm-quiet {grid-column: 1 / -1}
 }
+
+/* Detailed fixture scoreboard */
+html #td-mobile-root .tdm-match-page .tdm-match-hero {
+  border-top: 4px solid #467dff !important;
+  background: repeating-linear-gradient(90deg,transparent 0 5.55%,#ffffff08 5.55% 11.11%),linear-gradient(165deg,#192d52,#101827 56%,#080e1b) !important;
+}
+html #td-mobile-root .tdm-match-page .tdm-match-center {
+  border-inline: 1px solid #ffffff24; padding-inline: clamp(8px,1.5vw,24px);
+}
+html #td-mobile-root .tdm-match-page .tdm-match-brand {
+  padding: 4px 8px; color: #fff; background:#234cb0; border-radius:2px;
+}
+html #td-mobile-root .tdm-match-page .tdm-match-content .tdm-panel > h3 {
+  border-inline-start: 4px solid #467dff !important;
+  padding-inline-start: 12px !important;
+}
+html #td-mobile-root .tdm-match-page .tdm-match-tabs .tdm-tab.active {
+  background:#234cb0 !important; color:#fff !important; border-radius:3px 3px 0 0 !important;
+}
+@media(max-width:780px) {
+  html #td-mobile-root .tdm-match-page .tdm-match-center {
+    border-inline:0; border-top:1px solid #ffffff30; padding-top:12px;
+  }
+}
