@@ -64,6 +64,7 @@
       '#td-cookie-control .tdc-purposes{margin:12px 0 16px;padding:0 0 0 12px;border-left:3px solid #5688ff;text-align:start}' +
       '#td-cookie-control dt{font-weight:700;font-size:14px}#td-cookie-control dd{margin:1px 0 8px;font-size:13px}' +
       'html #td-cookie-control button.tdc-toggle{background:#204dc5!important;color:white!important;border-color:#204dc5!important}';
+    style.textContent += '@media(max-width:768px){html body #td-cookie-control{position:fixed;bottom:calc(72px + env(safe-area-inset-bottom,0px));left:10px;width:auto;padding:0;margin:0}}';
     document.head.appendChild(style);
     var root = create('div');
     root.id = 'td-cookie-control';
@@ -96,17 +97,7 @@
     panel.appendChild(heading);panel.appendChild(info);panel.appendChild(purposes);panel.appendChild(links);
     panel.appendChild(actions);panel.appendChild(status);
     root.appendChild(toggle);root.appendChild(panel);
-    // Mobile: keep the cookie shortcut in the page footer, never over the bottom navigation.
-    var mobileQuery=window.matchMedia&&window.matchMedia('(max-width: 768px)');
-    function placeControl(){
-      var target=mobileQuery&&mobileQuery.matches?(document.querySelector('footer')||document.querySelector('main')||document.body):document.body;
-      if(root.parentNode!==target)target.appendChild(root);
-    }
-    placeControl();
-    if(mobileQuery){
-      if(typeof mobileQuery.addEventListener==='function')mobileQuery.addEventListener('change',placeControl);
-      else if(typeof mobileQuery.addListener==='function')mobileQuery.addListener(placeControl);
-    }
+    document.body.appendChild(root);
     function show() { panel.hidden=false;toggle.setAttribute('aria-expanded','true');status.hidden=true;manage.focus(); }
     function hide() { panel.hidden=true;toggle.setAttribute('aria-expanded','false');markSeen();try{toggle.focus({preventScroll:true});}catch(_){toggle.focus();} }
     toggle.addEventListener('click',function(){ if(panel.hidden)show();else hide(); });
