@@ -16,3 +16,30 @@
   }
   signalGooglefcPresent();
 })();
+
+
+// Wait for Google's CMP to resolve regional applicability and the visitor's choice.
+(function () {
+  var fc = window.googlefc = window.googlefc || {};
+  fc.callbackQueue = fc.callbackQueue || [];
+  var started = false;
+  fc.callbackQueue.push({ CONSENT_API_READY: function () {
+    if (typeof window.__tcfapi !== 'function') return;
+    window.__tcfapi('addEventListener', 2, function (data, success) {
+      if (!success || !data || data.cmpStatus !== 'loaded') return;
+      if (data.eventStatus !== 'tcloaded' && data.eventStatus !== 'useractioncomplete') return;
+      var allowed = data.gdprApplies === false || (data.gdprApplies === true &&
+        data.purpose?.consents?.[1] === true && data.vendor?.consents?.[755] === true);
+      if (started && !allowed) { window.location.reload(); return; }
+      if (!allowed || started) return;
+      var publisher = document.querySelector('meta[name="google-adsense-account"]');
+      if (!publisher || !/^ca-pub-[0-9]+$/.test(publisher.content)) return;
+      started = true;
+      var script = document.createElement('script');
+      script.async = true;
+      script.crossOrigin = 'anonymous';
+      script.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=' + publisher.content;
+      document.head.appendChild(script);
+    });
+  }});
+})();

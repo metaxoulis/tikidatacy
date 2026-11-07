@@ -5,16 +5,16 @@
   var words = {
     el: {
       toggle: 'Cookies', title: 'Cookies και απόρρητο',
-      info: 'Το Tiki-Data χρησιμοποιεί απαραίτητη αποθήκευση για τη λειτουργία του. Οι επιλογές για cookies διαφήμισης γίνονται αποκλειστικά στο πιστοποιημένο μήνυμα συναίνεσης της Google.',
+      info: 'Το Tiki-Data χρησιμοποιεί απαραίτητη αποθήκευση για τη λειτουργία του. Στο μήνυμα της Google μπορείτε να αποδεχτείτε, να απορρίψετε ή να αλλάξετε τις επιλογές διαφήμισης. Το κλείσιμο αυτής της ενημέρωσης διατηρεί τις επιλογές σας.',
       manage: 'Ρυθμίσεις συναίνεσης', close: 'Κλείσιμο',
-      unavailable: 'Οι ρυθμίσεις συναίνεσης της Google δεν είναι διαθέσιμες αυτή τη στιγμή. Δείτε την Πολιτική Cookies ή δοκιμάστε ξανά αργότερα.',
+      unavailable: 'Οι ρυθμίσεις συναίνεσης της Google δεν είναι διαθέσιμες αυτή τη στιγμή. Μπορείτε να συνεχίσετε την περιήγηση. Οι διαφημίσεις παραμένουν ανενεργές μέχρι να υπάρχει έγκυρη επιλογή.',
       cookies: 'Πολιτική Cookies', privacy: 'Απόρρητο'
     },
     en: {
       toggle: 'Cookies', title: 'Cookies and privacy',
-      info: 'Tiki-Data uses essential browser storage to operate. Advertising-cookie choices are managed only through Google’s certified consent message.',
+      info: 'Tiki-Data uses essential browser storage to operate. Use Google’s consent message to accept, refuse or change advertising choices. Closing this notice leaves your choices unchanged.',
       manage: 'Consent preferences', close: 'Close',
-      unavailable: 'Google consent settings are currently unavailable. See our Cookie Policy or try again later.',
+      unavailable: 'Google consent settings are currently unavailable. You can keep browsing. Advertising stays off until a valid choice is available.',
       cookies: 'Cookie Policy', privacy: 'Privacy'
     }
   };

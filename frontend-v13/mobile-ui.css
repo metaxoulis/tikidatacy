@@ -1893,3 +1893,20 @@ html #td-cookie-control .tdc-close{background:transparent!important;color:var(--
   html #td-mobile-root .tdm-core-cell b{font-size:clamp(15px,4.4vw,18px)!important}
 }
 @media(prefers-reduced-motion:reduce){html #td-mobile-root .tdm-card:hover{transform:none}}
+
+/* Match detail uses the striped scoreboard and compact overview from the match sheet. */
+html #td-mobile-root .tdm-match-page .tdm-match-hero {
+  background: repeating-linear-gradient(90deg, #ffffff08 0 5.55%, transparent 5.55% 11.11%), linear-gradient(#111c31, #090c13 76%) !important;
+  border-radius: 5px !important;
+}
+html #td-mobile-root .tdm-match-page .tdm-match-center .tdm-versus {color: #5888ff !important}
+html #td-mobile-root .tdm-match-page .tdm-match-tabs .tdm-tab.active {border-bottom-color: #356bff !important}
+@media (min-width: 901px) {
+  html #td-mobile-root .tdm-match-page {max-width: 1296px; margin-inline: auto}
+  html #td-mobile-root .tdm-match-page .tdm-match-main {min-height: 170px; align-items: center}
+  html #td-mobile-root .tdm-match-page .tdm-match-content:has(.tdm-forecast) {
+    display: grid !important; grid-template-columns: repeat(2,minmax(0,1fr)); align-items: start; gap: 24px;
+  }
+  html #td-mobile-root .tdm-match-page .tdm-match-content:has(.tdm-forecast) > * {min-width: 0; margin-block: 0 !important}
+  html #td-mobile-root .tdm-match-page .tdm-match-content > .tdm-quiet {grid-column: 1 / -1}
+}
