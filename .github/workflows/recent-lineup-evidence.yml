@@ -25,6 +25,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Rebuild embedded Worker for parity tests
+        run: python3 scripts/sync-worker-assets.py
       - name: Check affected modules
         run: |
           node --check frontend/recent-lineup-evidence.mjs
