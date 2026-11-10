@@ -81,5 +81,5 @@ test('the live feed is requested for the covered competitions only, never the wh
  s.sqlite.prepare('INSERT INTO football_trial_cache(cache_key,payload_json,fetched_at) VALUES(?,?,?)').run('live-primary-v2',JSON.stringify(live.map(faTrialMatch)),T0-60000);
  await faLiveHeartbeat(s.env,async u=>{const url=new URL(u);if(url.pathname==='/matches/live.json')asked.push(url.searchParams.get('competition_id'));return s.fetcher(u)},s.clock,s.sleep);
  assert.equal(asked.length,4);
- assert.deepEqual(asked[0].split(',').map(Number).sort((a,b)=>a-b),[1,2,3,4,5,9,44,150,167,171,244,245,334,446],'leagues, UEFA and the known domestic cups (334 is the Copa del Rey)');
+ assert.deepEqual(asked[0].split(',').map(Number).sort((a,b)=>a-b),[1,2,3,4,5,9,44,150,167,171,244,245,334,350,446],'leagues, UEFA and the known domestic cups (334 is the Copa del Rey)');
 });
