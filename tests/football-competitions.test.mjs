@@ -5,6 +5,8 @@ import {faCoveredCompetition,faTeamLogos} from '../frontend/football-primary.mjs
 test('top flights, UEFA and the seven countries\' domestic cups are covered',()=>{
  assert.equal(faCoveredCompetition({competition_id:2,country:'England',league:'Premier League'}),'epl');
  assert.equal(faCoveredCompetition({competition_id:244,country:'',league:'UEFA Champions League'}),'ucl');
+ assert.equal(faCoveredCompetition({competition_id:350,country:'Europe',league:'UEFA Nations League'}),'unl');
+ assert.equal(faCoveredCompetition({competition_id:350,country:'',league:'Nations League'}),'unl');
  assert.equal(faCoveredCompetition({competition_id:150,country:'England',league:'EFL Cup'}),'fa150');
  assert.equal(faCoveredCompetition({competition_id:167,country:'Germany',league:'DFB Cup'}),'fa167');
  assert.equal(faCoveredCompetition({competition_id:171,country:'Greece',league:'Cup'}),'fa171');

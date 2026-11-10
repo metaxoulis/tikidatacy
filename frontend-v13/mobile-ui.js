@@ -249,7 +249,7 @@
 
 (()=>{'use strict';
 const deepCache=new Map(),deepLoading=new Set();
-const favKey='tiki.followedTeams.v2',params=new URLSearchParams(location.search),state={view:params.get('account')==='1'?'account':location.pathname.startsWith('/transparency')?'transparency':location.pathname.includes('/predictions')?(params.get('match')&&/^(?:sportmonks|football-api(?:-fixture)?)-[1-9]\d{0,13}$/.test(params.get('match'))?'detail':params.get('filter')==='live'?'live':'matches'):'home',previous:['home','matches','live','teams'].includes(params.get('from'))?params.get('from'):params.get('filter')==='live'?'live':'matches',mode:params.get('filter')==='live'?'live':'all',league:['ucl','uel','uecl'].includes(params.get('league'))?params.get('league'):'all',day:'all',query:'',tab:'summary',id:/^(?:sportmonks|football-api(?:-fixture)?)-[1-9]\d{0,13}$/.test(params.get('match')||'')?params.get('match'):'',matches:[],loading:true,error:'',fromCache:false,visible:42,liveUpdatedAt:'',livePending:false};
+const favKey='tiki.followedTeams.v2',params=new URLSearchParams(location.search),state={view:params.get('account')==='1'?'account':location.pathname.startsWith('/transparency')?'transparency':location.pathname.includes('/predictions')?(params.get('match')&&/^(?:sportmonks|football-api(?:-fixture)?)-[1-9]\d{0,13}$/.test(params.get('match'))?'detail':params.get('filter')==='live'?'live':'matches'):'home',previous:['home','matches','live','teams'].includes(params.get('from'))?params.get('from'):params.get('filter')==='live'?'live':'matches',mode:params.get('filter')==='live'?'live':'all',league:['ucl','uel','uecl','unl'].includes(params.get('league'))?params.get('league'):'all',day:'all',query:'',tab:'summary',id:/^(?:sportmonks|football-api(?:-fixture)?)-[1-9]\d{0,13}$/.test(params.get('match')||'')?params.get('match'):'',matches:[],loading:true,error:'',fromCache:false,visible:42,liveUpdatedAt:'',livePending:false};
 let followed=[];try{const f=JSON.parse(localStorage.getItem(favKey)||'[]');if(Array.isArray(f))followed=f.filter(v=>typeof v==='string')}catch{}
 let guestFollowed=followed.slice(),accountUser=null,accountCsrf='',loginEnabled=null,accountLeagues=[],accountError='';let saving=Promise.resolve();
 let accountLoaded=false,accountLoading=false;
@@ -326,7 +326,7 @@ const pct=x=>typeof x==='number'&&Number.isFinite(x)?x.toLocaleString(window.__t
 const trusted=x=>typeof x==='string'&&(/^https:\/\/(cdn\.sportmonks\.com|cdn\.football-api\.com|raw\.githubusercontent\.com|d2ol7oe51mr4n9\.cloudfront\.net)\//.test(x)||/^\/badges\/[1-9]\d{0,9}\.png$/.test(x)||/^\/league-logos\/[a-z0-9][a-z0-9-]{1,79}\.png$/.test(x));
 const badge=(name,url)=>trusted(url)?'<img src="'+E(url)+'" loading="lazy" decoding="async" width="40" height="40" alt="'+E(name)+'">':'<span class="tdm-team-avatar">'+E(String(name).slice(0,2).toUpperCase())+'</span>';
 const club=(n,l)=>'<div class="tdm-team">'+badge(n,l)+'<strong>'+E(n)+'</strong></div>';
-const UEFA_FILTERS=[['ucl','Champions League','UCL'],['uel','Europa League','UEL'],['uecl','Conference League','UECL']];
+const UEFA_FILTERS=[['ucl','Champions League','UCL'],['uel','Europa League','UEL'],['uecl','Conference League','UECL'],['unl','Nations League','UNL']];
 // Written in the header's language: the page translator only replaces whole strings, not "Tiki-Data · <label>".
 const source=m=>{const en=window.__tdLocale==='en';return ({team:en?'Team history':'Ιστορικό ομάδων',partial_team:en?'Partial history':'Μερικό ιστορικό',league:en?'League averages':'Μέσοι όροι λίγκας',cross_league:en?'General baseline · low confidence':'Γενική βάση · χαμηλή βεβαιότητα'})[m.prediction_tier]||(m.prediction_tier==='provider'?'SportMonks · 1X2':en?'Experimental analysis':'Πειραματική ανάλυση')};
 const valid123=p=>p&&[p.p1,p.px,p.p2].every(x=>typeof x==='number'&&Number.isFinite(x)&&x>=0&&x<=100)&&Math.abs(p.p1+p.px+p.p2-100)<1;
@@ -499,7 +499,7 @@ function accountPanel(){
  '<button class="tdm-auth-button" data-view="home">Συνέχεια ως επισκέπτης</button></div></section>'+
  '<section class="tdm-panel"><h3>Guest Mode</h3>'+row('Τοπικές αγαπημένες ομάδες',guestFollowed.length)+
  '<button class="tdm-auth-button" data-view="teams">Διαχείριση αγαπημένων</button><p class="tdm-note">Οι επισκέπτες δεν χρειάζονται λογαριασμό· οι προτιμήσεις αποθηκεύονται μόνο στον browser.</p></section>';
- const allowed=new Set(['ucl','uel','uecl','epl','laliga','bundesliga','seriea','ligue1','greece','cyprus']);const leagues=[...UEFA_FILTERS.map(([k,n])=>[k,n]),...new Map(state.matches.map(m=>[m.league_key,m.league||m.league_key])).entries()].filter(([k],i,a)=>allowed.has(k)&&a.findIndex(v=>v[0]===k)===i);
+ const allowed=new Set(['ucl','uel','uecl','unl','epl','laliga','bundesliga','seriea','ligue1','greece','cyprus']);const leagues=[...UEFA_FILTERS.map(([k,n])=>[k,n]),...new Map(state.matches.map(m=>[m.league_key,m.league||m.league_key])).entries()].filter(([k],i,a)=>allowed.has(k)&&a.findIndex(v=>v[0]===k)===i);
  return h+'<section class="tdm-panel"><h3>'+E(accountUser.display_name||'Tiki-Data Member')+'</h3><p class="tdm-lead">'+E(accountUser.email||'')+'</p>'+
  row('Αγαπημένες ομάδες',followed.length)+row('Αγαπημένες λίγκες',accountLeagues.length)+'</section>'+
  (accountError?'<p class="tdm-auth-error">'+E(accountError)+'</p>':'')+

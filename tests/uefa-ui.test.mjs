@@ -2,6 +2,8 @@ import test from 'node:test';import assert from 'node:assert/strict';import {rea
 test('all UEFA menus stay visible on days with no games',()=>{
  const j=readFileSync(new URL('../frontend-v13/mobile-ui.js',import.meta.url),'utf8');
  assert.match(j,/const UEFA_FILTERS=/);
+ assert.match(j,/\['unl','Nations League','UNL'\]/);
+ assert.match(j,/\['ucl','uel','uecl','unl'\]\.includes\(params\.get\('league'\)\)/);
  assert.match(j,/const leagues=\[\.\.\.UEFA_FILTERS/);
  assert.match(j,/predictions\?league=/);
  assert.match(j,/Δεν υπάρχουν διαθέσιμοι αγώνες στο τρέχον επταήμερο για αυτή τη διοργάνωση/);

@@ -5,7 +5,7 @@ import {faMatchKits} from './team-kits.mjs';
 /* Covered: top-5 leagues, Greek and Cypriot top flights, UEFA, and the domestic cups of those seven countries.
    Cups with a known Football-API ID also have their schedule fetched; other cups are accepted by exact name
    when they appear live, so lower divisions (National League, Coppa Italia Serie C...) stay out. */
-export const FA_COMPETITIONS={1:'bundesliga',2:'epl',3:'laliga',4:'seriea',5:'ligue1',9:'greece',44:'cyprus',244:'ucl',245:'uel',446:'uecl',150:'fa150',167:'fa167',171:'fa171',334:'fa334'};
+export const FA_COMPETITIONS={1:'bundesliga',2:'epl',3:'laliga',4:'seriea',5:'ligue1',9:'greece',44:'cyprus',244:'ucl',245:'uel',350:'unl',446:'uecl',150:'fa150',167:'fa167',171:'fa171',334:'fa334'};
 // The live feed is requested for these competitions only; cups with an unknown ID still pass by name when a feed
 // without this filter is read.
 const FA_LIVE_PARAMS={competition_id:Object.keys(FA_COMPETITIONS).join(',')};
@@ -31,7 +31,7 @@ export function faPrimaryGame(row){
  const status=row.status==='FINISHED'?'FT':row.status==='HALF TIME BREAK'?'HT':row.status==='EXTRA TIME'?'ET':
   row.status==='PENALTY SHOOTOUT'||playing&&clock==='PS'?'PEN_LIVE':playing?(at!==null&&at<=45?'1ST':at!==null&&at>90?'ET':'2ND'):'NS';
  return {...row,id:row.fixture_id?'football-api-fixture-'+row.fixture_id:'football-api-'+row.match_id,
-  league_key:key,league:['ucl','uel','uecl'].includes(key)?'UEFA '+row.league:row.country&&/^Cup$/i.test(row.league)?row.country+' Cup':row.league,
+  league_key:key,league:key==='unl'?'UEFA Nations League':['ucl','uel','uecl'].includes(key)?'UEFA '+row.league:row.country&&/^Cup$/i.test(row.league)?row.country+' Cup':row.league,
   status,minute:status==='NS'?null:min?Number(min[1]):null,logos:{home:null,away:null},events:[],lineups:[],statistics:[],live_stats:[],match_statistics_available:false};
 }
 export function faPrimaryFixture(raw){
@@ -170,6 +170,8 @@ export function faLivePredictor(game,model,fitted=null,stats=null){
 }
 function faPrimaryForecast(game,model,badges,stats=null){
  game={...game,logos:faTeamLogos(game,model,badges,fhName),league_logo:faLeagueLogo(game,faBadgeCache.leagues)};
+ // National teams have no trained national-team history in the club model: show the fixture, not invented odds.
+ if(game.league_key==='unl')return {...game,p1:null,px:null,p2:null,model:null,coverage:'national_team_model_unavailable',forecast_review:null,live_outlook:null};
  const legacy=faForecastIdentity(game,model,fhName,faBadgeCache.identities);
  const review=forecastIntegrity(legacy,model,fhTeamKey);
  const fitted=fhEstimate(legacy,model,{allowHistoricalPriors:true});

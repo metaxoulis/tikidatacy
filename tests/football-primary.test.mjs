@@ -28,6 +28,15 @@ test('scheduled and live versions share a public fixture identity, never provide
  const scheduled=faPrimaryFixture({...raw,id:900,date:'2026-10-28',time:'18:30:00'}),live=faPrimaryGame(faTrialMatch(raw));
  assert.equal(scheduled.id,live.id);assert.equal(live.match_id,500);assert.equal(scheduled.match_id,null);assert.equal(live.date,'2026-10-28T18:30Z');assert.equal(live.minute,65);assert.equal(live.status,'2ND');assert.equal(live.league_key,'fa171');assert.deepEqual(live.live_stats,[]);
 });
+test('Nations League national-team fixtures keep a stable ID and a clear competition name',()=>{
+ const base={...raw,home:{id:810,name:'Greece'},away:{id:811,name:'Cyprus'},competition:{id:350,name:'Nations League'},country:{name:'Europe'},fixture_id:950};
+ const live=faPrimaryGame(faTrialMatch(base));
+ const scheduled=faPrimaryFixture({...base,id:950,date:'2026-11-20',time:'18:30:00'});
+ assert.equal(live.league_key,'unl');assert.equal(scheduled.league_key,'unl');
+ assert.equal(live.league,'UEFA Nations League');assert.equal(scheduled.league,'UEFA Nations League');
+ assert.equal(live.id,scheduled.id);assert.equal(live.id,'football-api-fixture-950');
+});
+
 test('provider numeric collisions cannot unlock historical forecasts without a unique alias',()=>{
  const model={team_identity:{aliases:{paok:'sportmonks:649',aek:'sportmonks:781'},ambiguous:[]}};
  const key=n=>({'PAOK':'paok','AEK Athens':'aek'})[n]||n.toLowerCase();
