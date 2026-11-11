@@ -94,7 +94,7 @@ function renderGames(){
    const when=document.createElement('div');when.className='td-game-time';when.textContent=hasDate?fmtTime.format(d):'—';
    const small=document.createElement('small');small.textContent=m.stage||readableStatus(m.status);when.append(small);
    const teams=document.createElement('div');teams.className='td-teams';
-   for(const side of ['home','away']){const team=document.createElement('div');team.className='td-team';const icon=document.createElement('span');icon.className='td-monogram';icon.textContent=tdCountryFlag(m[side])||monogram(m[side]);decorateLogo(icon,safeCatalogURL(knownTeamLogo.get(nameKey(m[side]))),'td-team-logo');decorateLogo(icon,signedTeamLogo(m.logos?.[side])||asDirectLogo(m.logos?.[side]),'td-team-logo');const name=document.createElement('span');name.textContent=m[side];team.append(icon,name);teams.append(team);}
+   for(const side of ['home','away']){const team=document.createElement('div');team.className='td-team';const icon=document.createElement('span');icon.className='td-monogram';icon.textContent=tdCountryFlag(m[side])||monogram(m[side]);if(!tdCountryFlag(m[side])){decorateLogo(icon,safeCatalogURL(knownTeamLogo.get(nameKey(m[side]))),'td-team-logo');decorateLogo(icon,signedTeamLogo(m.logos?.[side])||asDirectLogo(m.logos?.[side]),'td-team-logo');}const name=document.createElement('span');name.textContent=m[side];team.append(icon,name);teams.append(team);}
    const score=document.createElement('div');score.className='td-score';
    const hasScores=number(m.home_score)!==null&&number(m.away_score)!==null;
    score.textContent=hasScores?m.home_score+' : '+m.away_score:'— : —';
