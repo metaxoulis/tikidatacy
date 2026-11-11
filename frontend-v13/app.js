@@ -105,7 +105,7 @@ const tdCountryFlag=(()=>{
 
 function crest(name,cls='table-crest',providerURL=null){
  const n=String(name||''),nationalFlag=tdCountryFlag(n),initials=n.replace(/\b(fc|cf|sc|ac|afc|sv|club)\b/gi,'').trim().split(/\s+/).slice(0,2).map(a=>a[0]||'').join('').toUpperCase()||'FC';
- const verified=realTeamLogo(n),provider=sportmonksLogo(providerURL),hasReal=!!(verified||provider);
+ const verified=nationalFlag?null:realTeamLogo(n),provider=nationalFlag?null:sportmonksLogo(providerURL),hasReal=!!(verified||provider);
  return '<span class="'+esc(cls)+(hasReal?' has-team-logo':' team-no-logo')+'" title="'+esc(n)+'" aria-label="Έμβλημα '+esc(n)+'"><span class="team-initials">'+esc(nationalFlag||initials)+'</span>'
  +(verified?logoImage(verified,'logo-image team-logo-image'):'')
  +(provider&&provider!==verified?logoImage(provider,'logo-image team-logo-image'):'')+'</span>';
