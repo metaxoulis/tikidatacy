@@ -47,7 +47,7 @@ jobs:
 
   deploy-production:
     needs: build-and-test
-    if: ${{ github.ref == 'refs/heads/main' && (vars.TIKI_AUTO_DEPLOY_ENABLED == 'true' || startsWith(github.event.head_commit.message, 'Publish country flags to tiki-data production [approved-20261111]')) }}
+    if: ${{ github.ref == 'refs/heads/main' && vars.TIKI_AUTO_DEPLOY_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     environment: production
     steps:
