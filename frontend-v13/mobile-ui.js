@@ -324,7 +324,19 @@ const faMatch=m=>m?.source==='football-api.com'||/^football-api-/.test(String(m?
 const score=m=>Number.isInteger(m?.home_score)&&Number.isInteger(m?.away_score)?m.home_score+' : '+m.away_score:'VS';
 const pct=x=>typeof x==='number'&&Number.isFinite(x)?x.toLocaleString(window.__tdLocale==='el'?'el-GR':'en-GB',{maximumFractionDigits:1})+'%':'—';
 const trusted=x=>typeof x==='string'&&(/^https:\/\/(cdn\.sportmonks\.com|cdn\.football-api\.com|raw\.githubusercontent\.com|d2ol7oe51mr4n9\.cloudfront\.net)\//.test(x)||/^\/badges\/[1-9]\d{0,9}\.png$/.test(x)||/^\/league-logos\/[a-z0-9][a-z0-9-]{1,79}\.png$/.test(x));
-const badge=(name,url)=>trusted(url)?'<img src="'+E(url)+'" loading="lazy" decoding="async" width="40" height="40" alt="'+E(name)+'">':'<span class="tdm-team-avatar">'+E(String(name).slice(0,2).toUpperCase())+'</span>';
+
+const tdCountryFlag=(()=>{
+ const iso='AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW XK'.split(' ');
+ const norm=s=>String(s||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^\p{L}\p{N}]+/gu,' ').trim().toLowerCase();
+ const map=new Map();
+ for(const locale of ['en','el']){const labels=new Intl.DisplayNames([locale],{type:'region'});for(const id of iso){const n=labels.of(id);if(n&&n!==id)map.set(norm(n),id)}}
+ const aliases={'england':'GB-ENG','scotland':'GB-SCT','wales':'GB-WLS','northern ireland':'GB','kosovo':'XK','czech republic':'CZ','turkey':'TR','ivory coast':'CI','cape verde':'CV','south korea':'KR','north korea':'KP','republic of korea':'KR','korea republic':'KR','iran':'IR','syria':'SY','russia':'RU','moldova':'MD','macedonia':'MK','north macedonia':'MK','republic of ireland':'IE','usa':'US','united states of america':'US','uae':'AE','dr congo':'CD','congo dr':'CD','democratic republic of congo':'CD','the gambia':'GM','swaziland':'SZ','vietnam':'VN','bolivia':'BO','tanzania':'TZ','palestine':'PS','chinese taipei':'TW','east timor':'TL','faroe islands':'FO','bosnia':'BA','bosnia and herzegovina':'BA','united kingdom':'GB','ελλαδα':'GR','κυπρος':'CY','αγγλια':'GB-ENG','σκωτια':'GB-SCT','ουαλια':'GB-WLS','βορεια ιρλανδια':'GB','κοσοβο':'XK','τουρκια':'TR','τσεχια':'CZ','βορεια μακεδονια':'MK'};
+ for(const [name,id] of Object.entries(aliases))map.set(norm(name),id);
+ const special={'GB-ENG':'🏴󠁧󠁢󠁥󠁮󠁧󠁿','GB-SCT':'🏴󠁧󠁢󠁳󠁣󠁴󠁿','GB-WLS':'🏴󠁧󠁢󠁷󠁬󠁳󠁿'};
+ return name=>{const raw=String(name||'').replace(/\s*(?:\((?:women|men|u\d{2})\)|(?:women|men|u-?\d{2}|national team))\s*$/i,'').trim();const code=map.get(norm(raw))||(iso.includes(raw.toUpperCase())?raw.toUpperCase():null);return code?(special[code]||[...code].map(c=>String.fromCodePoint(127397+c.charCodeAt(0))).join('')):null};
+})();
+
+const badge=(name,url)=>tdCountryFlag(name)?'<span class="tdm-team-avatar" role="img" aria-label="'+E(name)+'">'+tdCountryFlag(name)+'</span>':trusted(url)?'<img src="'+E(url)+'" loading="lazy" decoding="async" width="40" height="40" alt="'+E(name)+'">':'<span class="tdm-team-avatar">'+E(String(name).slice(0,2).toUpperCase())+'</span>';
 const club=(n,l)=>'<div class="tdm-team">'+badge(n,l)+'<strong>'+E(n)+'</strong></div>';
 const UEFA_FILTERS=[['ucl','Champions League','UCL'],['uel','Europa League','UEL'],['uecl','Conference League','UECL']];
 // Written in the header's language: the page translator only replaces whole strings, not "Tiki-Data · <label>".

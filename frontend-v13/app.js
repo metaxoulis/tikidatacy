@@ -91,10 +91,22 @@ for(const [name,href] of Object.entries(LOGO_CATALOG.teams||{})){const u=safeLog
 const teamAliases=new Map([['olympiacos piraeus','olympiakos piraeus'],['olympiacos','olympiakos piraeus'],['bayern munich','fc bayern munchen'],['bayern münchen','fc bayern munchen'],['valencia','valencia cf'],['real madrid','real madrid cf'],['sevilla','sevilla fc'],['sunderland','sunderland afc'],['bournemouth','afc bournemouth'],['athletic bilbao','athletic club'],['panathinaikos fc','panathinaikos'],['asteras tripolis fc','asteras tripolis'],['panetolikos fc','panetolikos']]);
 function realTeamLogo(name){const key=logoNorm(name);return teamImages.get(key)||teamImages.get(teamAliases.get(key))||shortImages.get(shorten(name))||null}
 function logoImage(url,cls='logo-image'){return '<img class="'+esc(cls)+'" src="'+esc(url)+'" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">'}
+
+const tdCountryFlag=(()=>{
+ const iso='AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW XK'.split(' ');
+ const norm=s=>String(s||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^\p{L}\p{N}]+/gu,' ').trim().toLowerCase();
+ const map=new Map();
+ for(const locale of ['en','el']){const labels=new Intl.DisplayNames([locale],{type:'region'});for(const id of iso){const n=labels.of(id);if(n&&n!==id)map.set(norm(n),id)}}
+ const aliases={'england':'GB-ENG','scotland':'GB-SCT','wales':'GB-WLS','northern ireland':'GB','kosovo':'XK','czech republic':'CZ','turkey':'TR','ivory coast':'CI','cape verde':'CV','south korea':'KR','north korea':'KP','republic of korea':'KR','korea republic':'KR','iran':'IR','syria':'SY','russia':'RU','moldova':'MD','macedonia':'MK','north macedonia':'MK','republic of ireland':'IE','usa':'US','united states of america':'US','uae':'AE','dr congo':'CD','congo dr':'CD','democratic republic of congo':'CD','the gambia':'GM','swaziland':'SZ','vietnam':'VN','bolivia':'BO','tanzania':'TZ','palestine':'PS','chinese taipei':'TW','east timor':'TL','faroe islands':'FO','bosnia':'BA','bosnia and herzegovina':'BA','united kingdom':'GB','ελλαδα':'GR','κυπρος':'CY','αγγλια':'GB-ENG','σκωτια':'GB-SCT','ουαλια':'GB-WLS','βορεια ιρλανδια':'GB','κοσοβο':'XK','τουρκια':'TR','τσεχια':'CZ','βορεια μακεδονια':'MK'};
+ for(const [name,id] of Object.entries(aliases))map.set(norm(name),id);
+ const special={'GB-ENG':'🏴󠁧󠁢󠁥󠁮󠁧󠁿','GB-SCT':'🏴󠁧󠁢󠁳󠁣󠁴󠁿','GB-WLS':'🏴󠁧󠁢󠁷󠁬󠁳󠁿'};
+ return name=>{const raw=String(name||'').replace(/\s*(?:\((?:women|men|u\d{2})\)|(?:women|men|u-?\d{2}|national team))\s*$/i,'').trim();const code=map.get(norm(raw))||(iso.includes(raw.toUpperCase())?raw.toUpperCase():null);return code?(special[code]||[...code].map(c=>String.fromCodePoint(127397+c.charCodeAt(0))).join('')):null};
+})();
+
 function crest(name,cls='table-crest',providerURL=null){
- const n=String(name||''),initials=n.replace(/\b(fc|cf|sc|ac|afc|sv|club)\b/gi,'').trim().split(/\s+/).slice(0,2).map(a=>a[0]||'').join('').toUpperCase()||'FC';
- const verified=realTeamLogo(n),provider=sportmonksLogo(providerURL),hasReal=!!(verified||provider);
- return '<span class="'+esc(cls)+(hasReal?' has-team-logo':' team-no-logo')+'" title="'+esc(n)+'" aria-label="Έμβλημα '+esc(n)+'"><span class="team-initials">'+esc(initials)+'</span>'
+ const n=String(name||''),nationalFlag=tdCountryFlag(n),initials=n.replace(/\b(fc|cf|sc|ac|afc|sv|club)\b/gi,'').trim().split(/\s+/).slice(0,2).map(a=>a[0]||'').join('').toUpperCase()||'FC';
+ const verified=nationalFlag?null:realTeamLogo(n),provider=nationalFlag?null:sportmonksLogo(providerURL),hasReal=!!(verified||provider);
+ return '<span class="'+esc(cls)+(hasReal?' has-team-logo':' team-no-logo')+'" title="'+esc(n)+'" aria-label="Έμβλημα '+esc(n)+'"><span class="team-initials">'+esc(nationalFlag||initials)+'</span>'
  +(verified?logoImage(verified,'logo-image team-logo-image'):'')
  +(provider&&provider!==verified?logoImage(provider,'logo-image team-logo-image'):'')+'</span>';
 }
