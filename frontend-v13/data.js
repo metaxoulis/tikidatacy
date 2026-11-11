@@ -1,6 +1,18 @@
 /* Tiki-Data public Match Centre — view-layer only, no provider credentials. */
 (()=>{
 'use strict';
+
+const tdCountryFlag=(()=>{
+ const iso='AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW XK'.split(' ');
+ const norm=s=>String(s||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^\p{L}\p{N}]+/gu,' ').trim().toLowerCase();
+ const map=new Map();
+ for(const locale of ['en','el']){const labels=new Intl.DisplayNames([locale],{type:'region'});for(const id of iso){const n=labels.of(id);if(n&&n!==id)map.set(norm(n),id)}}
+ const aliases={'england':'GB-ENG','scotland':'GB-SCT','wales':'GB-WLS','northern ireland':'GB','kosovo':'XK','czech republic':'CZ','turkey':'TR','ivory coast':'CI','cape verde':'CV','south korea':'KR','north korea':'KP','republic of korea':'KR','korea republic':'KR','iran':'IR','syria':'SY','russia':'RU','moldova':'MD','macedonia':'MK','north macedonia':'MK','republic of ireland':'IE','usa':'US','united states of america':'US','uae':'AE','dr congo':'CD','congo dr':'CD','democratic republic of congo':'CD','the gambia':'GM','swaziland':'SZ','vietnam':'VN','bolivia':'BO','tanzania':'TZ','palestine':'PS','chinese taipei':'TW','east timor':'TL','faroe islands':'FO','bosnia':'BA','bosnia and herzegovina':'BA','united kingdom':'GB','ελλαδα':'GR','κυπρος':'CY','αγγλια':'GB-ENG','σκωτια':'GB-SCT','ουαλια':'GB-WLS','βορεια ιρλανδια':'GB','κοσοβο':'XK','τουρκια':'TR','τσεχια':'CZ','βορεια μακεδονια':'MK'};
+ for(const [name,id] of Object.entries(aliases))map.set(norm(name),id);
+ const special={'GB-ENG':'🏴󠁧󠁢󠁥󠁮󠁧󠁿','GB-SCT':'🏴󠁧󠁢󠁳󠁣󠁴󠁿','GB-WLS':'🏴󠁧󠁢󠁷󠁬󠁳󠁿'};
+ return name=>{const raw=String(name||'').replace(/\s*(?:\((?:women|men|u\d{2})\)|(?:women|men|u-?\d{2}|national team))\s*$/i,'').trim();const code=map.get(norm(raw))||(iso.includes(raw.toUpperCase())?raw.toUpperCase():null);return code?(special[code]||[...code].map(c=>String.fromCodePoint(127397+c.charCodeAt(0))).join('')):null};
+})();
+
 const $=id=>document.getElementById(id);
 if(!$('dataGames'))return;
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -82,7 +94,7 @@ function renderGames(){
    const when=document.createElement('div');when.className='td-game-time';when.textContent=hasDate?fmtTime.format(d):'—';
    const small=document.createElement('small');small.textContent=m.stage||readableStatus(m.status);when.append(small);
    const teams=document.createElement('div');teams.className='td-teams';
-   for(const side of ['home','away']){const team=document.createElement('div');team.className='td-team';const icon=document.createElement('span');icon.className='td-monogram';icon.textContent=monogram(m[side]);decorateLogo(icon,safeCatalogURL(knownTeamLogo.get(nameKey(m[side]))),'td-team-logo');decorateLogo(icon,signedTeamLogo(m.logos?.[side])||asDirectLogo(m.logos?.[side]),'td-team-logo');const name=document.createElement('span');name.textContent=m[side];team.append(icon,name);teams.append(team);}
+   for(const side of ['home','away']){const team=document.createElement('div');team.className='td-team';const icon=document.createElement('span');icon.className='td-monogram';icon.textContent=tdCountryFlag(m[side])||monogram(m[side]);decorateLogo(icon,safeCatalogURL(knownTeamLogo.get(nameKey(m[side]))),'td-team-logo');decorateLogo(icon,signedTeamLogo(m.logos?.[side])||asDirectLogo(m.logos?.[side]),'td-team-logo');const name=document.createElement('span');name.textContent=m[side];team.append(icon,name);teams.append(team);}
    const score=document.createElement('div');score.className='td-score';
    const hasScores=number(m.home_score)!==null&&number(m.away_score)!==null;
    score.textContent=hasScores?m.home_score+' : '+m.away_score:'— : —';
