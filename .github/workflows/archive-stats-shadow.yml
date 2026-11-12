@@ -1,0 +1,25 @@
+name: Archive statistics research tests
+
+on:
+  pull_request:
+    paths:
+      - 'research/archive_stats_shadow.py'
+      - 'research/ARCHIVE_STATISTICS_SHADOW.md'
+      - 'tests/test_archive_stats_shadow.py'
+      - '.github/workflows/archive-stats-shadow.yml'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check Python syntax
+        run: python -m compileall -q research/archive_stats_shadow.py tests/test_archive_stats_shadow.py
+      - name: Run leakage regression tests
+        run: python -m unittest tests.test_archive_stats_shadow -v
